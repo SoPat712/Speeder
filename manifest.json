@@ -1,13 +1,13 @@
 {
   "name": "Video Speed Controller",
   "short_name": "videospeed",
-  "version": "0.6.3.3",
+  "version": "1.1.0",
   "manifest_version": 2,
   "description": "Speed up, slow down, advance and rewind HTML5 audio/video with shortcuts",
-  "homepage_url": "https://github.com/codebicycle/videospeed",
+  "homepage_url": "https://github.com/SoPat712/videospeed",
   "browser_specific_settings": {
     "gecko": {
-      "id": "{7be2ba16-0f1e-4d93-9ebc-5164397477a9}"
+      "id": "{ed860648-f54f-4dc9-9a0d-501aec4313f5}"
     }
   },
   "icons": {

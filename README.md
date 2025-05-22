@@ -1,3 +1,7 @@
+[![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/video-speed-controller-v1/)
+
+
+
 # The science of accelerated playback
 
 **TL;DR: faster playback translates to better engagement and retention.**
@@ -74,10 +78,10 @@ You can try manually disabling Flash from the browser.
 [`igrigorik/videospeed`](https://github.com/igrigorik/videospeed) repository
 is a port of [`igrigorik`](https://github.com/igrigorik)'s videospeed Chrome 
 add-on for Firefox. This fork modifies the Chrome add-on code so that it works 
-in Firefox. This repo is the code behind the [Firefox Extension](https://addons.mozilla.org/en-us/firefox/addon/videospeed/)
+in Firefox. This repo is the code behind the [Firefox Extension](https://addons.mozilla.org/en-US/firefox/addon/video-speed-controller-v1/)
 whereas the [`igrigorik/videospeed`](https://github.com/igrigorik/videospeed)
 repository contains the code behind the [Chrome Extension](https://chrome.google.com/webstore/detail/video-speed-controller/nffaoalbilbmmfgbnbgppjihopabppdk).
 
 ### License
 
-(MIT License) - Copyright (c) 2014 Ilya Grigorik
+(MIT License) - Copyright (c) 2014 Josh Patra

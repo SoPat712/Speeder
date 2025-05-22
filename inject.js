@@ -21,12 +21,13 @@ var tc = {
     `.replace(regStrip, ""),
     defaultLogLevel: 4,
     logLevel: 3,
+    // --- Nudge settings (ADDED) ---
     enableSubtitleNudge: true,
     subtitleNudgeInterval: 25,
     subtitleNudgeAmount: 0.001
   },
   mediaElements: [],
-  isNudging: false
+  isNudging: false // ADDED: Flag for nudge operation
 };
 
 /* Log levels */
@@ -104,8 +105,8 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   ) {
     chrome.storage.sync.set({
       keyBindings: tc.settings.keyBindings,
-      version: "0.6.3.13"
-    }); // Incremented
+      version: "0.6.3.14"
+    }); // Incremented version
   }
 
   tc.settings.lastSpeed = Number(storage.lastSpeed) || 1.0;
@@ -120,6 +121,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   tc.settings.blacklist = String(storage.blacklist || tc.settings.blacklist);
   if (typeof storage.logLevel !== "undefined")
     tc.settings.logLevel = Number(storage.logLevel);
+
   tc.settings.enableSubtitleNudge =
     typeof storage.enableSubtitleNudge !== "undefined"
       ? Boolean(storage.enableSubtitleNudge)
@@ -144,7 +146,6 @@ chrome.storage.sync.get(tc.settings, function (storage) {
 });
 
 function getKeyBindings(action, what = "value") {
-  /* ... Same as your provided ... */
   if (!tc.settings.keyBindings) return false;
   try {
     const binding = tc.settings.keyBindings.find(
@@ -163,13 +164,16 @@ function getKeyBindings(action, what = "value") {
     return false;
   }
 }
+
 function setKeyBindings(action, value) {
-  /* ... Same as your provided ... */
+  // Original setKeyBindings
   if (!tc.settings.keyBindings) return;
   const binding = tc.settings.keyBindings.find(
     (item) => item.action === action
   );
-  if (binding) binding["value"] = value;
+  if (binding) {
+    binding["value"] = value;
+  }
 }
 
 function defineVideoController() {
@@ -179,13 +183,13 @@ function defineVideoController() {
     target.vsc = this;
     this.video = target;
     this.parent = parent || target.parentElement;
-    this.nudgeIntervalId = null;
+    this.nudgeIntervalId = null; // ADDED
 
-    let storedSpeed;
+    let storedSpeed; // Original logic for initial speed determination
     if (!tc.settings.rememberSpeed) {
       storedSpeed = tc.settings.speeds[target.currentSrc];
       if (!storedSpeed) storedSpeed = 1.0;
-      setKeyBindings("reset", getKeyBindings("fast"));
+      setKeyBindings("reset", getKeyBindings("fast")); // Original call
     } else {
       storedSpeed =
         tc.settings.speeds[target.currentSrc] || tc.settings.lastSpeed;
@@ -195,7 +199,8 @@ function defineVideoController() {
     this.div = this.initializeControls();
 
     if (Math.abs(target.playbackRate - storedSpeed) > 0.001) {
-      setSpeed(target, storedSpeed, true, false); // isInitialCall=true, isUserKeyPress=false
+      // MODIFIED: Pass isUserKeyPress = false for initial/automatic speed settings
+      setSpeed(target, storedSpeed, true, false);
     } else {
       if (this.speedIndicator)
         this.speedIndicator.textContent = storedSpeed.toFixed(2);
@@ -207,25 +212,46 @@ function defineVideoController() {
       }
     }
 
+    // MODIFIED: mediaEventAction to correctly maintain speed on play/pause/seek/ended
     var mediaEventAction = function (event) {
       const video = event.target;
       if (!video.vsc) return;
-      let speedToSet = tc.settings.speeds[video.currentSrc];
-      if (!tc.settings.rememberSpeed) {
-        if (!speedToSet) speedToSet = 1.0;
-        setKeyBindings("reset", getKeyBindings("fast"));
-      } else {
-        speedToSet = tc.settings.lastSpeed;
-      }
-      if (tc.settings.forceLastSavedSpeed) speedToSet = tc.settings.lastSpeed;
 
-      if (Math.abs(video.playbackRate - speedToSet) > 0.001) {
-        // Speed corrections from play/seek are not direct user key presses for blink
-        setSpeed(video, speedToSet, false, false); // isInitialCall=false, isUserKeyPress=false
+      let speedToMaintain;
+      if (tc.settings.forceLastSavedSpeed) {
+        speedToMaintain = tc.settings.lastSpeed;
+      } else if (tc.settings.rememberSpeed) {
+        speedToMaintain =
+          tc.settings.speeds[video.currentSrc] || tc.settings.lastSpeed;
+      } else {
+        // Not forcing, not remembering per-video. Maintain the current session's tc.settings.lastSpeed.
+        speedToMaintain = tc.settings.lastSpeed;
       }
-      if (event.type === "play") video.vsc.startSubtitleNudge();
-      else if (event.type === "pause" || event.type === "ended")
+
+      // The original setKeyBindings("reset", getKeyBindings("fast")) from old mediaEventAction
+      // was related to the complex 'R' key toggle. That logic is within the main `resetSpeed` function.
+      // Here, we just ensure the determined `speedToMaintain` is applied if needed.
+
+      if (Math.abs(video.playbackRate - speedToMaintain) > 0.001) {
+        log(
+          `Media event '${event.type}': video rate ${video.playbackRate.toFixed(2)} vs target ${speedToMaintain.toFixed(2)}. Correcting.`,
+          4
+        );
+        // Corrections from play/pause/seek/ended are not direct user key presses for blink.
+        setSpeed(video, speedToMaintain, false, false); // isInitialCall=false, isUserKeyPress=false
+      } else {
+        log(
+          `Media event '${event.type}': video rate ${video.playbackRate.toFixed(2)} matches target. No speed change needed.`,
+          6
+        );
+      }
+
+      // Manage nudge based on event type
+      if (event.type === "play") {
+        if (video.playbackRate !== 1.0) video.vsc.startSubtitleNudge(); // Only start if not 1.0x
+      } else if (event.type === "pause" || event.type === "ended") {
         video.vsc.stopSubtitleNudge();
+      }
     };
 
     target.addEventListener(
@@ -246,6 +272,7 @@ function defineVideoController() {
     );
 
     var srcObserver = new MutationObserver((mutations) => {
+      // Original srcObserver
       mutations.forEach((mutation) => {
         if (
           mutation.type === "attributes" &&
@@ -280,7 +307,7 @@ function defineVideoController() {
   };
 
   tc.videoController.prototype.startSubtitleNudge = function () {
-    /* ... Same as your provided ... */
+    // ADDED
     if (!location.hostname.includes("youtube.com")) return;
     if (
       !tc.settings.enableSubtitleNudge ||
@@ -292,6 +319,7 @@ function defineVideoController() {
       this.stopSubtitleNudge();
       return;
     }
+    log(`Nudge: Starting interval: ${tc.settings.subtitleNudgeInterval}ms.`, 5);
     this.nudgeIntervalId = setInterval(() => {
       if (
         !this.video ||
@@ -319,26 +347,29 @@ function defineVideoController() {
     }, tc.settings.subtitleNudgeInterval);
   };
   tc.videoController.prototype.stopSubtitleNudge = function () {
-    /* ... Same as your provided ... */
+    // ADDED
     if (this.nudgeIntervalId !== null) {
+      log(`Nudge: Stopping.`, 5);
       clearInterval(this.nudgeIntervalId);
       this.nudgeIntervalId = null;
     }
   };
+
   tc.videoController.prototype.remove = function () {
-    /* ... Same as your provided ... */
-    this.stopSubtitleNudge();
+    // Original remove
+    this.stopSubtitleNudge(); // ADDED
     if (this.div && this.div.parentNode) this.div.remove();
     if (this.video) {
       this.video.removeEventListener("play", this.handlePlay);
-      this.video.removeEventListener("pause", this.handlePause);
-      this.video.removeEventListener("ended", this.handleEnded);
-      this.video.removeEventListener("seeked", this.handleSeek);
+      this.video.removeEventListener("pause", this.handlePause); // ADDED
+      this.video.removeEventListener("ended", this.handleEnded); // ADDED
+      this.video.removeEventListener("seeked", this.handleSeek); // Original was "seek"
       delete this.video.vsc;
     }
     let idx = tc.mediaElements.indexOf(this.video);
     if (idx !== -1) tc.mediaElements.splice(idx, 1);
   };
+
   tc.videoController.prototype.initializeControls = function () {
     /* ... Same as your provided ... */
     const doc = this.video.ownerDocument;
@@ -460,11 +491,11 @@ function refreshCoolDown() {
 function setupListener() {
   if (document.vscRateListenerAttached) return;
 
-  // MODIFIED: updateSpeedFromEvent NO LONGER calls runAction("blink")
+  // MODIFIED: This function NO LONGER calls runAction("blink")
   function updateSpeedFromEvent(video) {
     if (!video.vsc || !video.vsc.speedIndicator) return;
     var speed = Number(video.playbackRate.toFixed(2));
-    log(`updateSpeedFromEvent: Rate is ${speed}.`, 4); // Removed fromUserInput from this log
+    log(`updateSpeedFromEvent: Rate is ${speed}.`, 4);
 
     video.vsc.speedIndicator.textContent = speed.toFixed(2);
     tc.settings.speeds[video.currentSrc || "unknown_src"] = speed;
@@ -473,7 +504,7 @@ function setupListener() {
       /* ... */
     });
 
-    // runAction("blink") is now called directly from setSpeed if it's a user key press.
+    // Blink is now handled directly in setSpeed for user key presses
 
     if (video.vsc) {
       if (speed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
@@ -484,7 +515,7 @@ function setupListener() {
   document.addEventListener(
     "ratechange",
     function (event) {
-      if (tc.isNudging) return; // Ignore nudge's own rate changes for VSC UI/state logic
+      if (tc.isNudging) return; // ADDED: Ignore nudge events
 
       if (coolDown) {
         log("Blocked by coolDown", 4);
@@ -497,32 +528,30 @@ function setupListener() {
         return;
 
       const eventOrigin = event.detail && event.detail.origin;
-      // The `fromUserInput` flag that was passed to updateSpeedFromEvent is removed from here.
-      // updateSpeedFromEvent now just updates state. Blinking is handled by setSpeed.
+      // The 'fromUserInput' flag previously passed to updateSpeedFromEvent is removed.
+      // Blinking is now directly triggered by `setSpeed` if it's a user key press.
 
       if (tc.settings.forceLastSavedSpeed) {
         if (eventOrigin === "videoSpeed") {
-          // This "videoSpeed" event is dispatched by setSpeed when forceLastSavedSpeed is true.
-          // setSpeed itself will handle blinking if it was a user key press.
+          // This event is from setSpeed's forceLastSavedSpeed path.
+          // setSpeed would have already handled blinking if it was a user key press.
           if (event.detail.speed) {
             const detailSpeedNum = Number(event.detail.speed);
             if (
               !isNaN(detailSpeedNum) &&
               Math.abs(video.playbackRate - detailSpeedNum) > 0.001
             ) {
-              video.playbackRate = detailSpeedNum; // As per original forceLastSavedSpeed logic
+              video.playbackRate = detailSpeedNum;
             }
           }
           updateSpeedFromEvent(video); // Update state
-          event.stopImmediatePropagation(); // Original behavior
+          event.stopImmediatePropagation();
         } else {
-          // Native event when forceLastSavedSpeed is ON
           if (Math.abs(video.playbackRate - tc.settings.lastSpeed) > 0.001) {
             video.playbackRate = tc.settings.lastSpeed;
             event.stopImmediatePropagation();
-            // The next ratechange (from VSC forcing it) will call updateSpeedFromEvent.
           } else {
-            updateSpeedFromEvent(video); // Just confirming, no blink needed from here
+            updateSpeedFromEvent(video); // Just confirming speed
           }
         }
       } else {
@@ -538,7 +567,7 @@ function setupListener() {
 
 var vscInitializedDocuments = new Set();
 function initializeWhenReady(doc) {
-  /* ... Same robust init ... */
+  /* ... Same robust init from your code ... */
   if (doc.vscInitWhenReadyUniqueFlag1 && doc.readyState !== "loading") return;
   doc.vscInitWhenReadyUniqueFlag1 = true;
   if (isBlacklisted()) return;
@@ -584,7 +613,7 @@ function getShadow(parent) {
 }
 
 function initializeNow(doc) {
-  /* ... Same robust init, ensuring tc.videoController is defined ... */
+  /* ... Same robust init from your code ... */
   if (vscInitializedDocuments.has(doc) || !doc.body) return;
   if (!tc.settings.enabled) return;
   if (!doc.body.classList.contains("vsc-initialized"))
@@ -725,15 +754,28 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   tc.settings.lastSpeed = numericSpeed;
   video.vsc.speedIndicator.textContent = numericSpeed.toFixed(2);
 
+  // MODIFIED: Directly trigger blink here if it's a user key press and not initial setup
+  if (isUserKeyPress && !isInitialCall && video.vsc) {
+    // Ensure controller is available before trying to blink
+    if (video.vsc.div) {
+      // Check if controller div exists
+      log(
+        `setSpeed: User key press detected, triggering blink for controller.`,
+        5
+      );
+      // Pass the specific video to runAction for blink
+      runAction("blink", getKeyBindings("blink", "value") || 1000, null, video);
+    }
+  }
+
   if (tc.settings.forceLastSavedSpeed) {
     video.dispatchEvent(
       new CustomEvent("ratechange", {
-        // Pass `isUserKeyPress` as `fromUserInput` for the custom event
         detail: {
           origin: "videoSpeed",
           speed: numericSpeed.toFixed(2),
           fromUserInput: isUserKeyPress
-        }
+        } // Pass isUserKeyPress
       })
     );
   } else {
@@ -742,12 +784,7 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
     }
   }
 
-  if (!isInitialCall) refreshCoolDown(); // Original call, only for non-initial sets
-
-  // MODIFIED: Directly trigger blink here if it's a user key press and not initial setup
-  if (isUserKeyPress && !isInitialCall && video.vsc) {
-    runAction("blink", getKeyBindings("blink", "value") || 1000, null, video);
-  }
+  if (!isInitialCall) refreshCoolDown(); // Original call
 
   if (video.vsc) {
     if (numericSpeed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
@@ -785,7 +822,12 @@ function runAction(action, value, e, specificVideo = null) {
       }
     }
   } else mediaTagsToProcess = tc.mediaElements;
-  if (mediaTagsToProcess.length === 0 && action !== "display") return;
+  if (
+    mediaTagsToProcess.length === 0 &&
+    action !== "display" &&
+    action !== "blink"
+  )
+    return; // Allow blink even if no media for global feedback
 
   var targetControllerFromEvent =
     e && e.target && e.target.getRootNode && e.target.getRootNode().host
@@ -804,8 +846,9 @@ function runAction(action, value, e, specificVideo = null) {
       return;
     if (action === "blink" && specificVideo && v !== specificVideo) return;
 
-    // Original showController logic (not tied to `isUserKeyPress` here, runAction("blink") is separate)
-    const userDrivenActionsThatShowController = [
+    // MODIFIED: `showController` is only called if action implies user directly interacting with speed/video state.
+    // "display" handles its own visibility. "blink" is for feedback *after* a state change.
+    const actionsThatShouldShowControllerTemporarily = [
       "rewind",
       "advance",
       "faster",
@@ -818,7 +861,11 @@ function runAction(action, value, e, specificVideo = null) {
       "jump",
       "drag"
     ];
-    if (userDrivenActionsThatShowController.includes(action)) {
+    if (actionsThatShouldShowControllerTemporarily.includes(action)) {
+      // The original showController is a timed visibility.
+      // The "blink" action also provides timed visibility.
+      // By having setSpeed call blink directly for user key presses, this might be redundant here for speed changes.
+      // However, for seek, pause etc., this existing showController is still relevant.
       showController(controllerDiv);
     }
 
@@ -846,6 +893,7 @@ function runAction(action, value, e, specificVideo = null) {
       case "slower":
         setSpeed(v, Math.max(v.playbackRate - numValue, 0.07), false, true);
         break;
+      // MODIFIED: Calls original resetSpeed, passing currentActionContext
       case "reset":
         resetSpeed(v, 1.0, currentActionContext);
         break;
@@ -856,7 +904,8 @@ function runAction(action, value, e, specificVideo = null) {
         controllerDiv.classList.add("vsc-manual");
         controllerDiv.classList.toggle("vsc-hidden");
         break;
-      case "blink": // This action is now mostly called by setSpeed itself for user key presses
+      case "blink": // This action is now primarily called by setSpeed itself for user key presses
+        if (!controllerDiv) return; // Safety check
         if (
           controllerDiv.classList.contains("vsc-hidden") ||
           controllerDiv.blinkTimeOut !== undefined
@@ -865,17 +914,21 @@ function runAction(action, value, e, specificVideo = null) {
           controllerDiv.classList.remove("vsc-hidden");
           controllerDiv.blinkTimeOut = setTimeout(
             () => {
+              // If user manually set controller to be visible (vsc-manual and NOT vsc-hidden), blink should not hide it.
               if (
                 controllerDiv.classList.contains("vsc-manual") &&
                 !controllerDiv.classList.contains("vsc-hidden")
               ) {
+                // Do nothing, respect manual visibility
               } else {
+                // Otherwise, (it was auto-shown by blink, or was already hidden, or user manually hid it)
+                // blink will ensure it ends up hidden.
                 controllerDiv.classList.add("vsc-hidden");
               }
               controllerDiv.blinkTimeOut = undefined;
             },
             typeof value === "number" && !isNaN(value) ? value : 1000
-          );
+          ); // Value for blink duration
         }
         break;
       case "drag":
@@ -905,7 +958,7 @@ function pause(v) {
   else v.pause();
 }
 
-// MODIFIED: `resetSpeed` now calls `setSpeed` with `isUserKeyPress = true`
+// MODIFIED: resetSpeed now calls setSpeed with isUserKeyPress = true
 function resetSpeed(v, target, currentActionContext = null) {
   log(
     `resetSpeed (original): Video current: ${v.playbackRate.toFixed(2)}, Target: ${target.toFixed(2)}, Context: ${currentActionContext}`,
@@ -914,18 +967,18 @@ function resetSpeed(v, target, currentActionContext = null) {
   if (Math.abs(v.playbackRate - target) < 0.01) {
     if (v.playbackRate === (getKeyBindings("reset", "value") || 1.0)) {
       if (target !== 1.0) {
-        setSpeed(v, 1.0, false, true); // isInitial=false, isUserKeyPress=true
+        setSpeed(v, 1.0, false, true);
       } else {
-        setSpeed(v, getKeyBindings("fast", "value"), false, true); // isInitial=false, isUserKeyPress=true
+        setSpeed(v, getKeyBindings("fast", "value"), false, true);
       }
     } else {
-      setSpeed(v, getKeyBindings("reset", "value") || 1.0, false, true); // isInitial=false, isUserKeyPress=true
+      setSpeed(v, getKeyBindings("reset", "value") || 1.0, false, true);
     }
   } else {
     if (currentActionContext === "reset") {
       setKeyBindings("reset", v.playbackRate);
     }
-    setSpeed(v, target, false, true); // isInitial=false, isUserKeyPress=true
+    setSpeed(v, target, false, true);
   }
 }
 
@@ -991,7 +1044,24 @@ var timer = null;
 function showController(controller) {
   /* ... Same as your original ... */
   if (!controller || typeof controller.classList === "undefined") return;
-  controller.classList.add("vcs-show");
+  // If controller is manually hidden by user (V pressed to hide), don't auto-show it
+  // The vsc-manual class is added when 'display' action is triggered.
+  // vsc-hidden is toggled by 'display' action.
+  // So, if vsc-manual AND vsc-hidden are present, user explicitly hid it.
+  if (
+    controller.classList.contains("vsc-manual") &&
+    controller.classList.contains("vsc-hidden")
+  ) {
+    // log("Controller is manually hidden by user, showController will not override.", 5);
+    return;
+  }
+  controller.classList.add("vcs-show"); // For autohide sites like YouTube
+  // The blink action has its own logic for vsc-hidden and vsc-manual.
+  // This showController is for the general "make it visible for a bit" from user actions.
+  // It should not remove vsc-hidden if it was there before adding vsc-show, because blink handles that.
+  // The original showController just adds vsc-show and sets a timer to remove it.
+  // The "blink" action in runAction explicitly removes vsc-hidden if present, then adds it back.
+
   if (timer) clearTimeout(timer);
   timer = setTimeout(function () {
     if (controller && controller.classList)

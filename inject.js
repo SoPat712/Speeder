@@ -1,5 +1,8 @@
 var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
 
+var isUserSeek = false; // Track if seek was user-initiated
+var lastToggleSpeed = {}; // Store last toggle speeds per video
+
 var tc = {
   settings: {
     lastSpeed: 1.0,
@@ -162,7 +165,6 @@ function defineVideoController() {
       if (!storedSpeed) {
         storedSpeed = 1.0;
       }
-      setKeyBindings("reset", getKeyBindings("fast"));
     } else {
       storedSpeed = tc.settings.lastSpeed;
     }
@@ -171,22 +173,46 @@ function defineVideoController() {
     }
     target.playbackRate = storedSpeed;
     this.div = this.initializeControls();
+
+    // FIXED: Make the controller visible for 5 seconds on startup
+    runAction("blink", 5000, null, this.video);
+
+    // FIXED: Rewritten mediaEventAction to prevent speed reset on pause.
     var mediaEventAction = function (event) {
-      let storedSpeed = tc.settings.speeds[event.target.currentSrc];
-      if (!tc.settings.rememberSpeed) {
-        if (!storedSpeed) {
-          storedSpeed = 1.0;
-        }
-        setKeyBindings("reset", getKeyBindings("fast"));
-      } else {
-        storedSpeed = tc.settings.lastSpeed;
-      }
-      if (tc.settings.forceLastSavedSpeed) storedSpeed = tc.settings.lastSpeed;
-      setSpeed(event.target, storedSpeed);
-      if (event.type === "play") this.startSubtitleNudge();
-      else if (event.type === "pause" || event.type === "ended")
+      // Subtitle Nudge logic is based on play/pause state.
+      if (event.type === "play") {
+        this.startSubtitleNudge();
+      } else if (event.type === "pause" || event.type === "ended") {
         this.stopSubtitleNudge();
+        // On pause or end, DO NOT proceed to change speed.
+        // This is the key fix for the pause-resets-speed bug.
+        return;
+      }
+
+      // Speed restoration logic (for "play" and non-user "seeked" events)
+      if (event.type === "seeked" && isUserSeek) {
+        isUserSeek = false; // Reset flag
+        return; // Don't change speed on user-initiated seeks.
+      }
+
+      // Determine the speed that *should* be set, in case the site changed it.
+      let targetSpeed;
+      if (tc.settings.forceLastSavedSpeed) {
+        targetSpeed = tc.settings.lastSpeed;
+      } else if (tc.settings.rememberSpeed) {
+        targetSpeed = tc.settings.lastSpeed;
+      } else {
+        // Fallback to per-video speed or 1.0
+        targetSpeed = tc.settings.speeds[event.target.currentSrc] || 1.0;
+      }
+
+      // Only set the speed if the site has actually changed it.
+      // This avoids unnecessary "ratechange" events.
+      if (Math.abs(event.target.playbackRate - targetSpeed) > 0.01) {
+        setSpeed(event.target, targetSpeed);
+      }
     };
+
     target.addEventListener(
       "play",
       (this.handlePlay = mediaEventAction.bind(this))
@@ -241,31 +267,7 @@ function defineVideoController() {
     if (idx != -1) tc.mediaElements.splice(idx, 1);
   };
 
-  // MODIFIED: Using your debug-enhanced startSubtitleNudge function
   tc.videoController.prototype.startSubtitleNudge = function () {
-    console.log("[VSC DEBUG] startSubtitleNudge called");
-    console.log("[VSC DEBUG] location.hostname:", location.hostname);
-    console.log(
-      "[VSC DEBUG] enableSubtitleNudge:",
-      tc.settings.enableSubtitleNudge
-    );
-    console.log("[VSC DEBUG] video element:", this.video);
-    console.log(
-      "[VSC DEBUG] video src:",
-      this.video ? this.video.src : "no video"
-    );
-    console.log(
-      "[VSC DEBUG] video currentSrc:",
-      this.video ? this.video.currentSrc : "no video"
-    );
-    console.log(
-      "[VSC DEBUG] video paused:",
-      this.video ? this.video.paused : "no video"
-    );
-    console.log(
-      "[VSC DEBUG] video playbackRate:",
-      this.video ? this.video.playbackRate : "no video"
-    );
     const isYouTube =
       (this.video &&
         this.video.currentSrc &&
@@ -277,19 +279,12 @@ function defineVideoController() {
       this.nudgeIntervalId !== null ||
       !this.video
     ) {
-      console.log("[VSC DEBUG] Nudge blocked - reasons:", {
-        enableSubtitleNudge: tc.settings.enableSubtitleNudge,
-        nudgeIntervalId: this.nudgeIntervalId,
-        hasVideo: !!this.video
-      });
       return;
     }
     if (this.video.paused || this.video.playbackRate === 1.0) {
-      console.log("[VSC DEBUG] Nudge stopped - video paused or 1.0x speed");
       this.stopSubtitleNudge();
       return;
     }
-    console.log("[VSC DEBUG] Starting nudge interval");
     log(`Nudge: Starting interval: ${tc.settings.subtitleNudgeInterval}ms.`, 5);
     this.nudgeIntervalId = setInterval(() => {
       if (
@@ -345,8 +340,7 @@ function defineVideoController() {
         runAction(
           e.target.dataset["action"],
           getKeyBindings(e.target.dataset["action"], "value"),
-          e,
-          this.video
+          e
         );
         e.stopPropagation();
       },
@@ -359,8 +353,7 @@ function defineVideoController() {
           runAction(
             e.target.dataset["action"],
             getKeyBindings(e.target.dataset["action"]),
-            e,
-            this.video
+            e
           );
           e.stopPropagation();
         },
@@ -450,7 +443,7 @@ function setupListener() {
     tc.settings.lastSpeed = speed;
     chrome.storage.sync.set({ lastSpeed: speed }, () => {});
     if (fromUserInput) {
-      runAction("blink", getKeyBindings("blink", "value") || 1000, null, video);
+      runAction("blink", 1000, null, video);
     }
     if (video.vsc) {
       if (speed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
@@ -522,12 +515,7 @@ function getShadow(parent) {
   return r;
 }
 
-// MODIFIED: Replaced with your debug-enhanced initializeNow
 function initializeNow(doc) {
-  console.log(
-    "[VSC DEBUG] initializeNow called for:",
-    doc.location ? doc.location.hostname : "unknown doc"
-  );
   if (vscInitializedDocuments.has(doc) || !doc.body) return;
   if (!tc.settings.enabled) return;
   if (!doc.body.classList.contains("vsc-initialized"))
@@ -535,7 +523,6 @@ function initializeNow(doc) {
   if (typeof tc.videoController === "undefined") defineVideoController();
   setupListener();
 
-  // Re-inserting original keydown listener logic from your codebase
   var docs = Array(doc);
   try {
     if (inIframe()) docs.push(window.top.document);
@@ -578,7 +565,6 @@ function initializeNow(doc) {
     d.vscKeydownListenerAttached = true;
   });
 
-  // Original MutationObserver logic
   if (!doc.vscMutationObserverAttached) {
     const observer = new MutationObserver(function (mutations) {
       requestIdleCallback(
@@ -652,31 +638,19 @@ function initializeNow(doc) {
 
   const q = tc.settings.audioBoolean ? "video,audio" : "video";
   const foundVideos = doc.querySelectorAll(q);
-  console.log(
-    "[VSC DEBUG] Found videos:",
-    foundVideos.length,
-    "in doc:",
-    doc.location ? doc.location.hostname : "unknown"
-  );
   foundVideos.forEach((v) => {
     if (!v.vsc) new tc.videoController(v, v.parentElement);
   });
 
-  // Your enhanced iframe handling
   Array.from(doc.getElementsByTagName("iframe")).forEach((f) => {
-    console.log("[VSC DEBUG] Found iframe:", f.src);
-    if (f.vscLoadListenerAttached) return; // Prevent attaching multiple load listeners
+    if (f.vscLoadListenerAttached) return;
     f.addEventListener("load", () => {
-      console.log("[VSC DEBUG] Iframe loaded, attempting to access");
       try {
         if (f.contentDocument) {
           initializeWhenReady(f.contentDocument);
         }
       } catch (e) {
-        console.log(
-          "[VSC DEBUG] Still cannot access iframe after load:",
-          e.message
-        );
+        // Silently ignore CORS errors
       }
     });
     f.vscLoadListenerAttached = true;
@@ -685,13 +659,12 @@ function initializeNow(doc) {
         initializeWhenReady(f.contentDocument);
       }
     } catch (e) {
-      console.log("[VSC DEBUG] Error accessing iframe immediately:", e.message);
+      // Silently ignore CORS errors
     }
   });
   vscInitializedDocuments.add(doc);
 }
 
-// MODIFIED: setSpeed now takes isUserKeyPress for blink logic
 function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   const numericSpeed = Number(speed);
   if (isNaN(numericSpeed) || numericSpeed <= 0 || numericSpeed > 16) return;
@@ -705,7 +678,7 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   video.vsc.speedIndicator.textContent = numericSpeed.toFixed(2);
 
   if (isUserKeyPress && !isInitialCall && video.vsc && video.vsc.div) {
-    runAction("blink", null, null, video); // Pass video to blink
+    runAction("blink", 1000, null, video); // Pass video to blink
   }
 
   if (tc.settings.forceLastSavedSpeed) {
@@ -733,11 +706,14 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   }
 }
 
-// MODIFIED: runAction is now context-aware and calls the new simpler resetSpeed
 function runAction(action, value, e) {
   log("runAction Begin", 5);
   var mediaTagsToProcess;
-  if (e && e.target && e.target.getRootNode) {
+  const specificVideo = arguments[3] || null;
+
+  if (specificVideo) {
+    mediaTagsToProcess = [specificVideo];
+  } else if (e && e.target && e.target.getRootNode) {
     // Event-driven action
     const docContext = e.target.ownerDocument || document;
     mediaTagsToProcess = tc.mediaElements.filter(
@@ -746,20 +722,18 @@ function runAction(action, value, e) {
     const targetController = e.target.getRootNode().host;
     if (targetController) {
       // If it's a click on a controller, only use that one video
-      const specificVideo = tc.mediaElements.find(
+      const videoFromController = tc.mediaElements.find(
         (v) => v.vsc && v.vsc.div === targetController
       );
-      if (specificVideo) mediaTagsToProcess = [specificVideo];
+      if (videoFromController) mediaTagsToProcess = [videoFromController];
     }
   } else {
-    // No event context (e.g., internal blink call) or a passed specificVideo
-    const specificVideo = arguments[3] || null; // The optional 4th argument
-    if (specificVideo) mediaTagsToProcess = [specificVideo];
-    else mediaTagsToProcess = tc.mediaElements;
+    mediaTagsToProcess = tc.mediaElements;
   }
   if (mediaTagsToProcess.length === 0 && action !== "display") return;
 
   mediaTagsToProcess.forEach(function (v) {
+    if (!v.vsc) return; // Don't process videos without a controller
     var controller = v.vsc.div;
     const userDrivenActionsThatShowController = [
       "rewind",
@@ -781,9 +755,11 @@ function runAction(action, value, e) {
     const numValue = parseFloat(value);
     switch (action) {
       case "rewind":
+        isUserSeek = true;
         v.currentTime -= numValue;
         break;
       case "advance":
+        isUserSeek = true;
         v.currentTime += numValue;
         break;
       case "faster":
@@ -801,11 +777,11 @@ function runAction(action, value, e) {
         setSpeed(v, Math.max(v.playbackRate - numValue, 0.07), false, true);
         break;
       case "reset":
-        resetSpeed(v, 1.0);
-        break; // Use new simpler resetSpeed
+        resetSpeed(v, 1.0, false); // Use enhanced resetSpeed
+        break;
       case "fast":
-        resetSpeed(v, numValue, true);
-        break; // Use new simpler resetSpeed
+        resetSpeed(v, numValue, true); // Use enhanced resetSpeed
+        break;
       case "display":
         controller.classList.add("vsc-manual");
         controller.classList.toggle("vsc-hidden");
@@ -827,7 +803,7 @@ function runAction(action, value, e) {
               controller.classList.add("vsc-hidden");
             }
             controller.blinkTimeOut = undefined;
-          }, value || 1000);
+          }, numValue || 1000); // FIXED: Use numValue for consistency
         }
         break;
       case "drag":
@@ -855,22 +831,40 @@ function pause(v) {
   else v.pause();
 }
 
-// MODIFIED: Replaced with new, simpler resetSpeed function
+// FIXED: Using the improved resetSpeed function for toggling
 function resetSpeed(v, target, isFastKey = false) {
-  const fastSpeed = getKeyBindings("fast", "value") || 1.8;
+  const videoId = v.currentSrc || v.src || "default";
+  const currentSpeed = v.playbackRate;
+
   if (isFastKey) {
-    // Called by 'fast' action
-    if (Math.abs(v.playbackRate - target) < 0.01) {
-      setSpeed(v, 1.0, false, true); // Toggle to 1.0
+    // G key: Toggle between current speed and preferred speed (e.g., 1.8)
+    const preferredSpeed = target;
+    const lastToggle = lastToggleSpeed[videoId] || currentSpeed;
+
+    if (Math.abs(currentSpeed - preferredSpeed) < 0.01) {
+      // Currently at preferred speed, toggle to the last speed
+      setSpeed(v, lastToggle, false, true);
     } else {
-      setSpeed(v, target, false, true); // Set to preferred speed
+      // Not at preferred speed, save current as toggle speed and go to preferred
+      lastToggleSpeed[videoId] = currentSpeed;
+      setSpeed(v, preferredSpeed, false, true);
     }
   } else {
-    // Called by 'reset' action
-    if (Math.abs(v.playbackRate - 1.0) < 0.01) {
-      setSpeed(v, fastSpeed, false, true); // Toggle to fast speed
+    // R key: Toggle between current speed and 1.0
+    const resetSpeedValue = 1.0;
+    const lastToggle = lastToggleSpeed[videoId] || currentSpeed;
+
+    if (Math.abs(currentSpeed - resetSpeedValue) < 0.01) {
+      // Currently at 1.0, toggle to the last speed (or 1.8 if no history)
+      const speedToRestore =
+        Math.abs(lastToggle - 1.0) < 0.01
+          ? getKeyBindings("fast") || 1.8
+          : lastToggle;
+      setSpeed(v, speedToRestore, false, true);
     } else {
-      setSpeed(v, 1.0, false, true); // Set to 1.0
+      // Not at 1.0, save current as toggle speed and go to 1.0
+      lastToggleSpeed[videoId] = currentSpeed;
+      setSpeed(v, resetSpeedValue, false, true);
     }
   }
 }
@@ -919,7 +913,7 @@ var timer = null;
 function showController(controller) {
   /* ... Same original logic ... */
   if (!controller || typeof controller.classList === "undefined") return;
-  controller.classList.add("vcs-show");
+  controller.classList.add("vsc-show");
   if (timer) clearTimeout(timer);
   timer = setTimeout(function () {
     controller.classList.remove("vsc-show");

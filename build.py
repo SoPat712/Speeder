@@ -1,3 +1,4 @@
+import glob
 import os
 import re
 import shutil
@@ -53,6 +54,15 @@ def update_version_line(file_path, new_version):
 
 
 def main():
+    # Step 0: Remove all existing .xpi files upfront
+    xpi_files = glob.glob("*.xpi")
+    for f in xpi_files:
+        try:
+            os.remove(f)
+            print(f"🗑️ Removed existing archive: {f}")
+        except Exception as e:
+            print(f"⚠️ Failed to remove {f}: {e}")
+
     base_version = input("Enter the new base version (e.g., 2.0.1): ").strip()
     if not base_version:
         print("❌ No version entered. Exiting.")
@@ -62,27 +72,28 @@ def main():
     current_dir = os.getcwd()
     manifest_path = os.path.join(current_dir, TARGET_FILE)
 
-    # Determine what to exclude
-    exclude_files = [SCRIPT_NAME] + [
-        f for f in os.listdir(current_dir) if f.endswith(".xpi")
-    ]
-    exclude_dirs = [".git"]
-
-    # Step 1: Update manifest.json on disk
+    # Step 1: Update manifest.json on disk to base_version
     if os.path.exists(manifest_path):
         update_version_line(manifest_path, base_version)
     else:
         print(f"❌ {TARGET_FILE} not found. Aborting.")
         return
 
-    # Step 2: Create GitHub .xpi archive
+    # Step 2: Create videospeed-github.xpi (exclude script, .git, AND videospeed-github.xpi itself)
+    exclude_files = [SCRIPT_NAME, "videospeed-github.xpi"]
+    exclude_dirs = [".git"]
     zip_folder("videospeed-github.xpi", current_dir, exclude_files, exclude_dirs)
     print("✅ Created videospeed-github.xpi")
 
-    # Step 3: Prepare Firefox archive with version bumped to .0
+    # Step 3: Re-scan for .xpi files after GitHub archive creation, exclude them for Firefox zip
+    current_xpi_files = set(glob.glob("*.xpi"))
+    exclude_temp_files = current_xpi_files.union({SCRIPT_NAME})
+    exclude_temp_dirs = set(exclude_dirs)
+
+    # Step 4: Create videospeed-firefox.xpi from temp folder with version bumped to .0
     with tempfile.TemporaryDirectory() as temp_dir:
         for item in os.listdir(current_dir):
-            if item in exclude_files or item in exclude_dirs:
+            if item in exclude_temp_files or item in exclude_temp_dirs:
                 continue
             src = os.path.join(current_dir, item)
             dst = os.path.join(temp_dir, item)

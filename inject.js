@@ -182,37 +182,25 @@ function defineVideoController() {
       // Handle subtitle nudging based on the event type first.
       if (event.type === "play") {
         this.startSubtitleNudge();
+
+        // Reapply the current speed to ensure it doesn't get reset
+        const currentSpeed = event.target.playbackRate;
+        if (currentSpeed !== 1.0) {
+          // Only reapply if it's not already at the correct speed
+          setTimeout(() => {
+            if (Math.abs(event.target.playbackRate - currentSpeed) > 0.01) {
+              event.target.playbackRate = currentSpeed;
+            }
+          }, 0);
+        }
       } else if (event.type === "pause" || event.type === "ended") {
         this.stopSubtitleNudge();
-        // *** THE KEY FIX ***
-        // On pause or end, we do NOT want to change the speed.
-        // We only stop the nudger and exit the function immediately.
-        return;
       }
 
-      // The rest of this logic will now ONLY run for "play" and "seeked" events.
-
-      // If it's a seek initiated by our rewind/advance keys, do nothing.
+      // For seek events, don't mess with speed
       if (event.type === "seeked" && isUserSeek) {
-        isUserSeek = false; // Reset the flag for the next seek.
+        isUserSeek = false;
         return;
-      }
-
-      // Determine the speed that *should* be applied, in case the site changed it.
-      let targetSpeed;
-      if (tc.settings.forceLastSavedSpeed) {
-        targetSpeed = tc.settings.lastSpeed;
-      } else if (tc.settings.rememberSpeed) {
-        targetSpeed = tc.settings.lastSpeed;
-      } else {
-        // Fallback to the speed saved for this specific video, or 1.0
-        targetSpeed = tc.settings.speeds[event.target.currentSrc] || 1.0;
-      }
-
-      // Only re-apply the speed if the website has actually changed it.
-      // This prevents redundant "ratechange" events.
-      if (Math.abs(event.target.playbackRate - targetSpeed) > 0.01) {
-        setSpeed(event.target, targetSpeed);
       }
     };
 

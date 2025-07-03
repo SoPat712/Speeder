@@ -174,40 +174,43 @@ function defineVideoController() {
     target.playbackRate = storedSpeed;
     this.div = this.initializeControls();
 
-    // FIXED: Make the controller visible for 5 seconds on startup
+    // Make the controller visible for 5 seconds on startup
     runAction("blink", 5000, null, this.video);
 
-    // FIXED: Rewritten mediaEventAction to prevent speed reset on pause.
+    // Rewritten mediaEventAction to prevent speed reset on pause.
     var mediaEventAction = function (event) {
-      // Subtitle Nudge logic is based on play/pause state.
+      // Handle subtitle nudging based on the event type first.
       if (event.type === "play") {
         this.startSubtitleNudge();
       } else if (event.type === "pause" || event.type === "ended") {
         this.stopSubtitleNudge();
-        // On pause or end, DO NOT proceed to change speed.
-        // This is the key fix for the pause-resets-speed bug.
+        // *** THE KEY FIX ***
+        // On pause or end, we do NOT want to change the speed.
+        // We only stop the nudger and exit the function immediately.
         return;
       }
 
-      // Speed restoration logic (for "play" and non-user "seeked" events)
+      // The rest of this logic will now ONLY run for "play" and "seeked" events.
+
+      // If it's a seek initiated by our rewind/advance keys, do nothing.
       if (event.type === "seeked" && isUserSeek) {
-        isUserSeek = false; // Reset flag
-        return; // Don't change speed on user-initiated seeks.
+        isUserSeek = false; // Reset the flag for the next seek.
+        return;
       }
 
-      // Determine the speed that *should* be set, in case the site changed it.
+      // Determine the speed that *should* be applied, in case the site changed it.
       let targetSpeed;
       if (tc.settings.forceLastSavedSpeed) {
         targetSpeed = tc.settings.lastSpeed;
       } else if (tc.settings.rememberSpeed) {
         targetSpeed = tc.settings.lastSpeed;
       } else {
-        // Fallback to per-video speed or 1.0
+        // Fallback to the speed saved for this specific video, or 1.0
         targetSpeed = tc.settings.speeds[event.target.currentSrc] || 1.0;
       }
 
-      // Only set the speed if the site has actually changed it.
-      // This avoids unnecessary "ratechange" events.
+      // Only re-apply the speed if the website has actually changed it.
+      // This prevents redundant "ratechange" events.
       if (Math.abs(event.target.playbackRate - targetSpeed) > 0.01) {
         setSpeed(event.target, targetSpeed);
       }
@@ -390,7 +393,7 @@ function defineVideoController() {
         const r = parentEl.getRootNode();
         const s = r && r.querySelector ? r.querySelector(".scrim") : null;
         if (s) s.prepend(fragment);
-        else parentEl.insertBefore(fragment, pEl.firstChild);
+        else parentEl.insertBefore(fragment, parentEl.firstChild);
         break;
       default:
         parentEl.insertBefore(fragment, parentEl.firstChild);
@@ -831,7 +834,6 @@ function pause(v) {
   else v.pause();
 }
 
-// FIXED: Using the improved resetSpeed function for toggling
 function resetSpeed(v, target, isFastKey = false) {
   const videoId = v.currentSrc || v.src || "default";
   const currentSpeed = v.playbackRate;
@@ -879,7 +881,6 @@ function jumpToMark(v) {
   if (v.vsc && typeof v.vsc.mark === "number") v.currentTime = v.vsc.mark;
 }
 function handleDrag(video, e) {
-  /* ... Same original logic ... */
   const c = video.vsc.div;
   const sC = c.shadowRoot.querySelector("#controller");
   var pE = c.parentElement;
@@ -911,7 +912,6 @@ function handleDrag(video, e) {
 }
 var timer = null;
 function showController(controller) {
-  /* ... Same original logic ... */
   if (!controller || typeof controller.classList === "undefined") return;
   controller.classList.add("vsc-show");
   if (timer) clearTimeout(timer);

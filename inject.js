@@ -315,8 +315,15 @@ function defineVideoController() {
   tc.videoController.prototype.initializeControls = function () {
     const doc = this.video.ownerDocument;
     const speed = this.video.playbackRate.toFixed(2);
-    var top = Math.max(this.video.offsetTop, 0) + "px",
+    // Fix for videos rendered after page load - use relative positioning
+    var top = "10px",
+      left = "10px";
+
+    // Try to get actual position, but fallback to default if not available
+    if (this.video.offsetTop > 0 || this.video.offsetLeft > 0) {
+      top = Math.max(this.video.offsetTop, 0) + "px";
       left = Math.max(this.video.offsetLeft, 0) + "px";
+    }
     var wrapper = doc.createElement("div");
     wrapper.classList.add("vsc-controller");
     if (!this.video.src && !this.video.currentSrc)

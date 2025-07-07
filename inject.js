@@ -160,6 +160,8 @@ function defineVideoController() {
     this.video = target;
     this.parent = target.parentElement || parent;
     this.nudgeIntervalId = null;
+
+    // Determine what speed to use
     let storedSpeed = tc.settings.speeds[target.currentSrc];
     if (!tc.settings.rememberSpeed) {
       if (!storedSpeed) {
@@ -171,7 +173,15 @@ function defineVideoController() {
     if (tc.settings.forceLastSavedSpeed) {
       storedSpeed = tc.settings.lastSpeed;
     }
-    target.playbackRate = storedSpeed;
+
+    // FIXED: Actually apply the speed to the video element
+    // Use setSpeed function to properly set the speed with all the necessary logic
+    setTimeout(() => {
+      if (this.video && this.video.vsc) {
+        setSpeed(this.video, storedSpeed, true, false);
+      }
+    }, 0);
+
     this.div = this.initializeControls();
 
     // Make the controller visible for 5 seconds on startup
@@ -183,15 +193,34 @@ function defineVideoController() {
       if (event.type === "play") {
         this.startSubtitleNudge();
 
-        // Reapply the current speed to ensure it doesn't get reset
+        // FIXED: Only reapply speed if there's a significant mismatch AND it's a new video
         const currentSpeed = event.target.playbackRate;
-        if (currentSpeed !== 1.0) {
-          // Only reapply if it's not already at the correct speed
+        const videoId =
+          event.target.currentSrc || event.target.src || "default";
+
+        // Get the expected speed based on settings
+        let expectedSpeed;
+        if (tc.settings.forceLastSavedSpeed) {
+          expectedSpeed = tc.settings.lastSpeed;
+        } else {
+          expectedSpeed = tc.settings.speeds[videoId] || tc.settings.lastSpeed;
+        }
+
+        // Only reapply speed if:
+        // 1. The current speed is 1.0 (default) AND we have a stored speed that's different
+        // 2. OR if forceLastSavedSpeed is enabled and speeds don't match
+        const shouldReapplySpeed =
+          (Math.abs(currentSpeed - 1.0) < 0.01 &&
+            Math.abs(expectedSpeed - 1.0) > 0.01) ||
+          (tc.settings.forceLastSavedSpeed &&
+            Math.abs(currentSpeed - expectedSpeed) > 0.01);
+
+        if (shouldReapplySpeed) {
           setTimeout(() => {
-            if (Math.abs(event.target.playbackRate - currentSpeed) > 0.01) {
-              event.target.playbackRate = currentSpeed;
+            if (event.target.vsc) {
+              setSpeed(event.target, expectedSpeed, false, false);
             }
-          }, 0);
+          }, 10);
         }
       } else if (event.type === "pause" || event.type === "ended") {
         this.stopSubtitleNudge();
@@ -220,6 +249,32 @@ function defineVideoController() {
       "seeked",
       (this.handleSeek = mediaEventAction.bind(this))
     );
+
+    // ADDITIONAL FIX: Listen for loadedmetadata to reapply speed when video source changes
+    target.addEventListener("loadedmetadata", () => {
+      if (this.video && this.video.vsc) {
+        const currentSpeed = this.video.playbackRate;
+        const videoId = this.video.currentSrc || this.video.src || "default";
+
+        // Get expected speed
+        let expectedSpeed;
+        if (tc.settings.forceLastSavedSpeed) {
+          expectedSpeed = tc.settings.lastSpeed;
+        } else {
+          expectedSpeed = tc.settings.speeds[videoId] || tc.settings.lastSpeed;
+        }
+
+        // Only reapply if current speed is default (1.0) and we have a different stored speed
+        const shouldReapplySpeed =
+          Math.abs(currentSpeed - 1.0) < 0.01 &&
+          Math.abs(expectedSpeed - 1.0) > 0.01;
+
+        if (shouldReapplySpeed) {
+          setSpeed(this.video, expectedSpeed, false, false);
+        }
+      }
+    });
+
     var srcObserver = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (
@@ -233,6 +288,19 @@ function defineVideoController() {
               this.div.classList.add("vsc-nosource");
             } else {
               this.div.classList.remove("vsc-nosource");
+
+              // FIXED: Reapply speed when source changes (like in shorts)
+              const expectedSpeed = tc.settings.forceLastSavedSpeed
+                ? tc.settings.lastSpeed
+                : tc.settings.speeds[mutation.target.currentSrc] ||
+                  tc.settings.lastSpeed;
+
+              setTimeout(() => {
+                if (mutation.target.vsc) {
+                  setSpeed(mutation.target, expectedSpeed, false, false);
+                }
+              }, 100);
+
               if (!mutation.target.paused) this.startSubtitleNudge();
             }
           }

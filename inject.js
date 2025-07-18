@@ -137,6 +137,31 @@ chrome.storage.sync.get(tc.settings, function (storage) {
       predefined: true
     });
   }
+  // Add a listener for messages from the popup.
+  // We use a global flag to ensure the listener is only attached once.
+  if (!window.vscMessageListener) {
+    chrome.runtime.onMessage.addListener(
+      function (request, sender, sendResponse) {
+        // Check if the message is a request to re-scan the page.
+        if (request.action === "rescan_page") {
+          log("Re-scan command received from popup.", 4);
+
+          // Call the main initialization function. It's designed to be safe
+          // to run multiple times and will pick up any new videos.
+          initializeWhenReady(document);
+
+          // Send a response to the popup to confirm completion.
+          sendResponse({ status: "complete" });
+        }
+
+        // Required to allow for asynchronous responses.
+        return true;
+      }
+    );
+
+    // Set the flag to prevent adding the listener again.
+    window.vscMessageListener = true;
+  }
   initializeWhenReady(document);
 });
 

@@ -19,6 +19,31 @@ document.addEventListener("DOMContentLoaded", function () {
     toggleEnabled(false, settingsSavedReloadMessage);
   });
 
+  // --- REVISED: "Re-scan" button functionality ---
+  document.querySelector("#refresh").addEventListener("click", function () {
+    setStatusMessage("Re-scanning page...");
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs[0] && tabs[0].id) {
+        // Send a message to the content script, asking it to re-initialize.
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          { action: "rescan_page" },
+          function (response) {
+            if (chrome.runtime.lastError) {
+              // This error is expected on pages where content scripts cannot run.
+              setStatusMessage("Cannot run on this page.");
+            } else if (response && response.status === "complete") {
+              setStatusMessage("Scan complete. Closing...");
+              setTimeout(() => window.close(), 500); // Close popup on success.
+            } else {
+              setStatusMessage("Scan failed. Please reload the page.");
+            }
+          }
+        );
+      }
+    });
+  });
+
   chrome.storage.sync.get({ enabled: true }, function (storage) {
     toggleEnabledUI(storage.enabled);
   });
@@ -42,9 +67,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const suffix = `${enabled ? "" : "_disabled"}.png`;
     chrome.browserAction.setIcon({
       path: {
-        "19": "icons/icon19" + suffix,
-        "38": "icons/icon38" + suffix,
-        "48": "icons/icon48" + suffix
+        19: "icons/icon19" + suffix,
+        38: "icons/icon38" + suffix,
+        48: "icons/icon48" + suffix
       }
     });
   }

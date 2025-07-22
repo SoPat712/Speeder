@@ -249,6 +249,7 @@ function defineVideoController() {
         }
       } else if (event.type === "pause" || event.type === "ended") {
         this.stopSubtitleNudge();
+        tc.isNudging = false;
       }
 
       // For seek events, don't mess with speed
@@ -369,14 +370,24 @@ function defineVideoController() {
       this.stopSubtitleNudge();
       return;
     }
+    // Additional  check to not start if paused
+    if (this.video.paused) {
+      return;
+    }
     log(`Nudge: Starting interval: ${tc.settings.subtitleNudgeInterval}ms.`, 5);
     this.nudgeIntervalId = setInterval(() => {
       if (
         !this.video ||
         this.video.paused ||
+        this.video.ended ||
         this.video.playbackRate === 1.0 ||
         tc.isNudging
       ) {
+        this.stopSubtitleNudge();
+        return;
+      }
+      // Double-check pause state before nudging
+      if (this.video.paused) {
         this.stopSubtitleNudge();
         return;
       }

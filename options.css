@@ -5,6 +5,7 @@ body {
   font-family: sans-serif;
   font-size: 12px;
   color: rgb(48, 57, 66);
+  background-color: white;
 }
 
 h1,
@@ -109,4 +110,77 @@ select {
 .customKey {
   color: transparent;
   text-shadow: 0 0 0 #000000;
+}
+
+/* Dark mode styles */
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+  }
+
+  h3 {
+    color: #ffffff;
+  }
+
+  header {
+    border-bottom: 1px solid #333;
+    background: linear-gradient(#1a1a1a, #1a1a1a 40%, rgba(26, 26, 26, 0.92));
+  }
+
+  button {
+    background-image: linear-gradient(#404040, #404040 38%, #353535);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 1px 2px rgba(0, 0, 0, 0.75);
+    color: #e0e0e0;
+    text-shadow: 0 1px 0 rgb(20, 20, 20);
+  }
+
+  button:hover {
+    background-image: linear-gradient(#4a4a4a, #4a4a4a 38%, #3f3f3f);
+  }
+
+  input[type="text"], 
+  input[type="checkbox"],
+  select,
+  textarea {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border: 1px solid #555;
+  }
+
+  input[type="text"]:focus,
+  select:focus,
+  textarea:focus {
+    background-color: #333;
+    border-color: #777;
+    outline: none;
+  }
+
+  select option {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+  }
+
+  .customKey {
+    color: transparent;
+    text-shadow: 0 0 0 #e0e0e0;
+  }
+
+  #status {
+    color: #888;
+  }
+
+  a {
+    color: #66b3ff;
+  }
+
+  a:visited {
+    color: #cc99ff;
+  }
+
+  hr {
+    border-color: #333;
+  }
 }

@@ -84,4 +84,4 @@ repository contains the code behind the [Chrome Extension](https://chrome.google
 
 ### License
 
-(MIT License) - Copyright (c) 2025 Josh Patra
+(GPLv3) - Copyright (c) 2025 Josh Patra

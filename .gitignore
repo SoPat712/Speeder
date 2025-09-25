@@ -2,5 +2,6 @@
 local
 
 # IntelliJ IDEA
+*.xpi
 .idea/
 node_modules

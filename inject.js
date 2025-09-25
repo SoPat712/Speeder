@@ -186,6 +186,8 @@ function defineVideoController() {
     this.parent = target.parentElement || parent;
     this.nudgeIntervalId = null;
 
+    log(`Creating video controller for ${target.tagName} with src: ${target.src || target.currentSrc || 'none'}`, 4);
+
     // Determine what speed to use
     let storedSpeed = tc.settings.speeds[target.currentSrc];
     if (!tc.settings.rememberSpeed) {
@@ -208,6 +210,13 @@ function defineVideoController() {
     }, 0);
 
     this.div = this.initializeControls();
+
+    if (!this.div) {
+      log("ERROR: Failed to create controller div!", 2);
+      return;
+    }
+
+    log(`Controller created and attached to DOM. Hidden: ${this.div.classList.contains('vsc-hidden')}`, 4);
 
     // Make the controller visible for 5 seconds on startup
     runAction("blink", 5000, null, this.video);
@@ -319,7 +328,7 @@ function defineVideoController() {
               const expectedSpeed = tc.settings.forceLastSavedSpeed
                 ? tc.settings.lastSpeed
                 : tc.settings.speeds[mutation.target.currentSrc] ||
-                  tc.settings.lastSpeed;
+                tc.settings.lastSpeed;
 
               setTimeout(() => {
                 if (mutation.target.vsc) {
@@ -399,7 +408,7 @@ function defineVideoController() {
         if (
           this.video &&
           Math.abs(this.video.playbackRate - (currentRate + nudgeAmount)) <
-            nudgeAmount * 1.5
+          nudgeAmount * 1.5
         ) {
           this.video.playbackRate = currentRate;
         }
@@ -471,32 +480,49 @@ function defineVideoController() {
     var fragment = doc.createDocumentFragment();
     fragment.appendChild(wrapper);
     const parentEl = this.parent || this.video.parentElement;
+
+    log(`Inserting controller: parentEl=${!!parentEl}, parentNode=${!!parentEl?.parentNode}, hostname=${location.hostname}`, 4);
+
     if (!parentEl || !parentEl.parentNode) {
+      log("No suitable parent found, appending to body", 4);
       doc.body.appendChild(fragment);
       return wrapper;
     }
-    switch (true) {
-      case location.hostname == "www.amazon.com":
-      case location.hostname == "www.reddit.com":
-      case /hbogo\./.test(location.hostname):
-        parentEl.parentElement.insertBefore(fragment, parentEl);
-        break;
-      case location.hostname == "www.facebook.com":
-        let p =
-          parentEl.parentElement.parentElement.parentElement.parentElement
-            .parentElement.parentElement.parentElement;
-        if (p && p.firstChild) p.insertBefore(fragment, p.firstChild);
-        else parentEl.insertBefore(fragment, parentEl.firstChild);
-        break;
-      case location.hostname == "tv.apple.com":
-        const r = parentEl.getRootNode();
-        const s = r && r.querySelector ? r.querySelector(".scrim") : null;
-        if (s) s.prepend(fragment);
-        else parentEl.insertBefore(fragment, parentEl.firstChild);
-        break;
-      default:
-        parentEl.insertBefore(fragment, parentEl.firstChild);
+
+    try {
+      switch (true) {
+        case location.hostname == "www.amazon.com":
+        case location.hostname == "www.reddit.com":
+        case /hbogo\./.test(location.hostname):
+          log("Using parentElement.parentElement insertion", 5);
+          parentEl.parentElement.insertBefore(fragment, parentEl);
+          break;
+        case location.hostname == "www.facebook.com":
+          log("Using Facebook-specific insertion", 5);
+          let p =
+            parentEl.parentElement.parentElement.parentElement.parentElement
+              .parentElement.parentElement.parentElement;
+          if (p && p.firstChild) p.insertBefore(fragment, p.firstChild);
+          else parentEl.insertBefore(fragment, parentEl.firstChild);
+          break;
+        case location.hostname == "tv.apple.com":
+          log("Using Apple TV-specific insertion", 5);
+          const r = parentEl.getRootNode();
+          const s = r && r.querySelector ? r.querySelector(".scrim") : null;
+          if (s) s.prepend(fragment);
+          else parentEl.insertBefore(fragment, parentEl.firstChild);
+          break;
+        default:
+          log("Using default insertion method", 5);
+          parentEl.insertBefore(fragment, parentEl.firstChild);
+      }
+      log("Controller successfully inserted into DOM", 4);
+    } catch (error) {
+      log(`Error inserting controller: ${error.message}`, 2);
+      // Fallback to body insertion
+      doc.body.appendChild(fragment);
     }
+
     return wrapper;
   };
 }
@@ -543,7 +569,7 @@ function setupListener() {
     video.vsc.speedIndicator.textContent = speed.toFixed(2);
     tc.settings.speeds[video.currentSrc || "unknown_src"] = speed;
     tc.settings.lastSpeed = speed;
-    chrome.storage.sync.set({ lastSpeed: speed }, () => {});
+    chrome.storage.sync.set({ lastSpeed: speed }, () => { });
     if (fromUserInput) {
       runAction("blink", 1000, null, video);
     }
@@ -583,12 +609,18 @@ function setupListener() {
 }
 
 var vscInitializedDocuments = new Set();
-function initializeWhenReady(doc) {
-  if (vscInitializedDocuments.has(doc) || !doc.body) return;
+function initializeWhenReady(doc, forceReinit = false) {
+  if (!forceReinit && vscInitializedDocuments.has(doc) || !doc.body) return;
+
+  // For navigation changes, we want to re-scan even if already initialized
+  if (forceReinit) {
+    log("Force re-initialization requested", 4);
+  }
+
   if (doc.readyState === "complete") {
-    initializeNow(doc);
+    initializeNow(doc, forceReinit);
   } else {
-    doc.addEventListener("DOMContentLoaded", () => initializeNow(doc), {
+    doc.addEventListener("DOMContentLoaded", () => initializeNow(doc, forceReinit), {
       once: true
     });
   }
@@ -608,7 +640,17 @@ function getShadow(parent) {
       do {
         r.push(c);
         gC(c);
-        if (c.shadowRoot) r.push(...getShadow(c.shadowRoot));
+        if (c.shadowRoot) {
+          r.push(...getShadow(c.shadowRoot));
+          // Also check for videos in shadow DOM
+          const shadowVideos = c.shadowRoot.querySelectorAll(tc.settings.audioBoolean ? "video,audio" : "video");
+          shadowVideos.forEach(video => {
+            if (!video.vsc) {
+              log(`Found video in shadow DOM`, 5);
+              checkForVideo(video, video.parentElement, true);
+            }
+          });
+        }
         c = c.nextElementSibling;
       } while (c);
     }
@@ -617,9 +659,10 @@ function getShadow(parent) {
   return r;
 }
 
-function initializeNow(doc) {
-  if (vscInitializedDocuments.has(doc) || !doc.body) return;
+function initializeNow(doc, forceReinit = false) {
+  if (!forceReinit && (vscInitializedDocuments.has(doc) || !doc.body)) return;
   if (!tc.settings.enabled) return;
+
   if (!doc.body.classList.contains("vsc-initialized"))
     doc.body.classList.add("vsc-initialized");
   if (typeof tc.videoController === "undefined") defineVideoController();
@@ -628,7 +671,7 @@ function initializeNow(doc) {
   var docs = Array(doc);
   try {
     if (inIframe()) docs.push(window.top.document);
-  } catch (e) {}
+  } catch (e) { }
   docs.forEach(function (d) {
     if (d.vscKeydownListenerAttached) return; // Prevent duplicate listeners
     d.addEventListener(
@@ -688,9 +731,16 @@ function initializeNow(doc) {
                 });
                 break;
               case "attributes":
-                if (
-                  mutation.target.attributes["aria-hidden"] &&
-                  mutation.target.attributes["aria-hidden"].value == "false"
+                // Enhanced attribute monitoring for video detection
+                const target = mutation.target;
+                if (target.tagName === "VIDEO" || target.tagName === "AUDIO") {
+                  // Video/audio element had attributes changed - check if it needs controller
+                  if (!target.vsc && (target.src || target.currentSrc)) {
+                    checkForVideo(target, target.parentNode, true);
+                  }
+                } else if (
+                  target.attributes["aria-hidden"] &&
+                  target.attributes["aria-hidden"].value == "false"
                 ) {
                   var flattenedNodes = getShadow(document.body);
                   var node = flattenedNodes.filter(
@@ -719,9 +769,30 @@ function initializeNow(doc) {
         (node.nodeName === "AUDIO" && tc.settings.audioBoolean)
       ) {
         if (added) {
-          if (!node.vsc) node.vsc = new tc.videoController(node, parent);
+          if (!node.vsc) {
+            log(`Creating controller for ${node.tagName}: ${node.src || node.currentSrc || 'no src'}`, 4);
+            node.vsc = new tc.videoController(node, parent);
+
+            // Verify controller was created successfully
+            if (!node.vsc || !node.vsc.div) {
+              log(`ERROR: Controller creation failed for ${node.tagName}`, 2);
+            } else {
+              log(`Controller created successfully, div in DOM: ${document.contains(node.vsc.div)}`, 4);
+            }
+
+            // Add to intersection observer if available
+            if (doc.vscVideoIntersectionObserver) {
+              doc.vscVideoIntersectionObserver.observe(node);
+            }
+          }
         } else {
-          if (node.vsc) node.vsc.remove();
+          if (node.vsc) {
+            node.vsc.remove();
+            // Remove from intersection observer if available
+            if (doc.vscVideoIntersectionObserver) {
+              doc.vscVideoIntersectionObserver.unobserve(node);
+            }
+          }
         }
       } else if (node.children != undefined) {
         for (var i = 0; i < node.children.length; i++) {
@@ -731,9 +802,10 @@ function initializeNow(doc) {
       }
     }
     observer.observe(doc, {
-      attributeFilter: ["aria-hidden"],
+      attributeFilter: ["aria-hidden", "src", "currentSrc", "style", "class"],
       childList: true,
-      subtree: true
+      subtree: true,
+      attributes: true
     });
     doc.vscMutationObserverAttached = true;
   }
@@ -743,6 +815,45 @@ function initializeNow(doc) {
   foundVideos.forEach((v) => {
     if (!v.vsc) new tc.videoController(v, v.parentElement);
   });
+
+  // Enhanced video detection via media events
+  if (!doc.vscMediaEventListenersAttached) {
+    const mediaEvents = ['loadstart', 'loadedmetadata', 'canplay', 'play'];
+    mediaEvents.forEach(eventType => {
+      doc.addEventListener(eventType, function (event) {
+        const target = event.target;
+        if ((target.tagName === 'VIDEO' || (target.tagName === 'AUDIO' && tc.settings.audioBoolean)) && !target.vsc) {
+          log(`Media event ${eventType} detected new ${target.tagName.toLowerCase()}`, 5);
+          checkForVideo(target, target.parentElement, true);
+        }
+      }, true);
+    });
+    doc.vscMediaEventListenersAttached = true;
+  }
+
+  // Intersection Observer for lazy-loaded videos
+  if (!doc.vscIntersectionObserverAttached && 'IntersectionObserver' in window) {
+    const videoIntersectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const target = entry.target;
+          if ((target.tagName === 'VIDEO' || (target.tagName === 'AUDIO' && tc.settings.audioBoolean)) && !target.vsc) {
+            log(`Intersection observer detected visible ${target.tagName.toLowerCase()}`, 5);
+            checkForVideo(target, target.parentElement, true);
+          }
+        }
+      });
+    }, { threshold: 0.1 });
+
+    // Observe existing videos that might not have been processed
+    doc.querySelectorAll(q).forEach(video => {
+      videoIntersectionObserver.observe(video);
+    });
+
+    // Store observer to add new videos to it
+    doc.vscVideoIntersectionObserver = videoIntersectionObserver;
+    doc.vscIntersectionObserverAttached = true;
+  }
 
   Array.from(doc.getElementsByTagName("iframe")).forEach((f) => {
     if (f.vscLoadListenerAttached) return;
@@ -764,6 +875,115 @@ function initializeNow(doc) {
       // Silently ignore CORS errors
     }
   });
+  // Navigation change detection for SPAs
+  if (!doc.vscNavigationListenersAttached) {
+    let currentUrl = location.href;
+
+    const handleNavigation = (source) => {
+      if (location.href !== currentUrl) {
+        const oldUrl = currentUrl;
+        currentUrl = location.href;
+        log(`Navigation detected via ${source}: ${oldUrl} -> ${currentUrl}`, 4);
+
+        // Wait a bit for the new content to load, then force re-scan
+        setTimeout(() => {
+          const q = tc.settings.audioBoolean ? "video,audio" : "video";
+          const videos = document.querySelectorAll(q);
+          log(`Post-navigation scan found ${videos.length} videos`, 4);
+
+          videos.forEach(video => {
+            if (!video.vsc) {
+              log(`Adding controller to post-navigation video`, 4);
+              checkForVideo(video, video.parentElement, true);
+            }
+          });
+        }, 500); // Increased delay for content to load
+
+        // Also do a quicker scan
+        setTimeout(() => {
+          const q = tc.settings.audioBoolean ? "video,audio" : "video";
+          const videos = document.querySelectorAll(q);
+          videos.forEach(video => {
+            if (!video.vsc && (video.src || video.currentSrc)) {
+              checkForVideo(video, video.parentElement, true);
+            }
+          });
+        }, 100);
+      }
+    };
+
+    // Listen for popstate (back/forward navigation)
+    window.addEventListener('popstate', () => handleNavigation('popstate'));
+
+    // Override pushState and replaceState to catch programmatic navigation
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function (...args) {
+      originalPushState.apply(this, args);
+      handleNavigation('pushState');
+    };
+
+    history.replaceState = function (...args) {
+      originalReplaceState.apply(this, args);
+      handleNavigation('replaceState');
+    };
+
+    // Listen for hashchange as well
+    window.addEventListener('hashchange', () => handleNavigation('hashchange'));
+
+    // Also intercept fetch and XMLHttpRequest for AJAX-heavy sites
+    const originalFetch = window.fetch;
+    window.fetch = function (...args) {
+      return originalFetch.apply(this, args).then(response => {
+        // After any fetch completes, check for new videos
+        setTimeout(() => {
+          const q = tc.settings.audioBoolean ? "video,audio" : "video";
+          const videos = document.querySelectorAll(q);
+          videos.forEach(video => {
+            if (!video.vsc && (video.src || video.currentSrc || video.readyState > 0)) {
+              log(`Post-fetch scan found video`, 5);
+              checkForVideo(video, video.parentElement, true);
+            }
+          });
+        }, 200);
+        return response;
+      });
+    };
+
+    doc.vscNavigationListenersAttached = true;
+  }
+
+  // Periodic fallback scan for missed videos
+  if (!doc.vscPeriodicScanAttached) {
+    const periodicScan = () => {
+      const q = tc.settings.audioBoolean ? "video,audio" : "video";
+      const allVideos = doc.querySelectorAll(q);
+      let foundNew = false;
+
+      allVideos.forEach(video => {
+        if (!video.vsc && (video.src || video.currentSrc || video.readyState > 0)) {
+          log(`Periodic scan found missed ${video.tagName.toLowerCase()}`, 4);
+          checkForVideo(video, video.parentElement, true);
+          foundNew = true;
+        }
+      });
+
+      if (foundNew) {
+        log(`Periodic scan found ${foundNew} new videos`, 4);
+      }
+    };
+
+    // Run periodic scan every 3 seconds, but only if we have videos on the page
+    setInterval(() => {
+      if (tc.mediaElements.length > 0 || doc.querySelector(tc.settings.audioBoolean ? "video,audio" : "video")) {
+        periodicScan();
+      }
+    }, 3000);
+
+    doc.vscPeriodicScanAttached = true;
+  }
+
   vscInitializedDocuments.add(doc);
 }
 
@@ -889,24 +1109,31 @@ function runAction(action, value, e) {
         controller.classList.toggle("vsc-hidden");
         break;
       case "blink":
-        if (
-          controller.classList.contains("vsc-hidden") ||
-          controller.blinkTimeOut !== undefined
-        ) {
+        log(`Blink action: controller hidden=${controller.classList.contains("vsc-hidden")}, timeout=${controller.blinkTimeOut !== undefined}, duration=${numValue}`, 5);
+
+        // Always clear existing timeout and show controller
+        if (controller.blinkTimeOut !== undefined) {
           clearTimeout(controller.blinkTimeOut);
-          controller.classList.remove("vsc-hidden");
-          controller.blinkTimeOut = setTimeout(() => {
-            if (
-              !(
-                controller.classList.contains("vsc-manual") &&
-                !controller.classList.contains("vsc-hidden")
-              )
-            ) {
-              controller.classList.add("vsc-hidden");
-            }
-            controller.blinkTimeOut = undefined;
-          }, numValue || 1000); // FIXED: Use numValue for consistency
         }
+
+        // Always show the controller
+        controller.classList.remove("vsc-hidden");
+        log(`Controller shown, setting timeout for ${numValue || 1000}ms`, 5);
+
+        controller.blinkTimeOut = setTimeout(() => {
+          if (
+            !(
+              controller.classList.contains("vsc-manual") &&
+              !controller.classList.contains("vsc-hidden")
+            )
+          ) {
+            controller.classList.add("vsc-hidden");
+            log("Controller auto-hidden after blink timeout", 5);
+          } else {
+            log("Controller kept visible (manual mode)", 5);
+          }
+          controller.blinkTimeOut = undefined;
+        }, numValue || 1000);
         break;
       case "drag":
         if (e) handleDrag(v, e);

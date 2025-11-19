@@ -63,14 +63,26 @@ def main():
         except Exception as e:
             print(f"⚠️ Failed to remove {f}: {e}")
 
+    # Read current version from manifest.json
+    current_dir = os.getcwd()
+    manifest_path = os.path.join(current_dir, TARGET_FILE)
+    current_version = "unknown"
+    
+    if os.path.exists(manifest_path):
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            for line in f:
+                match = re.match(r'\s*"version":\s*"([^"]+)"', line)
+                if match:
+                    current_version = match.group(1)
+                    break
+    
+    print(f"📦 Current version: {current_version}")
     base_version = input("Enter the new base version (e.g., 2.0.1): ").strip()
     if not base_version:
         print("❌ No version entered. Exiting.")
         return
 
     firefox_version = f"{base_version}.0"
-    current_dir = os.getcwd()
-    manifest_path = os.path.join(current_dir, TARGET_FILE)
 
     # Step 1: Update manifest.json on disk to base_version
     if os.path.exists(manifest_path):

@@ -184,7 +184,7 @@ function defineVideoController() {
     target.vsc = this;
     this.video = target;
     this.parent = target.parentElement || parent;
-    this.nudgeIntervalId = null;
+    this.nudgeAnimationId = null;
 
     log(`Creating video controller for ${target.tagName} with src: ${target.src || target.currentSrc || 'none'}`, 4);
 
@@ -367,62 +367,85 @@ function defineVideoController() {
         this.video.currentSrc &&
         this.video.currentSrc.includes("googlevideo.com")) ||
       location.hostname.includes("youtube.com");
-    if (!isYouTube) return;
     if (
+      !isYouTube ||
       !tc.settings.enableSubtitleNudge ||
-      this.nudgeIntervalId !== null ||
-      !this.video
+      this.nudgeAnimationId !== null ||
+      !this.video ||
+      this.video.paused ||
+      this.video.playbackRate === 1.0
     ) {
       return;
     }
-    if (this.video.paused || this.video.playbackRate === 1.0) {
-      this.stopSubtitleNudge();
-      return;
-    }
-    // Additional  check to not start if paused
-    if (this.video.paused) {
-      return;
-    }
-    log(`Nudge: Starting interval: ${tc.settings.subtitleNudgeInterval}ms.`, 5);
-    this.nudgeIntervalId = setInterval(() => {
-      if (
-        !this.video ||
-        this.video.paused ||
-        this.video.ended ||
-        this.video.playbackRate === 1.0 ||
-        tc.isNudging
-      ) {
+
+    const performNudge = () => {
+      // Check if we should stop
+      if (!this.video || this.video.paused || this.video.playbackRate === 1.0) {
         this.stopSubtitleNudge();
         return;
       }
-      // Double-check pause state before nudging
-      if (this.video.paused) {
-        this.stopSubtitleNudge();
-        return;
-      }
+
       const currentRate = this.video.playbackRate;
       const nudgeAmount = tc.settings.subtitleNudgeAmount;
-      tc.isNudging = true;
+
+      // Apply nudge
       this.video.playbackRate = currentRate + nudgeAmount;
+
+      // Revert on next frame
       requestAnimationFrame(() => {
-        if (
-          this.video &&
-          Math.abs(this.video.playbackRate - (currentRate + nudgeAmount)) <
-          nudgeAmount * 1.5
-        ) {
+        if (this.video) {
           this.video.playbackRate = currentRate;
         }
-        tc.isNudging = false;
       });
-    }, tc.settings.subtitleNudgeInterval);
+
+      // Schedule next nudge using setTimeout instead of continuous RAF loop
+      this.nudgeAnimationId = setTimeout(performNudge, tc.settings.subtitleNudgeInterval);
+    };
+
+    // Start the first nudge
+    this.nudgeAnimationId = setTimeout(performNudge, tc.settings.subtitleNudgeInterval);
+    log(`Nudge: Starting with interval ${tc.settings.subtitleNudgeInterval}ms.`, 5);
   };
 
   tc.videoController.prototype.stopSubtitleNudge = function () {
-    if (this.nudgeIntervalId !== null) {
+    if (this.nudgeAnimationId !== null) {
+      clearTimeout(this.nudgeAnimationId);
+      this.nudgeAnimationId = null;
       log(`Nudge: Stopping.`, 5);
-      clearInterval(this.nudgeIntervalId);
-      this.nudgeIntervalId = null;
     }
+  };
+
+  tc.videoController.prototype.performImmediateNudge = function () {
+    const isYouTube =
+      (this.video &&
+        this.video.currentSrc &&
+        this.video.currentSrc.includes("googlevideo.com")) ||
+      location.hostname.includes("youtube.com");
+    
+    if (
+      !isYouTube ||
+      !tc.settings.enableSubtitleNudge ||
+      !this.video ||
+      this.video.paused ||
+      this.video.playbackRate === 1.0
+    ) {
+      return;
+    }
+
+    const currentRate = this.video.playbackRate;
+    const nudgeAmount = tc.settings.subtitleNudgeAmount;
+
+    // Apply nudge
+    this.video.playbackRate = currentRate + nudgeAmount;
+
+    // Revert on next frame
+    requestAnimationFrame(() => {
+      if (this.video) {
+        this.video.playbackRate = currentRate;
+      }
+    });
+
+    log(`Immediate nudge performed at rate ${currentRate.toFixed(2)}`, 5);
   };
 
   tc.videoController.prototype.initializeControls = function () {

@@ -24,8 +24,8 @@ var tc = {
     `.replace(regStrip, ""),
     defaultLogLevel: 4,
     logLevel: 5, // Set to 5 to see your debug logs
-    enableSubtitleNudge: true,
-    subtitleNudgeInterval: 25,
+    enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
+    subtitleNudgeInterval: 100, // Reduced from 25ms to 100ms (10x/sec instead of 40x/sec)
     subtitleNudgeAmount: 0.001
   },
   mediaElements: [],
@@ -123,7 +123,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
       ? Boolean(storage.enableSubtitleNudge)
       : tc.settings.enableSubtitleNudge;
   tc.settings.subtitleNudgeInterval =
-    Number(storage.subtitleNudgeInterval) || 25;
+    Number(storage.subtitleNudgeInterval) || 100; // Default 100ms for better performance
   tc.settings.subtitleNudgeAmount =
     Number(storage.subtitleNudgeAmount) || tc.settings.subtitleNudgeAmount;
   if (
@@ -378,6 +378,9 @@ function defineVideoController() {
       return;
     }
 
+    // Store the target speed so we can always revert to it
+    this.targetSpeed = this.video.playbackRate;
+
     const performNudge = () => {
       // Check if we should stop
       if (!this.video || this.video.paused || this.video.playbackRate === 1.0) {
@@ -385,20 +388,31 @@ function defineVideoController() {
         return;
       }
 
-      const currentRate = this.video.playbackRate;
+      // CRITICAL: Don't nudge if tab is hidden - prevents speed drift
+      if (document.hidden) {
+        this.nudgeAnimationId = setTimeout(performNudge, tc.settings.subtitleNudgeInterval);
+        return;
+      }
+
+      // Set flag to prevent ratechange listener from interfering
+      tc.isNudging = true;
+
+      // Cache values to avoid repeated property access
+      const targetSpeed = this.targetSpeed;
       const nudgeAmount = tc.settings.subtitleNudgeAmount;
 
-      // Apply nudge
-      this.video.playbackRate = currentRate + nudgeAmount;
+      // Apply nudge from the stored target speed (not current rate)
+      this.video.playbackRate = targetSpeed + nudgeAmount;
 
-      // Revert on next frame
-      requestAnimationFrame(() => {
-        if (this.video) {
-          this.video.playbackRate = currentRate;
+      // Revert synchronously after a microtask to ensure it happens immediately
+      Promise.resolve().then(() => {
+        if (this.video && targetSpeed) {
+          this.video.playbackRate = targetSpeed;
         }
+        tc.isNudging = false;
       });
 
-      // Schedule next nudge using setTimeout instead of continuous RAF loop
+      // Schedule next nudge
       this.nudgeAnimationId = setTimeout(performNudge, tc.settings.subtitleNudgeInterval);
     };
 
@@ -413,6 +427,8 @@ function defineVideoController() {
       this.nudgeAnimationId = null;
       log(`Nudge: Stopping.`, 5);
     }
+    // Clear the target speed when stopping
+    this.targetSpeed = null;
   };
 
   tc.videoController.prototype.performImmediateNudge = function () {
@@ -427,25 +443,27 @@ function defineVideoController() {
       !tc.settings.enableSubtitleNudge ||
       !this.video ||
       this.video.paused ||
-      this.video.playbackRate === 1.0
+      this.video.playbackRate === 1.0 ||
+      document.hidden
     ) {
       return;
     }
 
-    const currentRate = this.video.playbackRate;
+    const targetRate = this.targetSpeed || this.video.playbackRate;
     const nudgeAmount = tc.settings.subtitleNudgeAmount;
 
-    // Apply nudge
-    this.video.playbackRate = currentRate + nudgeAmount;
+    tc.isNudging = true;
+    this.video.playbackRate = targetRate + nudgeAmount;
 
-    // Revert on next frame
-    requestAnimationFrame(() => {
+    // Revert synchronously via microtask
+    Promise.resolve().then(() => {
       if (this.video) {
-        this.video.playbackRate = currentRate;
+        this.video.playbackRate = targetRate;
       }
+      tc.isNudging = false;
     });
 
-    log(`Immediate nudge performed at rate ${currentRate.toFixed(2)}`, 5);
+    log(`Immediate nudge performed at rate ${targetRate.toFixed(2)}`, 5);
   };
 
   tc.videoController.prototype.initializeControls = function () {
@@ -734,56 +752,69 @@ function initializeNow(doc, forceReinit = false) {
   });
 
   if (!doc.vscMutationObserverAttached) {
+    // Throttle mutation processing to reduce CPU usage
+    let mutationProcessingScheduled = false;
+    let pendingMutations = [];
+
     const observer = new MutationObserver(function (mutations) {
-      requestIdleCallback(
-        (_) => {
-          mutations.forEach(function (mutation) {
-            switch (mutation.type) {
-              case "childList":
-                mutation.addedNodes.forEach(function (node) {
-                  if (typeof node === "function") return;
-                  checkForVideo(node, node.parentNode || mutation.target, true);
-                });
-                mutation.removedNodes.forEach(function (node) {
-                  if (typeof node === "function") return;
-                  checkForVideo(
-                    node,
-                    node.parentNode || mutation.target,
-                    false
-                  );
-                });
-                break;
-              case "attributes":
-                // Enhanced attribute monitoring for video detection
-                const target = mutation.target;
-                if (target.tagName === "VIDEO" || target.tagName === "AUDIO") {
-                  // Video/audio element had attributes changed - check if it needs controller
-                  if (!target.vsc && (target.src || target.currentSrc)) {
-                    checkForVideo(target, target.parentNode, true);
-                  }
-                } else if (
-                  target.attributes["aria-hidden"] &&
-                  target.attributes["aria-hidden"].value == "false"
-                ) {
-                  var flattenedNodes = getShadow(document.body);
-                  var node = flattenedNodes.filter(
-                    (x) => x.tagName == "VIDEO"
-                  )[0];
-                  if (node) {
-                    if (node.vsc) node.vsc.remove();
+      pendingMutations.push(...mutations);
+      
+      if (!mutationProcessingScheduled) {
+        mutationProcessingScheduled = true;
+        requestIdleCallback(
+          (_) => {
+            const mutationsToProcess = pendingMutations.splice(0);
+            mutationProcessingScheduled = false;
+
+            mutationsToProcess.forEach(function (mutation) {
+              switch (mutation.type) {
+                case "childList":
+                  mutation.addedNodes.forEach(function (node) {
+                    if (typeof node === "function") return;
+                    checkForVideo(node, node.parentNode || mutation.target, true);
+                  });
+                  mutation.removedNodes.forEach(function (node) {
+                    if (typeof node === "function") return;
                     checkForVideo(
                       node,
                       node.parentNode || mutation.target,
-                      true
+                      false
                     );
+                  });
+                  break;
+                case "attributes":
+                  // Enhanced attribute monitoring for video detection
+                  const target = mutation.target;
+                  if (target.tagName === "VIDEO" || target.tagName === "AUDIO") {
+                    // Video/audio element had attributes changed - check if it needs controller
+                    if (!target.vsc && (target.src || target.currentSrc)) {
+                      checkForVideo(target, target.parentNode, true);
+                    }
+                  } else if (
+                    target.attributes["aria-hidden"] &&
+                    target.attributes["aria-hidden"].value == "false"
+                  ) {
+                    // Only scan shadow DOM if absolutely necessary (expensive operation)
+                    var flattenedNodes = getShadow(document.body);
+                    var node = flattenedNodes.filter(
+                      (x) => x.tagName == "VIDEO"
+                    )[0];
+                    if (node) {
+                      if (node.vsc) node.vsc.remove();
+                      checkForVideo(
+                        node,
+                        node.parentNode || mutation.target,
+                        true
+                      );
+                    }
                   }
-                }
-                break;
-            }
-          });
-        },
-        { timeout: 1000 }
-      );
+                  break;
+              }
+            });
+          },
+          { timeout: 1000 }
+        );
+      }
     });
     function checkForVideo(node, parent, added) {
       if (!added && document.body.contains(node)) return;
@@ -825,7 +856,7 @@ function initializeNow(doc, forceReinit = false) {
       }
     }
     observer.observe(doc, {
-      attributeFilter: ["aria-hidden", "src", "currentSrc", "style", "class"],
+      attributeFilter: ["aria-hidden", "src", "currentSrc"], // Removed "style" and "class" for better performance
       childList: true,
       subtree: true,
       attributes: true
@@ -955,21 +986,28 @@ function initializeNow(doc, forceReinit = false) {
     // Listen for hashchange as well
     window.addEventListener('hashchange', () => handleNavigation('hashchange'));
 
-    // Also intercept fetch and XMLHttpRequest for AJAX-heavy sites
+    // Throttle fetch-based video scanning to reduce CPU usage
+    let lastFetchScanTime = 0;
+    const FETCH_SCAN_THROTTLE = 2000; // Only scan once every 2 seconds max
+
     const originalFetch = window.fetch;
     window.fetch = function (...args) {
       return originalFetch.apply(this, args).then(response => {
-        // After any fetch completes, check for new videos
-        setTimeout(() => {
-          const q = tc.settings.audioBoolean ? "video,audio" : "video";
-          const videos = document.querySelectorAll(q);
-          videos.forEach(video => {
-            if (!video.vsc && (video.src || video.currentSrc || video.readyState > 0)) {
-              log(`Post-fetch scan found video`, 5);
-              checkForVideo(video, video.parentElement, true);
-            }
-          });
-        }, 200);
+        // Throttle video scanning after fetch to avoid excessive CPU usage
+        const now = Date.now();
+        if (now - lastFetchScanTime > FETCH_SCAN_THROTTLE) {
+          lastFetchScanTime = now;
+          setTimeout(() => {
+            const q = tc.settings.audioBoolean ? "video,audio" : "video";
+            const videos = document.querySelectorAll(q);
+            videos.forEach(video => {
+              if (!video.vsc && (video.src || video.currentSrc || video.readyState > 0)) {
+                log(`Post-fetch scan found video`, 5);
+                checkForVideo(video, video.parentElement, true);
+              }
+            });
+          }, 200);
+        }
         return response;
       });
     };
@@ -982,27 +1020,27 @@ function initializeNow(doc, forceReinit = false) {
     const periodicScan = () => {
       const q = tc.settings.audioBoolean ? "video,audio" : "video";
       const allVideos = doc.querySelectorAll(q);
-      let foundNew = false;
+      let foundNewCount = 0;
 
       allVideos.forEach(video => {
         if (!video.vsc && (video.src || video.currentSrc || video.readyState > 0)) {
           log(`Periodic scan found missed ${video.tagName.toLowerCase()}`, 4);
           checkForVideo(video, video.parentElement, true);
-          foundNew = true;
+          foundNewCount++;
         }
       });
 
-      if (foundNew) {
-        log(`Periodic scan found ${foundNew} new videos`, 4);
+      if (foundNewCount > 0) {
+        log(`Periodic scan found ${foundNewCount} new videos`, 4);
       }
     };
 
-    // Run periodic scan every 3 seconds, but only if we have videos on the page
+    // Run periodic scan every 5 seconds (reduced frequency), only if we have videos
     setInterval(() => {
       if (tc.mediaElements.length > 0 || doc.querySelector(tc.settings.audioBoolean ? "video,audio" : "video")) {
         periodicScan();
       }
-    }, 3000);
+    }, 5000); // Increased from 3s to 5s for better performance
 
     doc.vscPeriodicScanAttached = true;
   }
@@ -1021,6 +1059,9 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   );
   tc.settings.lastSpeed = numericSpeed;
   video.vsc.speedIndicator.textContent = numericSpeed.toFixed(2);
+
+  // Update the target speed for nudge so it knows what to revert to
+  video.vsc.targetSpeed = numericSpeed;
 
   if (isUserKeyPress && !isInitialCall && video.vsc && video.vsc.div) {
     runAction("blink", 1000, null, video); // Pass video to blink
@@ -1108,18 +1149,19 @@ function runAction(action, value, e) {
         v.currentTime += numValue;
         break;
       case "faster":
-        setSpeed(
-          v,
-          Math.min(
-            (v.playbackRate < 0.07 ? 0.07 : v.playbackRate) + numValue,
-            16
-          ),
-          false,
-          true
-        );
+        // Round to the step precision to avoid floating-point issues (e.g., 1.80 + 0.1 = 1.9000000000000001)
+        var fasterStep = numValue;
+        var fasterPrecision = Math.round(1 / fasterStep); // e.g., 0.1 -> 10, 0.05 -> 20, 0.25 -> 4
+        var newFasterSpeed = (v.playbackRate < 0.07 ? 0.07 : v.playbackRate) + fasterStep;
+        newFasterSpeed = Math.round(newFasterSpeed * fasterPrecision) / fasterPrecision;
+        setSpeed(v, Math.min(newFasterSpeed, 16), false, true);
         break;
       case "slower":
-        setSpeed(v, Math.max(v.playbackRate - numValue, 0.07), false, true);
+        var slowerStep = numValue;
+        var slowerPrecision = Math.round(1 / slowerStep);
+        var newSlowerSpeed = v.playbackRate - slowerStep;
+        newSlowerSpeed = Math.round(newSlowerSpeed * slowerPrecision) / slowerPrecision;
+        setSpeed(v, Math.max(newSlowerSpeed, 0.07), false, true);
         break;
       case "reset":
         resetSpeed(v, 1.0, false); // Use enhanced resetSpeed

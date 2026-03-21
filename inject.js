@@ -32,6 +32,483 @@ var tc = {
   isNudging: false
 };
 
+var MIN_SPEED = 0.0625;
+var MAX_SPEED = 16;
+var vscObservedRoots = new WeakSet();
+var requestIdle =
+  typeof window.requestIdleCallback === "function"
+    ? window.requestIdleCallback.bind(window)
+    : function (callback, options) {
+        return setTimeout(callback, (options && options.timeout) || 1);
+      };
+
+var keyCodeToEventKey = {
+  32: " ",
+  37: "ArrowLeft",
+  38: "ArrowUp",
+  39: "ArrowRight",
+  40: "ArrowDown",
+  96: "0",
+  97: "1",
+  98: "2",
+  99: "3",
+  100: "4",
+  101: "5",
+  102: "6",
+  103: "7",
+  104: "8",
+  105: "9",
+  106: "*",
+  107: "+",
+  109: "-",
+  110: ".",
+  111: "/",
+  112: "F1",
+  113: "F2",
+  114: "F3",
+  115: "F4",
+  116: "F5",
+  117: "F6",
+  118: "F7",
+  119: "F8",
+  120: "F9",
+  121: "F10",
+  122: "F11",
+  123: "F12",
+  186: ";",
+  188: "<",
+  189: "-",
+  187: "+",
+  190: ">",
+  191: "/",
+  192: "~",
+  219: "[",
+  220: "\\",
+  221: "]",
+  222: "'",
+  59: ";",
+  61: "+",
+  173: "-"
+};
+
+function createDefaultBinding(action, key, keyCode, value) {
+  return {
+    action: action,
+    key: key,
+    keyCode: keyCode,
+    value: value,
+    force: false,
+    predefined: true
+  };
+}
+
+function defaultKeyBindings(storage) {
+  return [
+    createDefaultBinding(
+      "slower",
+      "S",
+      Number(storage.slowerKeyCode) || 83,
+      Number(storage.speedStep) || 0.1
+    ),
+    createDefaultBinding(
+      "faster",
+      "D",
+      Number(storage.fasterKeyCode) || 68,
+      Number(storage.speedStep) || 0.1
+    ),
+    createDefaultBinding(
+      "rewind",
+      "Z",
+      Number(storage.rewindKeyCode) || 90,
+      Number(storage.rewindTime) || 10
+    ),
+    createDefaultBinding(
+      "advance",
+      "X",
+      Number(storage.advanceKeyCode) || 88,
+      Number(storage.advanceTime) || 10
+    ),
+    createDefaultBinding(
+      "reset",
+      "R",
+      Number(storage.resetKeyCode) || 82,
+      1.0
+    ),
+    createDefaultBinding(
+      "fast",
+      "G",
+      Number(storage.fastKeyCode) || 71,
+      Number(storage.fastSpeed) || 1.8
+    )
+  ];
+}
+
+function getLegacyKeyCode(binding) {
+  if (!binding) return null;
+  if (Number.isInteger(binding.keyCode)) return binding.keyCode;
+  if (typeof binding.key === "number" && Number.isInteger(binding.key)) {
+    return binding.key;
+  }
+  return null;
+}
+
+function normalizeBindingKey(key) {
+  if (typeof key !== "string" || key.length === 0) return null;
+  if (key === "Spacebar") return " ";
+  if (key === "Esc") return "Escape";
+  if (key.length === 1 && /[a-z]/i.test(key)) return key.toUpperCase();
+  return key;
+}
+
+function legacyKeyCodeToBinding(keyCode) {
+  if (!Number.isInteger(keyCode)) return null;
+  var key = keyCodeToEventKey[keyCode];
+  if (!key && keyCode >= 48 && keyCode <= 57) {
+    key = String.fromCharCode(keyCode);
+  }
+  if (!key && keyCode >= 65 && keyCode <= 90) {
+    key = String.fromCharCode(keyCode);
+  }
+  return {
+    key: normalizeBindingKey(key),
+    keyCode: keyCode,
+    code: null,
+    disabled: false
+  };
+}
+
+function normalizeStoredBinding(binding, fallbackKeyCode) {
+  var fallbackBinding = legacyKeyCodeToBinding(fallbackKeyCode);
+  if (!binding) return fallbackBinding;
+
+  if (
+    binding.disabled === true ||
+    (binding.key === null &&
+      binding.keyCode === null &&
+      binding.code === null)
+  ) {
+    return {
+      action: binding.action,
+      key: null,
+      keyCode: null,
+      code: null,
+      disabled: true,
+      value: Number(binding.value),
+      force: String(binding.force) === "true" ? "true" : "false",
+      predefined: Boolean(binding.predefined)
+    };
+  }
+
+  var normalized = {
+    action: binding.action,
+    key: null,
+    keyCode: null,
+    code:
+      typeof binding.code === "string" && binding.code.length > 0
+        ? binding.code
+        : null,
+    disabled: false,
+    value: Number(binding.value),
+    force: String(binding.force) === "true" ? "true" : "false",
+    predefined: Boolean(binding.predefined)
+  };
+
+  if (typeof binding.key === "string") {
+    normalized.key = normalizeBindingKey(binding.key);
+  }
+
+  var legacyKeyCode = getLegacyKeyCode(binding);
+  if (Number.isInteger(legacyKeyCode)) {
+    var legacyBinding = legacyKeyCodeToBinding(legacyKeyCode);
+    if (legacyBinding) {
+      normalized.key = normalized.key || legacyBinding.key;
+      normalized.keyCode = legacyKeyCode;
+    }
+  }
+
+  if (Number.isInteger(binding.keyCode)) {
+    normalized.keyCode = binding.keyCode;
+  }
+
+  if (!normalized.key && fallbackBinding) {
+    normalized.key = fallbackBinding.key;
+    if (normalized.keyCode === null) normalized.keyCode = fallbackBinding.keyCode;
+  }
+
+  if (!normalized.key && !normalized.code && normalized.keyCode === null) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function isValidSpeed(speed) {
+  return !isNaN(speed) && speed >= MIN_SPEED && speed <= MAX_SPEED;
+}
+
+function sanitizeSpeed(speed, fallback) {
+  var numericSpeed = Number(speed);
+  return isValidSpeed(numericSpeed) ? numericSpeed : fallback;
+}
+
+function getVideoSourceKey(video) {
+  return (video && (video.currentSrc || video.src)) || "unknown_src";
+}
+
+function getControllerTargetSpeed(video) {
+  if (!video || !video.vsc) return null;
+  return isValidSpeed(video.vsc.targetSpeed) ? video.vsc.targetSpeed : null;
+}
+
+function getRememberedSpeed(video) {
+  var sourceKey = getVideoSourceKey(video);
+  if (sourceKey !== "unknown_src") {
+    var videoSpeed = tc.settings.speeds[sourceKey];
+    if (isValidSpeed(videoSpeed)) return videoSpeed;
+  }
+  if (tc.settings.forceLastSavedSpeed && isValidSpeed(tc.settings.lastSpeed)) {
+    return tc.settings.lastSpeed;
+  }
+  if (tc.settings.rememberSpeed && isValidSpeed(tc.settings.lastSpeed)) {
+    return tc.settings.lastSpeed;
+  }
+  return null;
+}
+
+function getDesiredSpeed(video) {
+  return getControllerTargetSpeed(video) || getRememberedSpeed(video) || 1.0;
+}
+
+function resolveTargetSpeed(video) {
+  return getDesiredSpeed(video);
+}
+
+function extendSpeedRestoreWindow(video, duration) {
+  if (!video || !video.vsc) return;
+
+  var restoreDuration = Number(duration) || 1500;
+  var restoreUntil = Date.now() + restoreDuration;
+  var currentUntil = Number(video.vsc.speedRestoreUntil) || 0;
+
+  video.vsc.speedRestoreUntil = Math.max(currentUntil, restoreUntil);
+}
+
+function scheduleSpeedRestore(video, desiredSpeed, reason) {
+  if (!video || !video.vsc || !isValidSpeed(desiredSpeed)) return;
+
+  if (video.vsc.restoreSpeedTimer) {
+    clearTimeout(video.vsc.restoreSpeedTimer);
+  }
+
+  video.vsc.restoreSpeedTimer = setTimeout(function () {
+    if (!video.vsc) return;
+
+    if (Math.abs(video.playbackRate - desiredSpeed) > 0.01) {
+      log(
+        `Restoring playbackRate to ${desiredSpeed.toFixed(2)} after ${reason}`,
+        4
+      );
+      setSpeed(video, desiredSpeed, false, false);
+    }
+
+    if (video.vsc) {
+      video.vsc.restoreSpeedTimer = null;
+    }
+  }, 0);
+}
+
+function rememberPendingRateChange(video, speed) {
+  if (!video || !video.vsc || !isValidSpeed(speed)) return;
+
+  video.vsc.pendingRateChange = {
+    speed: Number(speed),
+    expiresAt: Date.now() + 1000
+  };
+}
+
+function takePendingRateChange(video, currentSpeed) {
+  if (!video || !video.vsc || !video.vsc.pendingRateChange) return null;
+
+  var pendingRateChange = video.vsc.pendingRateChange;
+  if (
+    !isValidSpeed(pendingRateChange.speed) ||
+    pendingRateChange.expiresAt <= Date.now()
+  ) {
+    video.vsc.pendingRateChange = null;
+    return null;
+  }
+
+  if (Math.abs(Number(pendingRateChange.speed) - currentSpeed) > 0.01) {
+    return null;
+  }
+
+  video.vsc.pendingRateChange = null;
+  return pendingRateChange;
+}
+
+function matchesKeyBinding(binding, event) {
+  if (!binding || binding.disabled) return false;
+
+  var normalizedEventKey = normalizeBindingKey(event.key);
+  if (binding.key && normalizedEventKey) {
+    return binding.key === normalizedEventKey;
+  }
+
+  if (binding.code && event.code) {
+    return binding.code === event.code;
+  }
+
+  var legacyKeyCode = getLegacyKeyCode(binding);
+  return Number.isInteger(legacyKeyCode) && legacyKeyCode === event.keyCode;
+}
+
+function mediaSelector() {
+  return tc.settings.audioBoolean ? "video,audio" : "video";
+}
+
+function isMediaElement(node) {
+  return (
+    node &&
+    node.nodeType === Node.ELEMENT_NODE &&
+    (node.nodeName === "VIDEO" ||
+      (node.nodeName === "AUDIO" && tc.settings.audioBoolean))
+  );
+}
+
+function hasUsableMediaSource(node) {
+  if (!isMediaElement(node) || !node.isConnected) return false;
+  if (node.currentSrc || node.src || node.srcObject) return true;
+  if (typeof node.readyState === "number" && node.readyState > 0) return true;
+  if (
+    typeof node.networkState === "number" &&
+    typeof HTMLMediaElement !== "undefined" &&
+    (node.networkState === HTMLMediaElement.NETWORK_IDLE ||
+      node.networkState === HTMLMediaElement.NETWORK_LOADING)
+  ) {
+    return true;
+  }
+
+  if (node.querySelectorAll) {
+    return Array.from(node.querySelectorAll("source[src]")).some(function (
+      source
+    ) {
+      var src = source.getAttribute("src");
+      return typeof src === "string" && src.trim().length > 0;
+    });
+  }
+
+  return false;
+}
+
+function ensureController(node, parent) {
+  if (!isMediaElement(node) || node.vsc) return node && node.vsc;
+  if (!hasUsableMediaSource(node)) {
+    log(
+      `Deferring controller creation for ${node.tagName}: no usable source yet`,
+      5
+    );
+    return null;
+  }
+  log(
+    `Creating controller for ${node.tagName}: ${node.src || node.currentSrc || "no src"}`,
+    4
+  );
+  node.vsc = new tc.videoController(
+    node,
+    parent || node.parentElement || node.parentNode
+  );
+  return node.vsc;
+}
+
+function removeController(node) {
+  if (node && node.vsc) node.vsc.remove();
+}
+
+function scanNodeForMedia(node, parent, added) {
+  if (!node || typeof node === "function") return;
+
+  if (node.nodeType === Node.DOCUMENT_NODE) {
+    scanNodeForMedia(node.body || node.documentElement, node.body, added);
+    return;
+  }
+
+  if (
+    node.nodeType !== Node.ELEMENT_NODE &&
+    node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE
+  ) {
+    return;
+  }
+
+  var ownerDocument = node.ownerDocument || document;
+  if (!added && ownerDocument.body && ownerDocument.body.contains(node)) return;
+
+  if (isMediaElement(node)) {
+    if (added) ensureController(node, parent);
+    else removeController(node);
+  }
+
+  if (node.children) {
+    Array.from(node.children).forEach(function (child) {
+      scanNodeForMedia(child, child.parentNode || parent, added);
+    });
+  }
+
+  if (node.shadowRoot) {
+    observeRoot(node.shadowRoot);
+    scanNodeForMedia(node.shadowRoot, node, added);
+  }
+}
+
+function getScanNodeForRoot(root) {
+  if (!root) return null;
+  if (root.nodeType === Node.DOCUMENT_NODE) {
+    return root.body || root.documentElement;
+  }
+  return root;
+}
+
+function scanRootForMedia(root) {
+  var scanRoot = getScanNodeForRoot(root);
+  if (!scanRoot) return;
+  scanNodeForMedia(scanRoot, root.host || scanRoot.parentNode || scanRoot, true);
+  if (root.nodeType === Node.DOCUMENT_NODE) {
+    attachIframeListeners(root);
+  }
+}
+
+function observeRoot(root) {
+  if (!root || vscObservedRoots.has(root)) return;
+  vscObservedRoots.add(root);
+  setupListener(root);
+  attachMutationObserver(root);
+  attachMediaDetectionListeners(root);
+  scanRootForMedia(root);
+}
+
+function patchAttachShadow() {
+  if (
+    window.vscAttachShadowPatched ||
+    typeof Element === "undefined" ||
+    typeof Element.prototype.attachShadow !== "function"
+  ) {
+    return;
+  }
+
+  var originalAttachShadow = Element.prototype.attachShadow;
+  Element.prototype.attachShadow = function () {
+    var shadowRoot = originalAttachShadow.apply(this, arguments);
+    try {
+      if (shadowRoot) {
+        observeRoot(shadowRoot);
+      }
+    } catch (error) {
+      log(`Unable to observe shadow root: ${error.message}`, 3);
+    }
+    return shadowRoot;
+  };
+  window.vscAttachShadowPatched = true;
+}
+
 /* Log levels */
 function log(message, level) {
   verbosity = tc.settings.logLevel;
@@ -50,51 +527,16 @@ function log(message, level) {
 }
 
 chrome.storage.sync.get(tc.settings, function (storage) {
-  // Original initialization from your code
-  tc.settings.keyBindings = storage.keyBindings;
-  if (storage.keyBindings.length == 0) {
-    tc.settings.keyBindings.push({
-      action: "slower",
-      key: Number(storage.slowerKeyCode) || 83,
-      value: Number(storage.speedStep) || 0.1,
-      force: false,
-      predefined: true
-    });
-    tc.settings.keyBindings.push({
-      action: "faster",
-      key: Number(storage.fasterKeyCode) || 68,
-      value: Number(storage.speedStep) || 0.1,
-      force: false,
-      predefined: true
-    });
-    tc.settings.keyBindings.push({
-      action: "rewind",
-      key: Number(storage.rewindKeyCode) || 90,
-      value: Number(storage.rewindTime) || 10,
-      force: false,
-      predefined: true
-    });
-    tc.settings.keyBindings.push({
-      action: "advance",
-      key: Number(storage.advanceKeyCode) || 88,
-      value: Number(storage.advanceTime) || 10,
-      force: false,
-      predefined: true
-    });
-    tc.settings.keyBindings.push({
-      action: "reset",
-      key: Number(storage.resetKeyCode) || 82,
-      value: 1.0,
-      force: false,
-      predefined: true
-    });
-    tc.settings.keyBindings.push({
-      action: "fast",
-      key: Number(storage.fastKeyCode) || 71,
-      value: Number(storage.fastSpeed) || 1.8,
-      force: false,
-      predefined: true
-    });
+  var storedBindings = Array.isArray(storage.keyBindings)
+    ? storage.keyBindings
+    : [];
+
+  tc.settings.keyBindings = storedBindings
+    .map((binding) => normalizeStoredBinding(binding))
+    .filter(Boolean);
+
+  if (tc.settings.keyBindings.length === 0) {
+    tc.settings.keyBindings = defaultKeyBindings(storage);
     tc.settings.version = "0.5.3";
     chrome.storage.sync.set({
       keyBindings: tc.settings.keyBindings,
@@ -110,6 +552,13 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     });
   }
   tc.settings.lastSpeed = Number(storage.lastSpeed);
+  if (!isValidSpeed(tc.settings.lastSpeed) && tc.settings.lastSpeed !== 1.0) {
+    log(`Invalid lastSpeed detected: ${storage.lastSpeed}, resetting to 1.0`, 3);
+    tc.settings.lastSpeed = 1.0;
+    chrome.storage.sync.set({ lastSpeed: 1.0 });
+  } else if (!isValidSpeed(tc.settings.lastSpeed)) {
+    tc.settings.lastSpeed = 1.0;
+  }
   tc.settings.displayKeyCode = Number(storage.displayKeyCode);
   tc.settings.rememberSpeed = Boolean(storage.rememberSpeed);
   tc.settings.forceLastSavedSpeed = Boolean(storage.forceLastSavedSpeed);
@@ -129,14 +578,17 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   if (
     tc.settings.keyBindings.filter((x) => x.action == "display").length == 0
   ) {
-    tc.settings.keyBindings.push({
-      action: "display",
-      key: Number(storage.displayKeyCode) || 86,
-      value: 0,
-      force: false,
-      predefined: true
-    });
+    tc.settings.keyBindings.push(
+      createDefaultBinding(
+        "display",
+        "V",
+        Number(storage.displayKeyCode) || 86,
+        0
+      )
+    );
+    chrome.storage.sync.set({ keyBindings: tc.settings.keyBindings });
   }
+  patchAttachShadow();
   // Add a listener for messages from the popup.
   // We use a global flag to ensure the listener is only attached once.
   if (!window.vscMessageListener) {
@@ -145,12 +597,8 @@ chrome.storage.sync.get(tc.settings, function (storage) {
         // Check if the message is a request to re-scan the page.
         if (request.action === "rescan_page") {
           log("Re-scan command received from popup.", 4);
+          initializeWhenReady(document, true);
 
-          // Call the main initialization function. It's designed to be safe
-          // to run multiple times and will pick up any new videos.
-          initializeWhenReady(document);
-
-          // Send a response to the popup to confirm completion.
           sendResponse({ status: "complete" });
         }
 
@@ -185,29 +633,20 @@ function defineVideoController() {
     this.video = target;
     this.parent = target.parentElement || parent;
     this.nudgeAnimationId = null;
+    this.restoreSpeedTimer = null;
+    this.pendingRateChange = null;
+    this.speedRestoreUntil = 0;
 
     log(`Creating video controller for ${target.tagName} with src: ${target.src || target.currentSrc || 'none'}`, 4);
 
-    // Determine what speed to use
-    let storedSpeed = tc.settings.speeds[target.currentSrc];
-    if (!tc.settings.rememberSpeed) {
-      if (!storedSpeed) {
-        storedSpeed = 1.0;
-      }
-    } else {
-      storedSpeed = tc.settings.lastSpeed;
-    }
-    if (tc.settings.forceLastSavedSpeed) {
-      storedSpeed = tc.settings.lastSpeed;
+    let storedSpeed = sanitizeSpeed(resolveTargetSpeed(target), 1.0);
+    this.targetSpeed = storedSpeed;
+    if (!tc.settings.rememberSpeed && !tc.settings.forceLastSavedSpeed) {
+      setKeyBindings("reset", getKeyBindings("fast"));
     }
 
-    // FIXED: Actually apply the speed to the video element
-    // Use setSpeed function to properly set the speed with all the necessary logic
-    setTimeout(() => {
-      if (this.video && this.video.vsc) {
-        setSpeed(this.video, storedSpeed, true, false);
-      }
-    }, 0);
+    log("Explicitly setting playbackRate to: " + storedSpeed, 5);
+    target.playbackRate = storedSpeed;
 
     this.div = this.initializeControls();
 
@@ -218,53 +657,51 @@ function defineVideoController() {
 
     log(`Controller created and attached to DOM. Hidden: ${this.div.classList.contains('vsc-hidden')}`, 4);
 
-    // Make the controller visible for 5 seconds on startup
-    runAction("blink", 5000, null, this.video);
-
-    // Rewritten mediaEventAction to prevent speed reset on pause.
     var mediaEventAction = function (event) {
-      // Handle subtitle nudging based on the event type first.
       if (event.type === "play") {
-        this.startSubtitleNudge();
+        extendSpeedRestoreWindow(event.target);
 
-        // FIXED: Only reapply speed if there's a significant mismatch AND it's a new video
-        const currentSpeed = event.target.playbackRate;
-        const videoId =
-          event.target.currentSrc || event.target.src || "default";
+        if (!tc.settings.rememberSpeed && !tc.settings.forceLastSavedSpeed) {
+          setKeyBindings("reset", getKeyBindings("fast"));
+        }
 
-        // Get the expected speed based on settings
-        let expectedSpeed;
-        if (tc.settings.forceLastSavedSpeed) {
-          expectedSpeed = tc.settings.lastSpeed;
+        var playSpeed = sanitizeSpeed(resolveTargetSpeed(event.target), 1.0);
+        if (Math.abs(event.target.playbackRate - playSpeed) > 0.01) {
+          log("Play event: setting playbackRate to: " + playSpeed, 4);
+          setSpeed(event.target, playSpeed, false, false);
+        } else if (playSpeed === 1.0 || event.target.paused) {
+          this.stopSubtitleNudge();
         } else {
-          expectedSpeed = tc.settings.speeds[videoId] || tc.settings.lastSpeed;
+          this.startSubtitleNudge();
         }
-
-        // Only reapply speed if:
-        // 1. The current speed is 1.0 (default) AND we have a stored speed that's different
-        // 2. OR if forceLastSavedSpeed is enabled and speeds don't match
-        const shouldReapplySpeed =
-          (Math.abs(currentSpeed - 1.0) < 0.01 &&
-            Math.abs(expectedSpeed - 1.0) > 0.01) ||
-          (tc.settings.forceLastSavedSpeed &&
-            Math.abs(currentSpeed - expectedSpeed) > 0.01);
-
-        if (shouldReapplySpeed) {
-          setTimeout(() => {
-            if (event.target.vsc) {
-              setSpeed(event.target, expectedSpeed, false, false);
-            }
-          }, 10);
-        }
-      } else if (event.type === "pause" || event.type === "ended") {
+      } else if (event.type === "pause") {
+        extendSpeedRestoreWindow(event.target);
         this.stopSubtitleNudge();
         tc.isNudging = false;
-      }
+      } else if (event.type === "seeking") {
+        extendSpeedRestoreWindow(event.target);
+      } else if (event.type === "ended") {
+        this.speedRestoreUntil = 0;
+        this.stopSubtitleNudge();
+        tc.isNudging = false;
+      } else if (event.type === "seeked") {
+        extendSpeedRestoreWindow(event.target);
+        var expectedSpeed = sanitizeSpeed(resolveTargetSpeed(event.target), 1.0);
+        var currentSpeed = event.target.playbackRate;
 
-      // For seek events, don't mess with speed
-      if (event.type === "seeked" && isUserSeek) {
-        isUserSeek = false;
-        return;
+        if (
+          Math.abs(currentSpeed - expectedSpeed) > 0.01
+        ) {
+          log(
+            `Seeked: speed changed from ${expectedSpeed} to ${currentSpeed}, restoring`,
+            4
+          );
+          setSpeed(event.target, expectedSpeed, false, false);
+        }
+
+        if (isUserSeek) {
+          isUserSeek = false;
+        }
       }
     };
 
@@ -277,6 +714,10 @@ function defineVideoController() {
       (this.handlePause = mediaEventAction.bind(this))
     );
     target.addEventListener(
+      "seeking",
+      (this.handleSeeking = mediaEventAction.bind(this))
+    );
+    target.addEventListener(
       "ended",
       (this.handleEnded = mediaEventAction.bind(this))
     );
@@ -285,31 +726,6 @@ function defineVideoController() {
       (this.handleSeek = mediaEventAction.bind(this))
     );
 
-    // ADDITIONAL FIX: Listen for loadedmetadata to reapply speed when video source changes
-    target.addEventListener("loadedmetadata", () => {
-      if (this.video && this.video.vsc) {
-        const currentSpeed = this.video.playbackRate;
-        const videoId = this.video.currentSrc || this.video.src || "default";
-
-        // Get expected speed
-        let expectedSpeed;
-        if (tc.settings.forceLastSavedSpeed) {
-          expectedSpeed = tc.settings.lastSpeed;
-        } else {
-          expectedSpeed = tc.settings.speeds[videoId] || tc.settings.lastSpeed;
-        }
-
-        // Only reapply if current speed is default (1.0) and we have a different stored speed
-        const shouldReapplySpeed =
-          Math.abs(currentSpeed - 1.0) < 0.01 &&
-          Math.abs(expectedSpeed - 1.0) > 0.01;
-
-        if (shouldReapplySpeed) {
-          setSpeed(this.video, expectedSpeed, false, false);
-        }
-      }
-    });
-
     var srcObserver = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (
@@ -317,31 +733,20 @@ function defineVideoController() {
           (mutation.attributeName === "src" ||
             mutation.attributeName === "currentSrc")
         ) {
+          log("mutation of A/V element", 5);
           if (this.div) {
             this.stopSubtitleNudge();
             if (!mutation.target.src && !mutation.target.currentSrc) {
               this.div.classList.add("vsc-nosource");
             } else {
               this.div.classList.remove("vsc-nosource");
-
-              // FIXED: Reapply speed when source changes (like in shorts)
-              const expectedSpeed = tc.settings.forceLastSavedSpeed
-                ? tc.settings.lastSpeed
-                : tc.settings.speeds[mutation.target.currentSrc] ||
-                tc.settings.lastSpeed;
-
-              setTimeout(() => {
-                if (mutation.target.vsc) {
-                  setSpeed(mutation.target, expectedSpeed, false, false);
-                }
-              }, 100);
-
               if (!mutation.target.paused) this.startSubtitleNudge();
             }
           }
         }
       });
     });
+    this.srcObserver = srcObserver;
     srcObserver.observe(target, { attributeFilter: ["src", "currentSrc"] });
     if (!target.paused && target.playbackRate !== 1.0)
       this.startSubtitleNudge();
@@ -350,13 +755,16 @@ function defineVideoController() {
   tc.videoController.prototype.remove = function () {
     this.stopSubtitleNudge();
     if (this.div) this.div.remove();
+    if (this.restoreSpeedTimer) clearTimeout(this.restoreSpeedTimer);
     if (this.video) {
       this.video.removeEventListener("play", this.handlePlay);
       this.video.removeEventListener("pause", this.handlePause);
+      this.video.removeEventListener("seeking", this.handleSeeking);
       this.video.removeEventListener("ended", this.handleEnded);
       this.video.removeEventListener("seeked", this.handleSeek);
       delete this.video.vsc;
     }
+    if (this.srcObserver) this.srcObserver.disconnect();
     let idx = tc.mediaElements.indexOf(this.video);
     if (idx != -1) tc.mediaElements.splice(idx, 1);
   };
@@ -469,15 +877,8 @@ function defineVideoController() {
   tc.videoController.prototype.initializeControls = function () {
     const doc = this.video.ownerDocument;
     const speed = this.video.playbackRate.toFixed(2);
-    // Fix for videos rendered after page load - use relative positioning
-    var top = "10px",
-      left = "10px";
-
-    // Try to get actual position, but fallback to default if not available
-    if (this.video.offsetTop > 0 || this.video.offsetLeft > 0) {
-      top = Math.max(this.video.offsetTop, 0) + "px";
-      left = Math.max(this.video.offsetLeft, 0) + "px";
-    }
+    var top = "0px",
+      left = "0px";
     var wrapper = doc.createElement("div");
     wrapper.classList.add("vsc-controller");
     if (!this.video.src && !this.video.currentSrc)
@@ -594,76 +995,133 @@ function isBlacklisted() {
   if (b) log(`Page ${location.href} blacklisted.`, 4);
   return b;
 }
-var coolDown = false;
-function refreshCoolDown() {
-  if (coolDown) clearTimeout(coolDown);
-  coolDown = setTimeout(function () {
-    coolDown = false;
-  }, 1000);
+
+function shouldPreserveDesiredSpeed(video, speed) {
+  if (!video || !video.vsc) return false;
+  var desiredSpeed = getDesiredSpeed(video);
+  if (!isValidSpeed(desiredSpeed) || Math.abs(speed - desiredSpeed) <= 0.01) {
+    return false;
+  }
+
+  return (
+    video.paused === true ||
+    (typeof video.vsc.speedRestoreUntil === "number" &&
+      video.vsc.speedRestoreUntil > Date.now())
+  );
 }
 
-function setupListener() {
-  if (document.vscRateListenerAttached) return;
-  function updateSpeedFromEvent(video, fromUserInput = false) {
+function setupListener(root) {
+  root = root || document;
+  if (root.vscRateListenerAttached) return;
+  function updateSpeedFromEvent(video) {
     if (!video.vsc || !video.vsc.speedIndicator) return;
     var speed = Number(video.playbackRate.toFixed(2));
     video.vsc.speedIndicator.textContent = speed.toFixed(2);
-    tc.settings.speeds[video.currentSrc || "unknown_src"] = speed;
+    video.vsc.targetSpeed = speed;
+    var sourceKey = getVideoSourceKey(video);
+    if (sourceKey !== "unknown_src") {
+      tc.settings.speeds[sourceKey] = speed;
+    }
     tc.settings.lastSpeed = speed;
     chrome.storage.sync.set({ lastSpeed: speed }, () => { });
-    if (fromUserInput) {
-      runAction("blink", 1000, null, video);
-    }
     if (video.vsc) {
       if (speed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
       else video.vsc.startSubtitleNudge();
     }
   }
-  document.addEventListener(
+  root.addEventListener(
     "ratechange",
     function (event) {
       if (tc.isNudging) return;
-      if (coolDown) {
-        event.stopImmediatePropagation();
-        return;
-      }
       var video = event.target;
       if (!video || typeof video.playbackRate === "undefined" || !video.vsc)
         return;
       if (tc.settings.forceLastSavedSpeed) {
         if (event.detail && event.detail.origin === "videoSpeed") {
           video.playbackRate = event.detail.speed;
-          updateSpeedFromEvent(video, event.detail.fromUserInput === true);
+          updateSpeedFromEvent(video);
         } else {
-          video.playbackRate = tc.settings.lastSpeed;
+          video.playbackRate = sanitizeSpeed(tc.settings.lastSpeed, 1.0);
         }
         event.stopImmediatePropagation();
       } else {
-        updateSpeedFromEvent(video, video.vscIsDirectlySettingRate === true);
-        if (video.vscIsDirectlySettingRate)
-          delete video.vscIsDirectlySettingRate;
+        var currentSpeed = Number(video.playbackRate.toFixed(2));
+        var desiredSpeed = getDesiredSpeed(video);
+        var pendingRateChange = takePendingRateChange(video, currentSpeed);
+
+        if (pendingRateChange) {
+          updateSpeedFromEvent(video);
+          return;
+        }
+
+        if (shouldPreserveDesiredSpeed(video, currentSpeed)) {
+          log(
+            `Ignoring external rate change to ${currentSpeed.toFixed(2)} while preserving ${desiredSpeed.toFixed(2)}`,
+            4
+          );
+          video.vsc.speedIndicator.textContent = desiredSpeed.toFixed(2);
+          scheduleSpeedRestore(video, desiredSpeed, "pause/play or seek");
+          return;
+        }
+
+        updateSpeedFromEvent(video);
       }
     },
     true
   );
-  document.vscRateListenerAttached = true;
+  root.vscRateListenerAttached = true;
 }
 
 var vscInitializedDocuments = new Set();
-function initializeWhenReady(doc, forceReinit = false) {
-  if (!forceReinit && vscInitializedDocuments.has(doc) || !doc.body) return;
+function clearPendingInitialization(doc) {
+  if (!doc || !doc.vscPendingInitializeHandler) return;
 
-  // For navigation changes, we want to re-scan even if already initialized
-  if (forceReinit) {
-    log("Force re-initialization requested", 4);
+  var handler = doc.vscPendingInitializeHandler;
+  doc.removeEventListener("DOMContentLoaded", handler);
+  doc.removeEventListener("readystatechange", handler);
+
+  if (doc.defaultView) {
+    doc.defaultView.removeEventListener("load", handler);
   }
 
-  if (doc.readyState === "complete") {
-    initializeNow(doc, forceReinit);
+  delete doc.vscPendingInitializeHandler;
+  doc.vscPendingForceReinit = false;
+}
+
+function tryInitializeDocument(doc, forceReinit) {
+  if (!doc) return false;
+  if ((!forceReinit && vscInitializedDocuments.has(doc)) || !doc.body) {
+    return false;
+  }
+
+  initializeNow(doc, forceReinit);
+  clearPendingInitialization(doc);
+  return true;
+}
+
+function initializeWhenReady(doc, forceReinit = false) {
+  if (!doc) return;
+  doc.vscPendingForceReinit = doc.vscPendingForceReinit === true || forceReinit;
+
+  if (tryInitializeDocument(doc, doc.vscPendingForceReinit)) {
+    return;
+  }
+
+  if (doc.vscPendingInitializeHandler) return;
+
+  var pendingInitializeHandler = function () {
+    tryInitializeDocument(doc, doc.vscPendingForceReinit === true);
+  };
+
+  doc.vscPendingInitializeHandler = pendingInitializeHandler;
+  doc.addEventListener("DOMContentLoaded", pendingInitializeHandler);
+  doc.addEventListener("readystatechange", pendingInitializeHandler);
+
+  if (doc.defaultView) {
+    doc.defaultView.addEventListener("load", pendingInitializeHandler);
+    doc.defaultView.setTimeout(pendingInitializeHandler, 0);
   } else {
-    doc.addEventListener("DOMContentLoaded", () => initializeNow(doc, forceReinit), {
-      once: true
-    });
+    setTimeout(pendingInitializeHandler, 0);
   }
 }
 function inIframe() {
@@ -673,52 +1131,18 @@ function inIframe() {
     return true;
   }
 }
-function getShadow(parent) {
-  let r = [];
-  function gC(p) {
-    if (p.firstElementChild) {
-      var c = p.firstElementChild;
-      do {
-        r.push(c);
-        gC(c);
-        if (c.shadowRoot) {
-          r.push(...getShadow(c.shadowRoot));
-          // Also check for videos in shadow DOM
-          const shadowVideos = c.shadowRoot.querySelectorAll(tc.settings.audioBoolean ? "video,audio" : "video");
-          shadowVideos.forEach(video => {
-            if (!video.vsc) {
-              log(`Found video in shadow DOM`, 5);
-              checkForVideo(video, video.parentElement, true);
-            }
-          });
-        }
-        c = c.nextElementSibling;
-      } while (c);
-    }
-  }
-  gC(parent);
-  return r;
-}
 
-function initializeNow(doc, forceReinit = false) {
-  if (!forceReinit && (vscInitializedDocuments.has(doc) || !doc.body)) return;
-  if (!tc.settings.enabled) return;
-
-  if (!doc.body.classList.contains("vsc-initialized"))
-    doc.body.classList.add("vsc-initialized");
-  if (typeof tc.videoController === "undefined") defineVideoController();
-  setupListener();
-
-  var docs = Array(doc);
+function attachKeydownListeners(doc) {
+  var docs = [doc];
   try {
-    if (inIframe()) docs.push(window.top.document);
-  } catch (e) { }
-  docs.forEach(function (d) {
-    if (d.vscKeydownListenerAttached) return; // Prevent duplicate listeners
-    d.addEventListener(
+    if (inIframe() && window.top.document !== doc) docs.push(window.top.document);
+  } catch (e) {}
+
+  docs.forEach(function (keyDoc) {
+    if (keyDoc.vscKeydownListenerAttached) return;
+    keyDoc.addEventListener(
       "keydown",
       function (event) {
-        var keyCode = event.keyCode;
         if (
           !event.getModifierState ||
           event.getModifierState("Alt") ||
@@ -727,16 +1151,24 @@ function initializeNow(doc, forceReinit = false) {
           event.getModifierState("Meta") ||
           event.getModifierState("Hyper") ||
           event.getModifierState("OS")
-        )
+        ) {
           return;
+        }
+
         if (
           event.target.nodeName === "INPUT" ||
           event.target.nodeName === "TEXTAREA" ||
           event.target.isContentEditable
-        )
+        ) {
           return;
+        }
+
         if (!tc.mediaElements.length) return;
-        var item = tc.settings.keyBindings.find((item) => item.key === keyCode);
+
+        var item = tc.settings.keyBindings.find(function (binding) {
+          return matchesKeyBinding(binding, event);
+        });
+
         if (item) {
           runAction(item.action, item.value, event);
           if (item.force === "true") {
@@ -744,305 +1176,156 @@ function initializeNow(doc, forceReinit = false) {
             event.stopPropagation();
           }
         }
-        return false;
       },
       true
     );
-    d.vscKeydownListenerAttached = true;
+    keyDoc.vscKeydownListenerAttached = true;
   });
+}
 
-  if (!doc.vscMutationObserverAttached) {
-    // Throttle mutation processing to reduce CPU usage
-    let mutationProcessingScheduled = false;
-    let pendingMutations = [];
+function attachMutationObserver(root) {
+  if (root.vscMutationObserverAttached) return;
 
-    const observer = new MutationObserver(function (mutations) {
-      pendingMutations.push(...mutations);
-      
-      if (!mutationProcessingScheduled) {
-        mutationProcessingScheduled = true;
-        requestIdleCallback(
-          (_) => {
-            const mutationsToProcess = pendingMutations.splice(0);
-            mutationProcessingScheduled = false;
+  var pendingMutations = [];
+  var mutationProcessingScheduled = false;
+  var observer = new MutationObserver(function (mutations) {
+    pendingMutations.push(...mutations);
+    if (mutationProcessingScheduled) return;
 
-            mutationsToProcess.forEach(function (mutation) {
-              switch (mutation.type) {
-                case "childList":
-                  mutation.addedNodes.forEach(function (node) {
-                    if (typeof node === "function") return;
-                    checkForVideo(node, node.parentNode || mutation.target, true);
-                  });
-                  mutation.removedNodes.forEach(function (node) {
-                    if (typeof node === "function") return;
-                    checkForVideo(
-                      node,
-                      node.parentNode || mutation.target,
-                      false
-                    );
-                  });
-                  break;
-                case "attributes":
-                  // Enhanced attribute monitoring for video detection
-                  const target = mutation.target;
-                  if (target.tagName === "VIDEO" || target.tagName === "AUDIO") {
-                    // Video/audio element had attributes changed - check if it needs controller
-                    if (!target.vsc && (target.src || target.currentSrc)) {
-                      checkForVideo(target, target.parentNode, true);
-                    }
-                  } else if (
-                    target.attributes["aria-hidden"] &&
-                    target.attributes["aria-hidden"].value == "false"
-                  ) {
-                    // Only scan shadow DOM if absolutely necessary (expensive operation)
-                    var flattenedNodes = getShadow(document.body);
-                    var node = flattenedNodes.filter(
-                      (x) => x.tagName == "VIDEO"
-                    )[0];
-                    if (node) {
-                      if (node.vsc) node.vsc.remove();
-                      checkForVideo(
-                        node,
-                        node.parentNode || mutation.target,
-                        true
-                      );
-                    }
-                  }
-                  break;
-              }
+    mutationProcessingScheduled = true;
+    requestIdle(
+      function () {
+        var mutationsToProcess = pendingMutations.splice(0);
+        mutationProcessingScheduled = false;
+
+        mutationsToProcess.forEach(function (mutation) {
+          if (mutation.type === "childList") {
+            mutation.addedNodes.forEach(function (node) {
+              scanNodeForMedia(node, node.parentNode || mutation.target, true);
             });
-          },
-          { timeout: 1000 }
-        );
-      }
-    });
-    function checkForVideo(node, parent, added) {
-      if (!added && document.body.contains(node)) return;
-      if (
-        node.nodeName === "VIDEO" ||
-        (node.nodeName === "AUDIO" && tc.settings.audioBoolean)
-      ) {
-        if (added) {
-          if (!node.vsc) {
-            log(`Creating controller for ${node.tagName}: ${node.src || node.currentSrc || 'no src'}`, 4);
-            node.vsc = new tc.videoController(node, parent);
-
-            // Verify controller was created successfully
-            if (!node.vsc || !node.vsc.div) {
-              log(`ERROR: Controller creation failed for ${node.tagName}`, 2);
-            } else {
-              log(`Controller created successfully, div in DOM: ${document.contains(node.vsc.div)}`, 4);
-            }
-
-            // Add to intersection observer if available
-            if (doc.vscVideoIntersectionObserver) {
-              doc.vscVideoIntersectionObserver.observe(node);
-            }
+            mutation.removedNodes.forEach(function (node) {
+              scanNodeForMedia(node, node.parentNode || mutation.target, false);
+            });
+            return;
           }
-        } else {
-          if (node.vsc) {
-            node.vsc.remove();
-            // Remove from intersection observer if available
-            if (doc.vscVideoIntersectionObserver) {
-              doc.vscVideoIntersectionObserver.unobserve(node);
-            }
-          }
-        }
-      } else if (node.children != undefined) {
-        for (var i = 0; i < node.children.length; i++) {
-          const child = node.children[i];
-          checkForVideo(child, child.parentNode || parent, added);
-        }
-      }
-    }
-    observer.observe(doc, {
-      attributeFilter: ["aria-hidden", "src", "currentSrc"], // Removed "style" and "class" for better performance
-      childList: true,
-      subtree: true,
-      attributes: true
-    });
-    doc.vscMutationObserverAttached = true;
-  }
 
-  const q = tc.settings.audioBoolean ? "video,audio" : "video";
-  const foundVideos = doc.querySelectorAll(q);
-  foundVideos.forEach((v) => {
-    if (!v.vsc) new tc.videoController(v, v.parentElement);
+          if (mutation.type !== "attributes") return;
+
+          var target = mutation.target;
+          if (
+            isMediaElement(target) &&
+            (mutation.attributeName === "src" ||
+              mutation.attributeName === "currentSrc")
+          ) {
+            ensureController(target, target.parentElement || target.parentNode);
+            return;
+          }
+
+          if (
+            mutation.attributeName === "aria-hidden" &&
+            target.attributes["aria-hidden"] &&
+            target.attributes["aria-hidden"].value === "false"
+          ) {
+            scanRootForMedia(root);
+          }
+        });
+      },
+      { timeout: 1000 }
+    );
   });
 
-  // Enhanced video detection via media events
-  if (!doc.vscMediaEventListenersAttached) {
-    const mediaEvents = ['loadstart', 'loadedmetadata', 'canplay', 'play'];
-    mediaEvents.forEach(eventType => {
-      doc.addEventListener(eventType, function (event) {
-        const target = event.target;
-        if ((target.tagName === 'VIDEO' || (target.tagName === 'AUDIO' && tc.settings.audioBoolean)) && !target.vsc) {
-          log(`Media event ${eventType} detected new ${target.tagName.toLowerCase()}`, 5);
-          checkForVideo(target, target.parentElement, true);
-        }
-      }, true);
-    });
-    doc.vscMediaEventListenersAttached = true;
-  }
+  observer.observe(root, {
+    attributeFilter: ["aria-hidden", "src", "currentSrc"],
+    childList: true,
+    subtree: true,
+    attributes: true
+  });
 
-  // Intersection Observer for lazy-loaded videos
-  if (!doc.vscIntersectionObserverAttached && 'IntersectionObserver' in window) {
-    const videoIntersectionObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const target = entry.target;
-          if ((target.tagName === 'VIDEO' || (target.tagName === 'AUDIO' && tc.settings.audioBoolean)) && !target.vsc) {
-            log(`Intersection observer detected visible ${target.tagName.toLowerCase()}`, 5);
-            checkForVideo(target, target.parentElement, true);
+  root.vscMutationObserverAttached = true;
+}
+
+function attachMediaDetectionListeners(root) {
+  if (root.vscMediaEventListenersAttached) return;
+
+  var handleDetectedMedia = function (event) {
+    var target = event.target;
+    if (!isMediaElement(target)) return;
+    ensureController(target, target.parentElement || target.parentNode);
+  };
+
+  [
+    "loadstart",
+    "loadeddata",
+    "loadedmetadata",
+    "canplay",
+    "playing",
+    "play"
+  ].forEach(function (eventName) {
+    root.addEventListener(eventName, handleDetectedMedia, true);
+  });
+  root.vscMediaEventListenersAttached = true;
+}
+
+function attachIframeListeners(doc) {
+  Array.from(doc.getElementsByTagName("iframe")).forEach(function (frame) {
+    if (!frame.vscLoadListenerAttached) {
+      frame.addEventListener("load", function () {
+        try {
+          if (frame.contentDocument) {
+            initializeWhenReady(frame.contentDocument, true);
           }
-        }
+        } catch (e) {}
       });
-    }, { threshold: 0.1 });
+      frame.vscLoadListenerAttached = true;
+    }
 
-    // Observe existing videos that might not have been processed
-    doc.querySelectorAll(q).forEach(video => {
-      videoIntersectionObserver.observe(video);
-    });
-
-    // Store observer to add new videos to it
-    doc.vscVideoIntersectionObserver = videoIntersectionObserver;
-    doc.vscIntersectionObserverAttached = true;
-  }
-
-  Array.from(doc.getElementsByTagName("iframe")).forEach((f) => {
-    if (f.vscLoadListenerAttached) return;
-    f.addEventListener("load", () => {
-      try {
-        if (f.contentDocument) {
-          initializeWhenReady(f.contentDocument);
-        }
-      } catch (e) {
-        // Silently ignore CORS errors
-      }
-    });
-    f.vscLoadListenerAttached = true;
     try {
-      if (f.contentDocument) {
-        initializeWhenReady(f.contentDocument);
+      if (frame.contentDocument) {
+        initializeWhenReady(frame.contentDocument);
       }
-    } catch (e) {
-      // Silently ignore CORS errors
-    }
+    } catch (e) {}
   });
-  // Navigation change detection for SPAs
-  if (!doc.vscNavigationListenersAttached) {
-    let currentUrl = location.href;
+}
 
-    const handleNavigation = (source) => {
-      if (location.href !== currentUrl) {
-        const oldUrl = currentUrl;
-        currentUrl = location.href;
-        log(`Navigation detected via ${source}: ${oldUrl} -> ${currentUrl}`, 4);
+function attachNavigationListeners() {
+  if (window.vscNavigationListenersAttached) return;
 
-        // Wait a bit for the new content to load, then force re-scan
-        setTimeout(() => {
-          const q = tc.settings.audioBoolean ? "video,audio" : "video";
-          const videos = document.querySelectorAll(q);
-          log(`Post-navigation scan found ${videos.length} videos`, 4);
+  var scheduleRescan = function () {
+    clearTimeout(window.vscNavigationRescanTimer);
+    window.vscNavigationRescanTimer = setTimeout(function () {
+      initializeWhenReady(document, true);
+    }, 300);
+  };
 
-          videos.forEach(video => {
-            if (!video.vsc) {
-              log(`Adding controller to post-navigation video`, 4);
-              checkForVideo(video, video.parentElement, true);
-            }
-          });
-        }, 500); // Increased delay for content to load
-
-        // Also do a quicker scan
-        setTimeout(() => {
-          const q = tc.settings.audioBoolean ? "video,audio" : "video";
-          const videos = document.querySelectorAll(q);
-          videos.forEach(video => {
-            if (!video.vsc && (video.src || video.currentSrc)) {
-              checkForVideo(video, video.parentElement, true);
-            }
-          });
-        }, 100);
-      }
+  ["pushState", "replaceState"].forEach(function (method) {
+    if (typeof history[method] !== "function") return;
+    var original = history[method];
+    history[method] = function () {
+      var result = original.apply(this, arguments);
+      scheduleRescan();
+      return result;
     };
+  });
 
-    // Listen for popstate (back/forward navigation)
-    window.addEventListener('popstate', () => handleNavigation('popstate'));
+  window.addEventListener("popstate", scheduleRescan);
+  window.addEventListener("hashchange", scheduleRescan);
+  window.vscNavigationListenersAttached = true;
+}
 
-    // Override pushState and replaceState to catch programmatic navigation
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
+function initializeNow(doc, forceReinit = false) {
+  if ((!forceReinit && vscInitializedDocuments.has(doc)) || !doc.body) return;
+  if (!tc.settings.enabled) return;
 
-    history.pushState = function (...args) {
-      originalPushState.apply(this, args);
-      handleNavigation('pushState');
-    };
-
-    history.replaceState = function (...args) {
-      originalReplaceState.apply(this, args);
-      handleNavigation('replaceState');
-    };
-
-    // Listen for hashchange as well
-    window.addEventListener('hashchange', () => handleNavigation('hashchange'));
-
-    // Throttle fetch-based video scanning to reduce CPU usage
-    let lastFetchScanTime = 0;
-    const FETCH_SCAN_THROTTLE = 2000; // Only scan once every 2 seconds max
-
-    const originalFetch = window.fetch;
-    window.fetch = function (...args) {
-      return originalFetch.apply(this, args).then(response => {
-        // Throttle video scanning after fetch to avoid excessive CPU usage
-        const now = Date.now();
-        if (now - lastFetchScanTime > FETCH_SCAN_THROTTLE) {
-          lastFetchScanTime = now;
-          setTimeout(() => {
-            const q = tc.settings.audioBoolean ? "video,audio" : "video";
-            const videos = document.querySelectorAll(q);
-            videos.forEach(video => {
-              if (!video.vsc && (video.src || video.currentSrc || video.readyState > 0)) {
-                log(`Post-fetch scan found video`, 5);
-                checkForVideo(video, video.parentElement, true);
-              }
-            });
-          }, 200);
-        }
-        return response;
-      });
-    };
-
-    doc.vscNavigationListenersAttached = true;
+  if (!doc.body.classList.contains("vsc-initialized")) {
+    doc.body.classList.add("vsc-initialized");
   }
+  if (typeof tc.videoController === "undefined") defineVideoController();
+  attachKeydownListeners(doc);
+  attachNavigationListeners();
+  observeRoot(doc);
 
-  // Periodic fallback scan for missed videos
-  if (!doc.vscPeriodicScanAttached) {
-    const periodicScan = () => {
-      const q = tc.settings.audioBoolean ? "video,audio" : "video";
-      const allVideos = doc.querySelectorAll(q);
-      let foundNewCount = 0;
-
-      allVideos.forEach(video => {
-        if (!video.vsc && (video.src || video.currentSrc || video.readyState > 0)) {
-          log(`Periodic scan found missed ${video.tagName.toLowerCase()}`, 4);
-          checkForVideo(video, video.parentElement, true);
-          foundNewCount++;
-        }
-      });
-
-      if (foundNewCount > 0) {
-        log(`Periodic scan found ${foundNewCount} new videos`, 4);
-      }
-    };
-
-    // Run periodic scan every 5 seconds (reduced frequency), only if we have videos
-    setInterval(() => {
-      if (tc.mediaElements.length > 0 || doc.querySelector(tc.settings.audioBoolean ? "video,audio" : "video")) {
-        periodicScan();
-      }
-    }, 5000); // Increased from 3s to 5s for better performance
-
-    doc.vscPeriodicScanAttached = true;
+  if (forceReinit) {
+    log("Force re-initialization requested", 4);
   }
 
   vscInitializedDocuments.add(doc);
@@ -1050,7 +1333,15 @@ function initializeNow(doc, forceReinit = false) {
 
 function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   const numericSpeed = Number(speed);
-  if (isNaN(numericSpeed) || numericSpeed <= 0 || numericSpeed > 16) return;
+  
+  if (!isValidSpeed(numericSpeed)) {
+    log(
+      `Invalid speed rejected: ${speed}, must be between ${MIN_SPEED} and ${MAX_SPEED}`,
+      2
+    );
+    return;
+  }
+  
   if (!video || !video.vsc || !video.vsc.speedIndicator) return;
 
   log(
@@ -1079,13 +1370,10 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
     );
   } else {
     if (Math.abs(video.playbackRate - numericSpeed) > 0.001) {
-      if (isUserKeyPress && !isInitialCall) {
-        video.vscIsDirectlySettingRate = true; // Set flag for ratechange listener
-      }
+      rememberPendingRateChange(video, numericSpeed);
       video.playbackRate = numericSpeed;
     }
   }
-  if (!isInitialCall) refreshCoolDown();
   if (video.vsc) {
     if (numericSpeed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
     else video.vsc.startSubtitleNudge();
@@ -1142,26 +1430,28 @@ function runAction(action, value, e) {
     switch (action) {
       case "rewind":
         isUserSeek = true;
+        extendSpeedRestoreWindow(v);
         v.currentTime -= numValue;
         break;
       case "advance":
         isUserSeek = true;
+        extendSpeedRestoreWindow(v);
         v.currentTime += numValue;
         break;
       case "faster":
         // Round to the step precision to avoid floating-point issues (e.g., 1.80 + 0.1 = 1.9000000000000001)
         var fasterStep = numValue;
         var fasterPrecision = Math.round(1 / fasterStep); // e.g., 0.1 -> 10, 0.05 -> 20, 0.25 -> 4
-        var newFasterSpeed = (v.playbackRate < 0.07 ? 0.07 : v.playbackRate) + fasterStep;
+        var newFasterSpeed = (v.playbackRate < MIN_SPEED ? MIN_SPEED : v.playbackRate) + fasterStep;
         newFasterSpeed = Math.round(newFasterSpeed * fasterPrecision) / fasterPrecision;
-        setSpeed(v, Math.min(newFasterSpeed, 16), false, true);
+        setSpeed(v, Math.min(newFasterSpeed, MAX_SPEED), false, true);
         break;
       case "slower":
         var slowerStep = numValue;
         var slowerPrecision = Math.round(1 / slowerStep);
         var newSlowerSpeed = v.playbackRate - slowerStep;
         newSlowerSpeed = Math.round(newSlowerSpeed * slowerPrecision) / slowerPrecision;
-        setSpeed(v, Math.max(newSlowerSpeed, 0.07), false, true);
+        setSpeed(v, Math.max(newSlowerSpeed, MIN_SPEED), false, true);
         break;
       case "reset":
         resetSpeed(v, 1.0, false); // Use enhanced resetSpeed
@@ -1170,35 +1460,44 @@ function runAction(action, value, e) {
         resetSpeed(v, numValue, true); // Use enhanced resetSpeed
         break;
       case "display":
-        controller.classList.add("vsc-manual");
-        controller.classList.toggle("vsc-hidden");
+        if (controller.classList.contains("vsc-hidden")) {
+          controller.classList.remove("vsc-hidden");
+          controller.classList.add("vsc-manual");
+        } else {
+          controller.classList.add("vsc-hidden");
+          controller.classList.remove("vsc-manual");
+        }
         break;
       case "blink":
         log(`Blink action: controller hidden=${controller.classList.contains("vsc-hidden")}, timeout=${controller.blinkTimeOut !== undefined}, duration=${numValue}`, 5);
 
-        // Always clear existing timeout and show controller
-        if (controller.blinkTimeOut !== undefined) {
-          clearTimeout(controller.blinkTimeOut);
-        }
+        if (
+          controller.classList.contains("vsc-hidden") ||
+          controller.blinkTimeOut !== undefined
+        ) {
+          var restoreHidden =
+            controller.restoreHiddenAfterBlink === true ||
+            controller.classList.contains("vsc-hidden");
 
-        // Always show the controller
-        controller.classList.remove("vsc-hidden");
-        log(`Controller shown, setting timeout for ${numValue || 1000}ms`, 5);
-
-        controller.blinkTimeOut = setTimeout(() => {
-          if (
-            !(
-              controller.classList.contains("vsc-manual") &&
-              !controller.classList.contains("vsc-hidden")
-            )
-          ) {
-            controller.classList.add("vsc-hidden");
-            log("Controller auto-hidden after blink timeout", 5);
-          } else {
-            log("Controller kept visible (manual mode)", 5);
+          if (controller.blinkTimeOut !== undefined) {
+            clearTimeout(controller.blinkTimeOut);
           }
-          controller.blinkTimeOut = undefined;
-        }, numValue || 1000);
+
+          controller.restoreHiddenAfterBlink = restoreHidden;
+          controller.classList.remove("vsc-hidden");
+          log(`Controller shown, setting timeout for ${numValue || 1000}ms`, 5);
+
+          controller.blinkTimeOut = setTimeout(() => {
+            if (controller.restoreHiddenAfterBlink === true) {
+              controller.classList.add("vsc-hidden");
+              log("Controller auto-hidden after blink timeout", 5);
+            } else {
+              log("Controller kept visible", 5);
+            }
+            controller.restoreHiddenAfterBlink = false;
+            controller.blinkTimeOut = undefined;
+          }, numValue || 1000);
+        }
         break;
       case "drag":
         if (e) handleDrag(v, e);
@@ -1226,7 +1525,7 @@ function pause(v) {
 }
 
 function resetSpeed(v, target, isFastKey = false) {
-  const videoId = v.currentSrc || v.src || "default";
+  const videoId = getVideoSourceKey(v);
   const currentSpeed = v.playbackRate;
 
   if (isFastKey) {
@@ -1269,7 +1568,10 @@ function setMark(v) {
   v.vsc.mark = v.currentTime;
 }
 function jumpToMark(v) {
-  if (v.vsc && typeof v.vsc.mark === "number") v.currentTime = v.vsc.mark;
+  if (v.vsc && typeof v.vsc.mark === "number") {
+    extendSpeedRestoreWindow(v);
+    v.currentTime = v.vsc.mark;
+  }
 }
 function handleDrag(video, e) {
   const c = video.vsc.div;
@@ -1301,13 +1603,26 @@ function handleDrag(video, e) {
   pE.addEventListener("mouseleave", eD);
   pE.addEventListener("mousemove", sD);
 }
-var timer = null;
-function showController(controller) {
+function showController(controller, duration = 2000) {
   if (!controller || typeof controller.classList === "undefined") return;
+  var restoreHidden =
+    controller.restoreHiddenAfterShow === true ||
+    controller.classList.contains("vsc-hidden");
+
+  controller.restoreHiddenAfterShow = restoreHidden;
+  controller.classList.remove("vsc-hidden");
   controller.classList.add("vsc-show");
-  if (timer) clearTimeout(timer);
-  timer = setTimeout(function () {
+
+  if (controller.showTimeOut !== undefined) {
+    clearTimeout(controller.showTimeOut);
+  }
+
+  controller.showTimeOut = setTimeout(function () {
     controller.classList.remove("vsc-show");
-    timer = false;
-  }, 2000);
+    if (controller.restoreHiddenAfterShow === true) {
+      controller.classList.add("vsc-hidden");
+    }
+    controller.restoreHiddenAfterShow = false;
+    controller.showTimeOut = undefined;
+  }, duration);
 }

@@ -1,4 +1,10 @@
 document.addEventListener("DOMContentLoaded", function () {
+  var manifest = chrome.runtime.getManifest();
+  var versionElement = document.querySelector("#app-version");
+  if (versionElement) {
+    versionElement.innerText = manifest.version;
+  }
+
   document.querySelector("#config").addEventListener("click", function () {
     window.open(chrome.runtime.getURL("options.html"));
   });

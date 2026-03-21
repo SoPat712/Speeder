@@ -20,6 +20,11 @@ h1 {
   font-size: 1.5em;
   margin: 21px 0 13px;
 }
+.version {
+  margin: 0 0 12px;
+  color: #6b6b6b;
+  font-size: 0.95em;
+}
 h3 {
   font-size: 1.2em;
   margin-bottom: 0.8em;
@@ -121,6 +126,10 @@ select {
 
   h3 {
     color: #ffffff;
+  }
+
+  .version {
+    color: #a8a8a8;
   }
 
   header {

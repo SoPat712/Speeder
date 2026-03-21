@@ -4,6 +4,13 @@ body {
   color: #333;
 }
 
+.version {
+  margin-top: 0.7em;
+  font-size: 0.85em;
+  text-align: center;
+  color: #666;
+}
+
 hr {
   width: 100%;
   border: 0;
@@ -64,5 +71,9 @@ button {
 
   #status {
     color: #ccc;
+  }
+
+  .version {
+    color: #aaa;
   }
 }

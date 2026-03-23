@@ -10,11 +10,11 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   document.querySelector("#about").addEventListener("click", function () {
-    window.open("https://github.com/codebicycle/videospeed");
+    window.open("https://github.com/SoPat712/Speeder");
   });
 
   document.querySelector("#feedback").addEventListener("click", function () {
-    window.open("https://github.com/codebicycle/videospeed/issues");
+    window.open("https://github.com/SoPat712/Speeder/issues");
   });
 
   document.querySelector("#enable").addEventListener("click", function () {

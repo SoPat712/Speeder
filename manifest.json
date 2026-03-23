@@ -1,10 +1,10 @@
 {
-  "name": "Video Speed Controller",
-  "short_name": "videospeed",
+  "name": "Speeder",
+  "short_name": "Speeder",
   "version": "3.2.0",
   "manifest_version": 2,
-  "description": "Speed up, slow down, advance and rewind HTML5 audio/video with shortcuts",
-  "homepage_url": "https://github.com/SoPat712/videospeed",
+  "description": "Speed up, slow down, advance and rewind HTML5 audio/video with shortcuts (New and improved version of \"Video Speed Controller\")",
+  "homepage_url": "https://github.com/SoPat712/speeder",
   "browser_specific_settings": {
     "gecko": {
       "id": "{ed860648-f54f-4dc9-9a0d-501aec4313f5}",

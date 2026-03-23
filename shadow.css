@@ -21,7 +21,8 @@
   margin: 10px 10px 10px 15px;
 
   cursor: default;
-  z-index: 9999999;
+  /* Stay just above the video layer, not above site dialogs/modals. */
+  z-index: 1;
 }
 
 #controller:hover {

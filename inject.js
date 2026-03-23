@@ -625,6 +625,16 @@ function setKeyBindings(action, value) {
     value;
 }
 
+function createControllerButton(doc, action, label, className) {
+  var button = doc.createElement("button");
+  button.dataset.action = action;
+  button.textContent = label;
+  if (className) {
+    button.className = className;
+  }
+  return button;
+}
+
 function defineVideoController() {
   tc.videoController = function (target, parent) {
     if (target.vsc) return target.vsc;
@@ -885,9 +895,38 @@ function defineVideoController() {
       wrapper.classList.add("vsc-nosource");
     if (tc.settings.startHidden) wrapper.classList.add("vsc-hidden");
     var shadow = wrapper.attachShadow({ mode: "open" });
-    shadow.innerHTML = `<style> @import "${chrome.runtime.getURL("shadow.css")}"; </style><div id="controller" style="top:${top}; left:${left}; opacity:${tc.settings.controllerOpacity}"><span data-action="drag" class="draggable">${speed}</span><span id="controls"><button data-action="rewind" class="rw">«</button><button data-action="slower">−</button><button data-action="faster">+</button><button data-action="advance" class="rw">»</button><button data-action="display" class="hideButton">×</button></span></div>`;
-    this.speedIndicator = shadow.querySelector(".draggable");
-    shadow.querySelector(".draggable").addEventListener(
+    var shadowStylesheet = doc.createElement("link");
+    shadowStylesheet.rel = "stylesheet";
+    shadowStylesheet.href = chrome.runtime.getURL("shadow.css");
+    shadow.appendChild(shadowStylesheet);
+
+    var controller = doc.createElement("div");
+    controller.id = "controller";
+    controller.style.top = top;
+    controller.style.left = left;
+    controller.style.opacity = String(tc.settings.controllerOpacity);
+
+    var dragHandle = doc.createElement("span");
+    dragHandle.dataset.action = "drag";
+    dragHandle.className = "draggable";
+    dragHandle.textContent = speed;
+
+    var controls = doc.createElement("span");
+    controls.id = "controls";
+    controls.appendChild(createControllerButton(doc, "rewind", "«", "rw"));
+    controls.appendChild(createControllerButton(doc, "slower", "−"));
+    controls.appendChild(createControllerButton(doc, "faster", "+"));
+    controls.appendChild(createControllerButton(doc, "advance", "»", "rw"));
+    controls.appendChild(
+      createControllerButton(doc, "display", "×", "hideButton")
+    );
+
+    controller.appendChild(dragHandle);
+    controller.appendChild(controls);
+    shadow.appendChild(controller);
+
+    this.speedIndicator = dragHandle;
+    dragHandle.addEventListener(
       "mousedown",
       (e) => {
         runAction(
@@ -913,12 +952,8 @@ function defineVideoController() {
         true
       );
     });
-    shadow
-      .querySelector("#controller")
-      .addEventListener("click", (e) => e.stopPropagation(), false);
-    shadow
-      .querySelector("#controller")
-      .addEventListener("mousedown", (e) => e.stopPropagation(), false);
+    controller.addEventListener("click", (e) => e.stopPropagation(), false);
+    controller.addEventListener("mousedown", (e) => e.stopPropagation(), false);
     var fragment = doc.createDocumentFragment();
     fragment.appendChild(wrapper);
     const parentEl = this.parent || this.video.parentElement;

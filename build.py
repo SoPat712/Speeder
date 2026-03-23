@@ -1,4 +1,5 @@
 import glob
+import fnmatch
 import os
 import re
 import shutil
@@ -7,6 +8,32 @@ import zipfile
 
 SCRIPT_NAME = os.path.basename(__file__)
 TARGET_FILE = "manifest.json"
+DEFAULT_EXCLUDE_FILES = {".DS_Store"}
+DEFAULT_EXCLUDE_DIRS = {"__pycache__"}
+DEFAULT_EXCLUDE_PATTERNS = {"._*", "*.pyc"}
+
+
+def should_exclude(rel_path, exclude_files, exclude_dirs):
+    rel_path = os.path.normpath(rel_path)
+    path_parts = rel_path.split(os.sep)
+    file_name = path_parts[-1]
+
+    if file_name in DEFAULT_EXCLUDE_FILES or rel_path in DEFAULT_EXCLUDE_FILES:
+        return True
+
+    if any(part in DEFAULT_EXCLUDE_DIRS for part in path_parts):
+        return True
+
+    if file_name in exclude_files or rel_path in exclude_files:
+        return True
+
+    if any(part in exclude_dirs for part in path_parts):
+        return True
+
+    if any(fnmatch.fnmatch(file_name, pattern) for pattern in DEFAULT_EXCLUDE_PATTERNS):
+        return True
+
+    return False
 
 
 def zip_folder(output_name, folder, exclude_files, exclude_dirs):
@@ -15,15 +42,15 @@ def zip_folder(output_name, folder, exclude_files, exclude_dirs):
             dirs[:] = [
                 d
                 for d in dirs
-                if os.path.relpath(os.path.join(root, d), folder) not in exclude_dirs
+                if not should_exclude(
+                    os.path.relpath(os.path.join(root, d), folder),
+                    exclude_files,
+                    exclude_dirs,
+                )
             ]
             for file in files:
                 rel_path = os.path.relpath(os.path.join(root, file), folder)
-                if (
-                    file in exclude_files
-                    or rel_path in exclude_files
-                    or any(rel_path.startswith(ed + os.sep) for ed in exclude_dirs)
-                ):
+                if should_exclude(rel_path, exclude_files, exclude_dirs):
                     continue
                 zipf.write(os.path.join(root, file), arcname=rel_path)
 
@@ -105,7 +132,7 @@ def main():
     # Step 4: Create videospeed-firefox.xpi from temp folder with version bumped to .0
     with tempfile.TemporaryDirectory() as temp_dir:
         for item in os.listdir(current_dir):
-            if item in exclude_temp_files or item in exclude_temp_dirs:
+            if should_exclude(item, exclude_temp_files, exclude_temp_dirs):
                 continue
             src = os.path.join(current_dir, item)
             dst = os.path.join(temp_dir, item)

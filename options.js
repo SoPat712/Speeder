@@ -348,11 +348,69 @@ function updateCustomShortcutInputText(inputItem, bindingOrKeyCode) {
   setShortcutInputBinding(inputItem, legacyKeyCodeToBinding(bindingOrKeyCode));
 }
 
+function appendSelectOptions(select, options) {
+  options.forEach(function (optionData) {
+    var option = document.createElement("option");
+    option.value = optionData.value;
+    option.textContent = optionData.label;
+    select.appendChild(option);
+  });
+}
+
 function add_shortcut() {
-  var html = `<select class="customDo"><option value="slower">Decrease speed</option><option value="faster">Increase speed</option><option value="rewind">Rewind</option><option value="advance">Advance</option><option value="reset">Reset speed</option><option value="fast">Preferred speed</option><option value="muted">Mute</option><option value="pause">Pause</option><option value="mark">Set marker</option><option value="jump">Jump to marker</option><option value="display">Show/hide controller</option></select><input class="customKey" type="text" placeholder="press a key"/><input class="customValue" type="text" placeholder="value (0.10)"/><select class="customForce"><option value="false">Do not disable website key bindings</option><option value="true">Disable website key bindings</option></select><button class="removeParent">X</button>`;
   var div = document.createElement("div");
   div.setAttribute("class", "row customs");
-  div.innerHTML = html;
+
+  var actionSelect = document.createElement("select");
+  actionSelect.className = "customDo";
+  appendSelectOptions(actionSelect, [
+    { value: "slower", label: "Decrease speed" },
+    { value: "faster", label: "Increase speed" },
+    { value: "rewind", label: "Rewind" },
+    { value: "advance", label: "Advance" },
+    { value: "reset", label: "Reset speed" },
+    { value: "fast", label: "Preferred speed" },
+    { value: "muted", label: "Mute" },
+    { value: "pause", label: "Pause" },
+    { value: "mark", label: "Set marker" },
+    { value: "jump", label: "Jump to marker" },
+    { value: "display", label: "Show/hide controller" }
+  ]);
+
+  var keyInput = document.createElement("input");
+  keyInput.className = "customKey";
+  keyInput.type = "text";
+  keyInput.placeholder = "press a key";
+
+  var valueInput = document.createElement("input");
+  valueInput.className = "customValue";
+  valueInput.type = "text";
+  valueInput.placeholder = "value (0.10)";
+
+  var forceSelect = document.createElement("select");
+  forceSelect.className = "customForce";
+  appendSelectOptions(forceSelect, [
+    {
+      value: "false",
+      label: "Do not disable website key bindings"
+    },
+    {
+      value: "true",
+      label: "Disable website key bindings"
+    }
+  ]);
+
+  var removeButton = document.createElement("button");
+  removeButton.className = "removeParent";
+  removeButton.type = "button";
+  removeButton.textContent = "X";
+
+  div.appendChild(actionSelect);
+  div.appendChild(keyInput);
+  div.appendChild(valueInput);
+  div.appendChild(forceSelect);
+  div.appendChild(removeButton);
+
   var customsElement = document.getElementById("customs");
   customsElement.insertBefore(
     div,

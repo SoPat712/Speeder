@@ -1,5 +1,5 @@
-[![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/video-speed-controller-v1/)
-
+# Available for Firefox  
+[![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org//firefox/addon/speeder/)
 
 
 # The science of accelerated playback
@@ -7,19 +7,19 @@
 **TL;DR: faster playback translates to better engagement and retention.**
 
 Average adult reads prose text at
-[250 to 300 words per minute](http://www.paperbecause.com/PIOP/files/f7/f7bb6bc5-2c4a-466f-9ae7-b483a2c0dca4.pdf)
+[250 to 300 words per minute](https://web.archive.org/web/20220325065025/https://www.domtar.com/en/resources/paper-advocacy/paperbecause)
 (wpm). By contrast, the average rate of speech for English speakers is ~150 wpm,
 with slide presentations often closer to 100 wpm. As a result, when given the
 choice, many viewers
-[speed up video playback to ~1.3\~1.5 its recorded rate](http://research.microsoft.com/en-us/um/redmond/groups/coet/compression/chi99/paper.pdf)
+[speed up video playback to ~1.3\~1.5 its recorded rate](https://research.microsoft.com/en-us/um/redmond/groups/coet/compression/chi99/paper.pdf)
 to compensate for the difference.
 
 Many viewers report that
-[accelerated viewing keeps their attention longer](http://www.enounce.com/docs/BYUPaper020319.pdf):
+[accelerated viewing keeps their attention longer](https://www.enounce.com/docs/BYUPaper020319.pdf):
 faster delivery keeps the viewer more engaged with the content. In fact, with a
 little training many end up watching videos at 2x+ the recorded speed. Some
 studies report that after being exposed to accelerated playback,
-[listeners become uncomfortable](http://alumni.media.mit.edu/~barons/html/avios92.html#beasleyalteredspeech)
+[listeners become uncomfortable](https://web.archive.org/web/20230912173120/http://alumni.media.mit.edu/~barons/html/avios92.html)
 if they are forced to return to normal rate of presentation.
 
 ## Faster HTML5 Video
@@ -36,7 +36,7 @@ last point to listen to it a few more times.
 #### *Install [Chrome](https://chrome.google.com/webstore/detail/video-speed-controller/nffaoalbilbmmfgbnbgppjihopabppdk) or [Firefox](https://addons.mozilla.org/en-us/firefox/addon/videospeed/) Extension*
 
 \*\* Once the extension is installed simply navigate to any page that offers
-HTML5 video ([example](http://www.youtube.com/watch?v=E9FxNzv1Tr8)), and you'll
+HTML5 video ([example](https://www.youtube.com/watch?v=E9FxNzv1Tr8)), and you'll
 see a speed indicator in top left corner. Hover over the indicator to reveal the
 controls to accelerate, slowdown, and quickly rewind or advance the video. Or,
 even better, simply use your keyboard:
@@ -74,13 +74,11 @@ and inspect the menu: if it mentions flash, then that's the issue. That said,
 most sites will fallback to HTML5 if they detect that Flash is not available.
 You can try manually disabling Flash from the browser.
 
-**What is this fork of `igrigorik/videospeed` all about?** This fork of the
-[`igrigorik/videospeed`](https://github.com/igrigorik/videospeed) repository
-is a port of [`igrigorik`](https://github.com/igrigorik)'s videospeed Chrome 
-add-on for Firefox. This fork modifies the Chrome add-on code so that it works 
-in Firefox. This repo is the code behind the [Firefox Extension](https://addons.mozilla.org/en-US/firefox/addon/video-speed-controller-v1/)
-whereas the [`igrigorik/videospeed`](https://github.com/igrigorik/videospeed)
-repository contains the code behind the [Chrome Extension](https://chrome.google.com/webstore/detail/video-speed-controller/nffaoalbilbmmfgbnbgppjihopabppdk).
+**What is this fork all about?** This is a fork of 
+[CodeBicycle's Video Speed Controller extension for Firefox](https://github.com/codebicycle/videospeed) 
+which is a fork of [Igrigorik's Video Speed Controller extension for Chromium](https://github.com/igrigorik/videospeed).
+
+The goal of this fork is fix bugs in the upstream code as well as add new features.
 
 ### License
 

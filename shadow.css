@@ -4,6 +4,8 @@
   font-size: 13px;
 }
 
+#controller:hover #controls,
+#controller:focus-within #controls,
 :host(:hover) #controls {
   display: inline;
 }
@@ -21,7 +23,7 @@
   margin: 10px 10px 10px 15px;
 
   cursor: default;
-  /* Stay just above the video layer, not above site dialogs/modals. */
+  /* Stay above the local video surface without overtaking page-level dialogs. */
   z-index: 1;
 }
 

@@ -150,7 +150,8 @@ var tcDefaults = {
     createDefaultBinding("rewind", "Z", 90, 10),
     createDefaultBinding("advance", "X", 88, 10),
     createDefaultBinding("reset", "R", 82, 1),
-    createDefaultBinding("fast", "G", 71, 1.8)
+    createDefaultBinding("fast", "G", 71, 1.8),
+    createDefaultBinding("toggleSubtitleNudge", "N", 78, 0)
   ],
   blacklist: `www.instagram.com
     twitter.com
@@ -158,11 +159,24 @@ var tcDefaults = {
     teams.microsoft.com
   `.replace(regStrip, ""),
   enableSubtitleNudge: true,
-  subtitleNudgeInterval: 25,
+  subtitleNudgeInterval: 50,
   subtitleNudgeAmount: 0.001
 };
 
-var customActionsNoValues = ["pause", "muted", "mark", "jump", "display"];
+var customActionsNoValues = [
+  "pause",
+  "muted",
+  "mark",
+  "jump",
+  "display",
+  "toggleSubtitleNudge"
+];
+
+function ensureDefaultBinding(storage, action, key, keyCode, value) {
+  if (storage.keyBindings.some((item) => item.action === action)) return;
+
+  storage.keyBindings.push(createDefaultBinding(action, key, keyCode, value));
+}
 
 function normalizeBindingKey(key) {
   if (typeof key !== "string" || key.length === 0) return null;
@@ -374,7 +388,8 @@ function add_shortcut() {
     { value: "pause", label: "Pause" },
     { value: "mark", label: "Set marker" },
     { value: "jump", label: "Jump to marker" },
-    { value: "display", label: "Show/hide controller" }
+    { value: "display", label: "Show/hide controller" },
+    { value: "toggleSubtitleNudge", label: "Toggle subtitle nudge" }
   ]);
 
   var keyInput = document.createElement("input");
@@ -517,6 +532,9 @@ function save_options() {
   if (settings.subtitleNudgeInterval < 10) {
     settings.subtitleNudgeInterval = 10;
   }
+  if (settings.subtitleNudgeInterval > 1000) {
+    settings.subtitleNudgeInterval = 1000;
+  }
   if (
     settings.subtitleNudgeAmount <= 0 ||
     settings.subtitleNudgeAmount > 0.1
@@ -547,15 +565,17 @@ function save_options() {
 }
 
 function ensureDisplayBinding(storage) {
-  if (storage.keyBindings.some((item) => item.action === "display")) return;
-  storage.keyBindings.push(
-    createDefaultBinding(
-      "display",
-      "V",
-      storage.displayKeyCode || tcDefaults.displayKeyCode,
-      0
-    )
+  ensureDefaultBinding(
+    storage,
+    "display",
+    "V",
+    storage.displayKeyCode || tcDefaults.displayKeyCode,
+    0
   );
+}
+
+function ensureSubtitleNudgeBinding(storage) {
+  ensureDefaultBinding(storage, "toggleSubtitleNudge", "N", 78, 0);
 }
 
 function restore_options() {
@@ -581,6 +601,7 @@ function restore_options() {
     }
 
     ensureDisplayBinding(storage);
+    ensureSubtitleNudgeBinding(storage);
 
     document.querySelectorAll(".customs:not([id])").forEach((row) => row.remove());
 

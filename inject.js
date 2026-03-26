@@ -22,14 +22,17 @@ var tc = {
       imgur.com
       teams.microsoft.com
     `.replace(regStrip, ""),
-    defaultLogLevel: 4,
-    logLevel: 5, // Set to 5 to see your debug logs
+    defaultLogLevel: 3,
+    logLevel: 3,
     enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
-    subtitleNudgeInterval: 100, // Reduced from 25ms to 100ms (10x/sec instead of 40x/sec)
+    subtitleNudgeInterval: 50, // Default 50ms balances subtitle tracking with CPU cost
     subtitleNudgeAmount: 0.001
   },
   mediaElements: [],
-  isNudging: false
+  isNudging: false,
+  pendingLastSpeedSave: null,
+  pendingLastSpeedValue: null,
+  persistedLastSpeed: 1.0
 };
 
 var MIN_SPEED = 0.0625;
@@ -139,8 +142,25 @@ function defaultKeyBindings(storage) {
       "G",
       Number(storage.fastKeyCode) || 71,
       Number(storage.fastSpeed) || 1.8
+    ),
+    createDefaultBinding(
+      "toggleSubtitleNudge",
+      "N",
+      78,
+      0
     )
   ];
+}
+
+function ensureDefaultKeyBinding(action, key, keyCode, value) {
+  if (tc.settings.keyBindings.some((binding) => binding.action === action)) {
+    return false;
+  }
+
+  tc.settings.keyBindings.push(
+    createDefaultBinding(action, key, keyCode, value)
+  );
+  return true;
 }
 
 function getLegacyKeyCode(binding) {
@@ -277,6 +297,107 @@ function getRememberedSpeed(video) {
 
 function getDesiredSpeed(video) {
   return getControllerTargetSpeed(video) || getRememberedSpeed(video) || 1.0;
+}
+
+function isSubtitleNudgeSupported(video) {
+  return Boolean(
+    video &&
+      ((video.currentSrc && video.currentSrc.includes("googlevideo.com")) ||
+        location.hostname.includes("youtube.com"))
+  );
+}
+
+function isSubtitleNudgeEnabledForVideo(video) {
+  if (!video || !video.vsc) return tc.settings.enableSubtitleNudge;
+
+  if (typeof video.vsc.subtitleNudgeEnabledOverride === "boolean") {
+    return video.vsc.subtitleNudgeEnabledOverride;
+  }
+
+  return tc.settings.enableSubtitleNudge;
+}
+
+function setSubtitleNudgeEnabledForVideo(video, enabled) {
+  if (!video || !video.vsc) return false;
+
+  var normalizedEnabled = Boolean(enabled);
+  video.vsc.subtitleNudgeEnabledOverride = normalizedEnabled;
+
+  if (!normalizedEnabled) {
+    video.vsc.stopSubtitleNudge();
+  } else if (!video.paused && video.playbackRate !== 1.0) {
+    video.vsc.startSubtitleNudge();
+  }
+
+  updateSubtitleNudgeIndicator(video);
+  return normalizedEnabled;
+}
+
+function updateSubtitleNudgeIndicator(video) {
+  if (!video || !video.vsc || !video.vsc.subtitleNudgeIndicator) return;
+
+  var indicator = video.vsc.subtitleNudgeIndicator;
+  var isSupported = isSubtitleNudgeSupported(video);
+  var isEnabled = isSupported && isSubtitleNudgeEnabledForVideo(video);
+  var label = isEnabled ? "✓" : "×";
+  var title = isSupported
+    ? isEnabled
+      ? "Subtitle nudge enabled"
+      : "Subtitle nudge disabled"
+    : "Subtitle nudge unavailable on this site";
+
+  indicator.textContent = label;
+  indicator.dataset.enabled = isEnabled ? "true" : "false";
+  indicator.dataset.supported = isSupported ? "true" : "false";
+  indicator.title = title;
+  indicator.setAttribute("aria-label", title);
+}
+
+function schedulePersistLastSpeed(speed) {
+  if (!isValidSpeed(speed)) return;
+
+  tc.pendingLastSpeedValue = speed;
+  if (tc.pendingLastSpeedSave !== null) return;
+
+  tc.pendingLastSpeedSave = setTimeout(function () {
+    var speedToPersist = tc.pendingLastSpeedValue;
+    tc.pendingLastSpeedSave = null;
+
+    if (!isValidSpeed(speedToPersist) || tc.persistedLastSpeed === speedToPersist) {
+      return;
+    }
+
+    chrome.storage.sync.set({ lastSpeed: speedToPersist }, function () { });
+    tc.persistedLastSpeed = speedToPersist;
+  }, 250);
+}
+
+function suppressNextNudgeRateChanges(controller, count) {
+  if (!controller) return;
+
+  controller.suppressedRateChangeCount =
+    (controller.suppressedRateChangeCount || 0) + (count || 2);
+  controller.suppressedRateChangeUntil =
+    Date.now() + Math.max(250, tc.settings.subtitleNudgeInterval * 4);
+}
+
+function shouldIgnoreSuppressedRateChange(video) {
+  if (!video || !video.vsc) return false;
+
+  var controller = video.vsc;
+  if (
+    controller.suppressedRateChangeCount > 0 &&
+    controller.suppressedRateChangeUntil >= Date.now()
+  ) {
+    controller.suppressedRateChangeCount -= 1;
+    return true;
+  }
+
+  if (controller.suppressedRateChangeUntil < Date.now()) {
+    controller.suppressedRateChangeCount = 0;
+  }
+
+  return false;
 }
 
 function resolveTargetSpeed(video) {
@@ -467,6 +588,18 @@ function getScanNodeForRoot(root) {
   return root;
 }
 
+function rootMayContainMedia(root) {
+  if (!root) return false;
+  if (root.nodeType === Node.DOCUMENT_NODE) return true;
+  if (typeof root.querySelector !== "function") return true;
+
+  try {
+    return Boolean(root.querySelector(mediaSelector()));
+  } catch (error) {
+    return true;
+  }
+}
+
 function scanRootForMedia(root) {
   var scanRoot = getScanNodeForRoot(root);
   if (!scanRoot) return;
@@ -482,7 +615,9 @@ function observeRoot(root) {
   setupListener(root);
   attachMutationObserver(root);
   attachMediaDetectionListeners(root);
-  scanRootForMedia(root);
+  if (rootMayContainMedia(root)) {
+    scanRootForMedia(root);
+  }
 }
 
 function patchAttachShadow() {
@@ -555,10 +690,12 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   if (!isValidSpeed(tc.settings.lastSpeed) && tc.settings.lastSpeed !== 1.0) {
     log(`Invalid lastSpeed detected: ${storage.lastSpeed}, resetting to 1.0`, 3);
     tc.settings.lastSpeed = 1.0;
+    tc.persistedLastSpeed = 1.0;
     chrome.storage.sync.set({ lastSpeed: 1.0 });
   } else if (!isValidSpeed(tc.settings.lastSpeed)) {
     tc.settings.lastSpeed = 1.0;
   }
+  tc.persistedLastSpeed = tc.settings.lastSpeed;
   tc.settings.displayKeyCode = Number(storage.displayKeyCode);
   tc.settings.rememberSpeed = Boolean(storage.rememberSpeed);
   tc.settings.forceLastSavedSpeed = Boolean(storage.forceLastSavedSpeed);
@@ -571,21 +708,25 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     typeof storage.enableSubtitleNudge !== "undefined"
       ? Boolean(storage.enableSubtitleNudge)
       : tc.settings.enableSubtitleNudge;
-  tc.settings.subtitleNudgeInterval =
-    Number(storage.subtitleNudgeInterval) || 100; // Default 100ms for better performance
+  tc.settings.subtitleNudgeInterval = Math.min(
+    1000,
+    Math.max(10, Number(storage.subtitleNudgeInterval) || 50)
+  );
   tc.settings.subtitleNudgeAmount =
     Number(storage.subtitleNudgeAmount) || tc.settings.subtitleNudgeAmount;
-  if (
-    tc.settings.keyBindings.filter((x) => x.action == "display").length == 0
-  ) {
-    tc.settings.keyBindings.push(
-      createDefaultBinding(
-        "display",
-        "V",
-        Number(storage.displayKeyCode) || 86,
-        0
-      )
-    );
+  var addedDefaultBinding = false;
+  addedDefaultBinding =
+    ensureDefaultKeyBinding(
+      "display",
+      "V",
+      Number(storage.displayKeyCode) || 86,
+      0
+    ) || addedDefaultBinding;
+  addedDefaultBinding =
+    ensureDefaultKeyBinding("toggleSubtitleNudge", "N", 78, 0) ||
+    addedDefaultBinding;
+
+  if (addedDefaultBinding) {
     chrome.storage.sync.set({ keyBindings: tc.settings.keyBindings });
   }
   patchAttachShadow();
@@ -646,6 +787,10 @@ function defineVideoController() {
     this.restoreSpeedTimer = null;
     this.pendingRateChange = null;
     this.speedRestoreUntil = 0;
+    this.subtitleNudgeEnabledOverride = null;
+    this.suppressedRateChangeCount = 0;
+    this.suppressedRateChangeUntil = 0;
+    this.visibilityResumeHandler = null;
 
     log(`Creating video controller for ${target.tagName} with src: ${target.src || target.currentSrc || 'none'}`, 4);
 
@@ -752,6 +897,7 @@ function defineVideoController() {
               this.div.classList.remove("vsc-nosource");
               if (!mutation.target.paused) this.startSubtitleNudge();
             }
+            updateSubtitleNudgeIndicator(this.video);
           }
         }
       });
@@ -780,14 +926,9 @@ function defineVideoController() {
   };
 
   tc.videoController.prototype.startSubtitleNudge = function () {
-    const isYouTube =
-      (this.video &&
-        this.video.currentSrc &&
-        this.video.currentSrc.includes("googlevideo.com")) ||
-      location.hostname.includes("youtube.com");
     if (
-      !isYouTube ||
-      !tc.settings.enableSubtitleNudge ||
+      !isSubtitleNudgeSupported(this.video) ||
+      !isSubtitleNudgeEnabledForVideo(this.video) ||
       this.nudgeAnimationId !== null ||
       !this.video ||
       this.video.paused ||
@@ -808,12 +949,30 @@ function defineVideoController() {
 
       // CRITICAL: Don't nudge if tab is hidden - prevents speed drift
       if (document.hidden) {
-        this.nudgeAnimationId = setTimeout(performNudge, tc.settings.subtitleNudgeInterval);
+        if (!this.visibilityResumeHandler && this.video && this.video.ownerDocument) {
+          this.visibilityResumeHandler = () => {
+            if (this.video.ownerDocument.hidden) return;
+            this.video.ownerDocument.removeEventListener(
+              "visibilitychange",
+              this.visibilityResumeHandler,
+              true
+            );
+            this.visibilityResumeHandler = null;
+            this.startSubtitleNudge();
+          };
+          this.video.ownerDocument.addEventListener(
+            "visibilitychange",
+            this.visibilityResumeHandler,
+            true
+          );
+        }
+        this.nudgeAnimationId = null;
         return;
       }
 
       // Set flag to prevent ratechange listener from interfering
       tc.isNudging = true;
+      suppressNextNudgeRateChanges(this, 2);
 
       // Cache values to avoid repeated property access
       const targetSpeed = this.targetSpeed;
@@ -845,20 +1004,22 @@ function defineVideoController() {
       this.nudgeAnimationId = null;
       log(`Nudge: Stopping.`, 5);
     }
+    if (this.visibilityResumeHandler && this.video && this.video.ownerDocument) {
+      this.video.ownerDocument.removeEventListener(
+        "visibilitychange",
+        this.visibilityResumeHandler,
+        true
+      );
+      this.visibilityResumeHandler = null;
+    }
     // Clear the target speed when stopping
     this.targetSpeed = null;
   };
 
   tc.videoController.prototype.performImmediateNudge = function () {
-    const isYouTube =
-      (this.video &&
-        this.video.currentSrc &&
-        this.video.currentSrc.includes("googlevideo.com")) ||
-      location.hostname.includes("youtube.com");
-    
     if (
-      !isYouTube ||
-      !tc.settings.enableSubtitleNudge ||
+      !isSubtitleNudgeSupported(this.video) ||
+      !isSubtitleNudgeEnabledForVideo(this.video) ||
       !this.video ||
       this.video.paused ||
       this.video.playbackRate === 1.0 ||
@@ -871,6 +1032,7 @@ function defineVideoController() {
     const nudgeAmount = tc.settings.subtitleNudgeAmount;
 
     tc.isNudging = true;
+    suppressNextNudgeRateChanges(this, 2);
     this.video.playbackRate = targetRate + nudgeAmount;
 
     // Revert synchronously via microtask
@@ -921,11 +1083,19 @@ function defineVideoController() {
       createControllerButton(doc, "display", "×", "hideButton")
     );
 
+    var subtitleNudgeIndicator = doc.createElement("span");
+    subtitleNudgeIndicator.id = "nudge-indicator";
+    subtitleNudgeIndicator.setAttribute("role", "status");
+    subtitleNudgeIndicator.setAttribute("aria-live", "polite");
+
     controller.appendChild(dragHandle);
     controller.appendChild(controls);
+    controller.appendChild(subtitleNudgeIndicator);
     shadow.appendChild(controller);
 
     this.speedIndicator = dragHandle;
+    this.subtitleNudgeIndicator = subtitleNudgeIndicator;
+    updateSubtitleNudgeIndicator(this.video);
     dragHandle.addEventListener(
       "mousedown",
       (e) => {
@@ -1058,7 +1228,7 @@ function setupListener(root) {
       tc.settings.speeds[sourceKey] = speed;
     }
     tc.settings.lastSpeed = speed;
-    chrome.storage.sync.set({ lastSpeed: speed }, () => { });
+    schedulePersistLastSpeed(speed);
     if (video.vsc) {
       if (speed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
       else video.vsc.startSubtitleNudge();
@@ -1071,6 +1241,7 @@ function setupListener(root) {
       var video = event.target;
       if (!video || typeof video.playbackRate === "undefined" || !video.vsc)
         return;
+      if (shouldIgnoreSuppressedRateChange(video)) return;
       if (tc.settings.forceLastSavedSpeed) {
         if (event.detail && event.detail.origin === "videoSpeed") {
           video.playbackRate = event.detail.speed;
@@ -1261,7 +1432,11 @@ function attachMutationObserver(root) {
             target.attributes["aria-hidden"] &&
             target.attributes["aria-hidden"].value === "false"
           ) {
-            scanRootForMedia(root);
+            scanNodeForMedia(
+              target,
+              target.parentNode || root.host || mutation.target,
+              true
+            );
           }
         });
       },
@@ -1419,6 +1594,7 @@ function runAction(action, value, e) {
   log("runAction Begin", 5);
   var mediaTagsToProcess;
   const specificVideo = arguments[3] || null;
+  var subtitleNudgeToggleValue = null;
 
   if (specificVideo) {
     mediaTagsToProcess = [specificVideo];
@@ -1441,6 +1617,12 @@ function runAction(action, value, e) {
   }
   if (mediaTagsToProcess.length === 0 && action !== "display") return;
 
+  if (action === "toggleSubtitleNudge" && mediaTagsToProcess.length > 0) {
+    subtitleNudgeToggleValue = !isSubtitleNudgeEnabledForVideo(
+      mediaTagsToProcess[0]
+    );
+  }
+
   mediaTagsToProcess.forEach(function (v) {
     if (!v.vsc) return; // Don't process videos without a controller
     var controller = v.vsc.div;
@@ -1455,7 +1637,8 @@ function runAction(action, value, e) {
       "muted",
       "mark",
       "jump",
-      "drag"
+      "drag",
+      "toggleSubtitleNudge"
     ];
     if (userDrivenActionsThatShowController.includes(action)) {
       showController(controller);
@@ -1548,6 +1731,9 @@ function runAction(action, value, e) {
         break;
       case "jump":
         jumpToMark(v);
+        break;
+      case "toggleSubtitleNudge":
+        setSubtitleNudgeEnabledForVideo(v, subtitleNudgeToggleValue);
         break;
     }
   });

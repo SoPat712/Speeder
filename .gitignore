@@ -6,3 +6,4 @@ local
 .idea/
 node_modules
 __pycache__/
+temp/

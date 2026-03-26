@@ -9,7 +9,7 @@ import zipfile
 SCRIPT_NAME = os.path.basename(__file__)
 TARGET_FILE = "manifest.json"
 DEFAULT_EXCLUDE_FILES = {".DS_Store"}
-DEFAULT_EXCLUDE_DIRS = {"__pycache__"}
+DEFAULT_EXCLUDE_DIRS = {"__pycache__", "temp"}
 DEFAULT_EXCLUDE_PATTERNS = {"._*", "*.pyc"}
 
 

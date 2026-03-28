@@ -1085,12 +1085,13 @@ function defineVideoController() {
 
     var subtitleNudgeIndicator = doc.createElement("span");
     subtitleNudgeIndicator.id = "nudge-indicator";
-    subtitleNudgeIndicator.setAttribute("role", "status");
+    subtitleNudgeIndicator.setAttribute("role", "button");
     subtitleNudgeIndicator.setAttribute("aria-live", "polite");
+    subtitleNudgeIndicator.setAttribute("tabindex", "0");
 
     controller.appendChild(dragHandle);
+    controls.appendChild(subtitleNudgeIndicator);
     controller.appendChild(controls);
-    controller.appendChild(subtitleNudgeIndicator);
     shadow.appendChild(controller);
 
     this.speedIndicator = dragHandle;
@@ -1122,6 +1123,18 @@ function defineVideoController() {
         true
       );
     });
+    subtitleNudgeIndicator.addEventListener(
+      "click",
+      (e) => {
+        var video = this.video;
+        if (video) {
+          var newState = !isSubtitleNudgeEnabledForVideo(video);
+          setSubtitleNudgeEnabledForVideo(video, newState);
+        }
+        e.stopPropagation();
+      },
+      true
+    );
     controller.addEventListener("click", (e) => e.stopPropagation(), false);
     controller.addEventListener("mousedown", (e) => e.stopPropagation(), false);
     var fragment = doc.createDocumentFragment();
@@ -1158,6 +1171,21 @@ function defineVideoController() {
           const s = r && r.querySelector ? r.querySelector(".scrim") : null;
           if (s) s.prepend(fragment);
           else parentEl.insertBefore(fragment, parentEl.firstChild);
+          break;
+        case location.hostname == "www.youtube.com":
+        case location.hostname == "m.youtube.com":
+        case location.hostname == "music.youtube.com":
+          // YouTube's player DOM has .html5-video-container (video's parent) as a
+          // low layer with overlay siblings (.ytp-player-content, etc.) on top that
+          // intercept mouse events. Insert into .html5-video-player (the player
+          // root) so the controller sits above all overlay layers.
+          log("Using YouTube-specific insertion", 5);
+          var ytPlayer = parentEl.closest(".html5-video-player");
+          if (ytPlayer) {
+            ytPlayer.insertBefore(fragment, ytPlayer.firstChild);
+          } else {
+            parentEl.insertBefore(fragment, parentEl.firstChild);
+          }
           break;
         default:
           log("Using default insertion method", 5);

@@ -20,6 +20,13 @@
   position: relative;
   top: 10px;
 }
+
+/* Ensure controller sits above all YouTube player overlay layers */
+.html5-video-player .vsc-controller {
+  position: relative;
+  z-index: 2147483646;
+  pointer-events: auto;
+}
 /* Keep Speeder visibility independent from YouTube's chrome autohide state. */
 
 /* YouTube embedded player */

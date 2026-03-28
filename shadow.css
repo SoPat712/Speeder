@@ -10,14 +10,6 @@
   display: inline;
 }
 
-#controller:hover #nudge-indicator,
-#controller:focus-within #nudge-indicator,
-#controller.dragging #nudge-indicator,
-:host(:hover) #nudge-indicator,
-:host(.vsc-show) #nudge-indicator {
-  display: inline-flex;
-}
-
 #controller {
   position: absolute;
   top: 0;
@@ -48,7 +40,8 @@
 }
 
 #nudge-indicator {
-  display: none;
+  display: inline-flex;
+  vertical-align: middle;
   align-items: center;
   justify-content: center;
   min-width: 1.35em;
@@ -61,6 +54,7 @@
   font-weight: bold;
   line-height: 1;
   box-sizing: border-box;
+  cursor: pointer;
 }
 
 #nudge-indicator[data-enabled="true"] {

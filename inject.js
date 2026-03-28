@@ -37,6 +37,9 @@ var tc = {
 
 var MIN_SPEED = 0.0625;
 var MAX_SPEED = 16;
+var YT_NATIVE_MIN = 0.25;
+var YT_NATIVE_MAX = 2.0;
+var YT_NATIVE_STEP = 0.05;
 var vscObservedRoots = new WeakSet();
 var requestIdle =
   typeof window.requestIdleCallback === "function"
@@ -299,12 +302,57 @@ function getDesiredSpeed(video) {
   return getControllerTargetSpeed(video) || getRememberedSpeed(video) || 1.0;
 }
 
+function isOnYouTube() {
+  return (
+    location.hostname.includes("youtube.com") ||
+    location.hostname.includes("youtube-nocookie.com")
+  );
+}
+
+function isYouTubeNativeSpeedRange(speed) {
+  if (speed < YT_NATIVE_MIN || speed > YT_NATIVE_MAX) return false;
+  // Check if speed is a multiple of 0.05 (with floating point tolerance)
+  var remainder = Math.abs((speed * 100) % (YT_NATIVE_STEP * 100));
+  return remainder < 0.01 || remainder > (YT_NATIVE_STEP * 100 - 0.01);
+}
+
+function tryYouTubeNativeSpeed(video, speed) {
+  if (!isOnYouTube() || !isYouTubeNativeSpeedRange(speed)) return false;
+
+  try {
+    // YouTube's movie_player element exposes setPlaybackRate() but it's a
+    // page-level JS method, not a native DOM method. Content scripts can't
+    // see it directly. In Firefox, wrappedJSObject gives access to the
+    // page's JS context.
+    var playerEl =
+      video.closest(".html5-video-player") ||
+      document.getElementById("movie_player");
+    if (!playerEl) return false;
+
+    // Try wrappedJSObject first (Firefox content script → page context)
+    var player = playerEl.wrappedJSObject || playerEl;
+    if (typeof player.setPlaybackRate === "function") {
+      player.setPlaybackRate(speed);
+      // Verify YouTube actually accepted the speed (it may silently clamp)
+      var actualSpeed = video.playbackRate;
+      if (Math.abs(actualSpeed - speed) > 0.01) {
+        log("YouTube clamped speed to " + actualSpeed + ", falling back", 4);
+        return false;
+      }
+      log("Used YouTube native setPlaybackRate: " + speed, 4);
+      return true;
+    }
+  } catch (e) {
+    log("YouTube native speed failed: " + e.message, 3);
+  }
+  return false;
+}
+
 function isSubtitleNudgeSupported(video) {
   return Boolean(
     video &&
       ((video.currentSrc && video.currentSrc.includes("googlevideo.com")) ||
-        location.hostname.includes("youtube.com") ||
-        location.hostname.includes("youtube-nocookie.com"))
+        isOnYouTube())
   );
 }
 
@@ -1641,6 +1689,8 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
     runAction("blink", 1000, null, video); // Pass video to blink
   }
 
+  // Try YouTube's native speed API first — keeps subtitles in sync without nudge
+  var usedNativeSpeed = false;
   if (tc.settings.forceLastSavedSpeed) {
     video.dispatchEvent(
       new CustomEvent("ratechange", {
@@ -1654,12 +1704,21 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   } else {
     if (Math.abs(video.playbackRate - numericSpeed) > 0.001) {
       rememberPendingRateChange(video, numericSpeed);
-      video.playbackRate = numericSpeed;
+      usedNativeSpeed = tryYouTubeNativeSpeed(video, numericSpeed);
+      if (!usedNativeSpeed) {
+        video.playbackRate = numericSpeed;
+      }
     }
   }
   if (video.vsc) {
-    if (numericSpeed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
-    else video.vsc.startSubtitleNudge();
+    if (numericSpeed === 1.0 || video.paused) {
+      video.vsc.stopSubtitleNudge();
+    } else if (usedNativeSpeed) {
+      // YouTube's native API handles subtitle sync — no nudge needed
+      video.vsc.stopSubtitleNudge();
+    } else {
+      video.vsc.startSubtitleNudge();
+    }
   }
 }
 

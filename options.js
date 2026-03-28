@@ -910,10 +910,6 @@ function restore_options() {
     document.querySelectorAll(".customs:not([id])").forEach((row) => row.remove());
 
     storage.keyBindings.forEach((item) => {
-      var fallbackKeyCode =
-        item.action === "display"
-          ? storage.displayKeyCode || tcDefaults.displayKeyCode
-          : undefined;
       var row = document.getElementById(item.action);
       var normalizedBinding = normalizeStoredBinding(item);
 
@@ -923,6 +919,11 @@ function restore_options() {
       }
 
       if (!row) return;
+
+      var keyInput = row.querySelector(".customKey");
+      if (keyInput) {
+        updateCustomShortcutInputText(keyInput, normalizedBinding || null);
+      }
 
       var valueInput = row.querySelector(".customValue");
       if (customActionsNoValues.includes(item.action)) {

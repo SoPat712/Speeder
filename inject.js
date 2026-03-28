@@ -1812,7 +1812,7 @@ function attachNavigationListeners() {
 
 function initializeNow(doc, forceReinit = false) {
   if ((!forceReinit && vscInitializedDocuments.has(doc)) || !doc.body) return;
-  if (!tc.settings.enabled) return;
+  if (!tc.settings.enabled || isBlacklisted()) return;
 
   if (!doc.body.classList.contains("vsc-initialized")) {
     doc.body.classList.add("vsc-initialized");

@@ -1,4 +1,32 @@
 document.addEventListener("DOMContentLoaded", function () {
+  var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
+
+  function escapeStringRegExp(str) {
+    const m = /[|\\{}()[\]^$+*?.]/g;
+    return str.replace(m, "\\$&");
+  }
+
+  function isBlacklisted(url, blacklist) {
+    let b = false;
+    const l = blacklist ? blacklist.split("\n") : [];
+    l.forEach((m) => {
+      if (b) return;
+      m = m.replace(regStrip, "");
+      if (m.length == 0) return;
+      let r;
+      if (m.startsWith("/") && m.lastIndexOf("/") > 0) {
+        try {
+          const ls = m.lastIndexOf("/");
+          r = new RegExp(m.substring(1, ls), m.substring(ls + 1));
+        } catch (e) {
+          return;
+        }
+      } else r = new RegExp(escapeStringRegExp(m));
+      if (r && r.test(url)) b = true;
+    });
+    return b;
+  }
+
   var manifest = chrome.runtime.getManifest();
   var versionElement = document.querySelector("#app-version");
   if (versionElement) {
@@ -50,9 +78,28 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  chrome.storage.sync.get({ enabled: true }, function (storage) {
-    toggleEnabledUI(storage.enabled);
-  });
+  chrome.storage.sync.get(
+    {
+      enabled: true,
+      blacklist: `\
+      www.instagram.com
+      twitter.com
+      vine.co
+      imgur.com
+      teams.microsoft.com
+    `.replace(/^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm, "")
+    },
+    function (storage) {
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        const url = tabs[0]?.url || "";
+        const blacklisted = isBlacklisted(url, storage.blacklist);
+        toggleEnabledUI(storage.enabled && !blacklisted);
+        if (blacklisted) {
+          setStatusMessage("Site is blacklisted.");
+        }
+      });
+    }
+  );
 
   function toggleEnabled(enabled, callback) {
     chrome.storage.sync.set(

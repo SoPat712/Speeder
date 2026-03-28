@@ -39,6 +39,17 @@
   margin-right: 0.8em;
 }
 
+/* For center positions, override transform to expand from left edge instead of center */
+#controller[data-location="top-center"],
+#controller[data-location="bottom-center"] {
+  transform: translate(0, 0) !important;
+  left: calc(50% - 30px) !important;
+}
+
+#controller[data-location="bottom-center"] {
+  transform: translate(0, -100%) !important;
+}
+
 #controls {
   display: none;
 }

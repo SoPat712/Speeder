@@ -167,10 +167,9 @@ var tcDefaults = {
     createDefaultBinding("toggleSubtitleNudge", "N", 78, 0)
   ],
   siteRules: [
-    { pattern: "instagram.com", disableExtension: true },
-    { pattern: "x.com", disableExtension: true },
-    { pattern: "imgur.com", disableExtension: true },
-    { pattern: "teams.microsoft.com", disableExtension: true }
+    { pattern: "example1.com", enabled: false },
+    { pattern: "/example2\\.com/i", enabled: false },
+    { pattern: "/(example3|sample3)\\.com/gi", enabled: false }
   ],
   enableSubtitleNudge: true,
   subtitleNudgeInterval: 50,

@@ -165,25 +165,81 @@ var tcDefaults = {
     createDefaultBinding("fast", "G", 71, 1.8),
     createDefaultBinding("toggleSubtitleNudge", "N", 78, 0)
   ],
-  blacklist: `www.instagram.com
-    twitter.com
-    imgur.com
-    teams.microsoft.com
-  `.replace(regStrip, ""),
+  siteRules: [
+    { pattern: "www.instagram.com", disableExtension: true },
+    { pattern: "x.com", disableExtension: true },
+    { pattern: "imgur.com", disableExtension: true },
+    { pattern: "teams.microsoft.com", disableExtension: true }
+  ],
   enableSubtitleNudge: true,
   subtitleNudgeInterval: 50,
   subtitleNudgeAmount: 0.001
 };
 
-var customActionsNoValues = [
-  "pause",
-  "muted",
-  "mark",
-  "jump",
+const actionLabels = {
+  display: "Show/hide controller",
+  move: "Move controller",
+  slower: "Decrease speed",
+  faster: "Increase speed",
+  rewind: "Rewind",
+  advance: "Advance",
+  reset: "Reset speed",
+  fast: "Preferred speed",
+  muted: "Mute",
+  pause: "Pause",
+  mark: "Set marker",
+  jump: "Jump to marker",
+  toggleSubtitleNudge: "Toggle subtitle nudge"
+};
+
+const customActionsNoValues = [
+  "reset",
   "display",
   "move",
+  "muted",
+  "pause",
+  "mark",
+  "jump",
   "toggleSubtitleNudge"
 ];
+
+function refreshAddShortcutSelector() {
+  const selector = document.getElementById("addShortcutSelector");
+  if (!selector) return;
+
+  // Clear existing options except the first one
+  while (selector.options.length > 1) {
+    selector.remove(1);
+  }
+
+  // Find all currently used actions
+  const usedActions = new Set();
+  document.querySelectorAll(".shortcut-row").forEach((row) => {
+    const action = row.dataset.action;
+    if (action) {
+      usedActions.add(action);
+    }
+  });
+
+  // Add all unused actions
+  Object.keys(actionLabels).forEach((action) => {
+    if (!usedActions.has(action)) {
+      const option = document.createElement("option");
+      option.value = action;
+      option.text = actionLabels[action];
+      selector.appendChild(option);
+    }
+  });
+
+  // If no available actions, hide or disable the selector
+  if (selector.options.length === 1) {
+    selector.disabled = true;
+    selector.options[0].text = "All shortcuts added";
+  } else {
+    selector.disabled = false;
+    selector.options[0].text = "Add shortcut...";
+  }
+}
 
 function ensureDefaultBinding(storage, action, key, keyCode, value) {
   if (storage.keyBindings.some((item) => item.action === action)) return;
@@ -389,27 +445,16 @@ function appendSelectOptions(select, options) {
   });
 }
 
-function add_shortcut() {
-  var div = document.createElement("div");
-  div.setAttribute("class", "row customs");
+function add_shortcut(action, value) {
+  if (!action) return;
 
-  var actionSelect = document.createElement("select");
-  actionSelect.className = "customDo";
-  appendSelectOptions(actionSelect, [
-    { value: "slower", label: "Decrease speed" },
-    { value: "faster", label: "Increase speed" },
-    { value: "rewind", label: "Rewind" },
-    { value: "advance", label: "Advance" },
-    { value: "reset", label: "Reset speed" },
-    { value: "fast", label: "Preferred speed" },
-    { value: "muted", label: "Mute" },
-    { value: "pause", label: "Pause" },
-    { value: "mark", label: "Set marker" },
-    { value: "jump", label: "Jump to marker" },
-    { value: "display", label: "Show/hide controller" },
-    { value: "move", label: "Move controller" },
-    { value: "toggleSubtitleNudge", label: "Toggle subtitle nudge" }
-  ]);
+  var div = document.createElement("div");
+  div.setAttribute("class", "shortcut-row customs");
+  div.dataset.action = action;
+
+  var actionLabel = document.createElement("div");
+  actionLabel.className = "shortcut-label";
+  actionLabel.textContent = actionLabels[action] || action;
 
   var keyInput = document.createElement("input");
   keyInput.className = "customKey";
@@ -419,41 +464,32 @@ function add_shortcut() {
   var valueInput = document.createElement("input");
   valueInput.className = "customValue";
   valueInput.type = "text";
-  valueInput.placeholder = "value (0.10)";
-
-  var forceSelect = document.createElement("select");
-  forceSelect.className = "customForce";
-  appendSelectOptions(forceSelect, [
-    {
-      value: "false",
-      label: "Do not disable website key bindings"
-    },
-    {
-      value: "true",
-      label: "Disable website key bindings"
-    }
-  ]);
+  valueInput.placeholder = "value";
+  if (customActionsNoValues.includes(action)) {
+    valueInput.value = "N/A";
+    valueInput.disabled = true;
+  } else {
+    valueInput.value = value || 0;
+  }
 
   var removeButton = document.createElement("button");
   removeButton.className = "removeParent";
   removeButton.type = "button";
   removeButton.textContent = "X";
 
-  div.appendChild(actionSelect);
+  div.appendChild(actionLabel);
   div.appendChild(keyInput);
   div.appendChild(valueInput);
-  div.appendChild(forceSelect);
   div.appendChild(removeButton);
 
-  var customsElement = document.getElementById("customs");
-  customsElement.insertBefore(
-    div,
-    customsElement.children[customsElement.childElementCount - 1]
-  );
+  var customsElement = document.querySelector(".shortcuts-grid");
+  customsElement.appendChild(div);
+  
+  refreshAddShortcutSelector();
 }
 
 function createKeyBindings(item) {
-  var action = item.querySelector(".customDo").value;
+  var action = item.dataset.action || item.querySelector(".customDo").value;
   var input = item.querySelector(".customKey");
   var valueInput = item.querySelector(".customValue");
   var predefined = !!item.id;
@@ -479,7 +515,7 @@ function createKeyBindings(item) {
     value: customActionsNoValues.includes(action)
       ? 0
       : Number(valueInput.value),
-    force: item.querySelector(".customForce").value,
+    force: false,
     predefined: predefined
   });
 
@@ -489,22 +525,27 @@ function createKeyBindings(item) {
 function validate() {
   var valid = true;
   var status = document.getElementById("status");
-  document
-    .getElementById("blacklist")
-    .value.split("\n")
-    .forEach((match) => {
-      match = match.replace(regStrip, "");
-      if (match.startsWith("/")) {
-        try {
-          new RegExp(match);
-        } catch (err) {
-          status.textContent =
-            "Error: Invalid blacklist regex: " + match + ". Unable to save";
-          valid = false;
-          return;
+  
+  // Validate site rules patterns
+  document.querySelectorAll(".site-rule").forEach((ruleEl) => {
+    var pattern = ruleEl.querySelector(".site-pattern").value.trim();
+    if (pattern.length === 0) return;
+    
+    if (pattern.startsWith("/")) {
+      try {
+        var lastSlash = pattern.lastIndexOf("/");
+        if (lastSlash > 0) {
+          new RegExp(pattern.substring(1, lastSlash), pattern.substring(lastSlash + 1));
         }
+      } catch (err) {
+        status.textContent =
+          "Error: Invalid site rule regex: " + pattern + ". Unable to save";
+        valid = false;
+        return;
       }
-    });
+    }
+  });
+  
   return valid;
 }
 
@@ -538,18 +579,13 @@ function save_options() {
   );
   settings.controllerOpacity =
     document.getElementById("controllerOpacity").value;
-  settings.blacklist = document
-    .getElementById("blacklist")
-    .value.replace(regStrip, "");
   settings.keyBindings = keyBindings;
   settings.enableSubtitleNudge =
     document.getElementById("enableSubtitleNudge").checked;
   settings.subtitleNudgeInterval =
     parseInt(document.getElementById("subtitleNudgeInterval").value, 10) ||
     tcDefaults.subtitleNudgeInterval;
-  settings.subtitleNudgeAmount =
-    parseFloat(document.getElementById("subtitleNudgeAmount").value) ||
-    tcDefaults.subtitleNudgeAmount;
+  settings.subtitleNudgeAmount = tcDefaults.subtitleNudgeAmount;
 
   if (settings.subtitleNudgeInterval < 10) {
     settings.subtitleNudgeInterval = 10;
@@ -557,12 +593,65 @@ function save_options() {
   if (settings.subtitleNudgeInterval > 1000) {
     settings.subtitleNudgeInterval = 1000;
   }
-  if (
-    settings.subtitleNudgeAmount <= 0 ||
-    settings.subtitleNudgeAmount > 0.1
-  ) {
-    settings.subtitleNudgeAmount = tcDefaults.subtitleNudgeAmount;
-  }
+
+  // Collect site rules
+  settings.siteRules = [];
+  document.querySelectorAll(".site-rule").forEach((ruleEl) => {
+    var pattern = ruleEl.querySelector(".site-pattern").value.trim();
+    if (pattern.length === 0) return;
+
+    var rule = { pattern: pattern };
+
+    // Handle Enable toggle
+    rule.enabled = ruleEl.querySelector(".site-enabled").checked;
+
+    // Handle other site settings
+    const siteSettings = [
+      { key: "startHidden", type: "checkbox" },
+      { key: "controllerLocation", type: "select" },
+      { key: "rememberSpeed", type: "checkbox" },
+      { key: "forceLastSavedSpeed", type: "checkbox" },
+      { key: "audioBoolean", type: "checkbox" },
+      { key: "controllerOpacity", type: "text" }
+    ];
+
+    siteSettings.forEach((s) => {
+      var input = ruleEl.querySelector(`.site-${s.key}`);
+      if (s.type === "checkbox") {
+        rule[s.key] = input.checked;
+      } else {
+        rule[s.key] = input.value;
+      }
+    });
+
+    if (ruleEl.querySelector(".override-shortcuts").checked) {
+      var shortcuts = [];
+      ruleEl.querySelectorAll(".site-shortcuts-container .customs").forEach((shortcutRow) => {
+        var action = shortcutRow.dataset.action;
+        var keyInput = shortcutRow.querySelector(".customKey");
+        var valueInput = shortcutRow.querySelector(".customValue");
+        var forceCheckbox = shortcutRow.querySelector(".customForce");
+        var binding = normalizeStoredBinding(keyInput.vscBinding);
+
+        if (binding) {
+          shortcuts.push({
+            action: action,
+            key: binding.key,
+            keyCode: binding.keyCode,
+            code: binding.code,
+            disabled: binding.disabled === true,
+            value: customActionsNoValues.includes(action)
+              ? 0
+              : Number(valueInput.value),
+            force: forceCheckbox ? forceCheckbox.checked : false
+          });
+        }
+      });
+      if (shortcuts.length > 0) rule.shortcuts = shortcuts;
+    }
+
+    settings.siteRules.push(rule);
+  });
 
   chrome.storage.sync.remove([
     "resetSpeed",
@@ -575,7 +664,8 @@ function save_options() {
     "fasterKeyCode",
     "rewindKeyCode",
     "advanceKeyCode",
-    "fastKeyCode"
+    "fastKeyCode",
+    "blacklist"
   ]);
 
   chrome.storage.sync.set(settings, function () {
@@ -604,6 +694,194 @@ function ensureSubtitleNudgeBinding(storage) {
   ensureDefaultBinding(storage, "toggleSubtitleNudge", "N", 78, 0);
 }
 
+function migrateLegacyBlacklist(storage) {
+  if (!storage.blacklist || typeof storage.blacklist !== "string") {
+    return [];
+  }
+
+  var siteRules = [];
+  var lines = storage.blacklist.split("\n");
+  
+  lines.forEach((line) => {
+    var pattern = line.replace(regStrip, "");
+    if (pattern.length === 0) return;
+    
+    siteRules.push({
+      pattern: pattern,
+      disableExtension: true
+    });
+  });
+
+  return siteRules;
+}
+
+function addSiteRuleShortcut(container, action, binding, value, force) {
+  var div = document.createElement("div");
+  div.setAttribute("class", "shortcut-row customs");
+  div.dataset.action = action;
+
+  var actionLabel = document.createElement("div");
+  actionLabel.className = "shortcut-label";
+  var actionLabels = {
+    display: "Show/hide controller",
+    move: "Move controller",
+    slower: "Decrease speed",
+    faster: "Increase speed",
+    rewind: "Rewind",
+    advance: "Advance",
+    reset: "Reset speed",
+    fast: "Preferred speed",
+    muted: "Mute",
+    pause: "Pause",
+    mark: "Set marker",
+    jump: "Jump to marker",
+    toggleSubtitleNudge: "Toggle subtitle nudge"
+  };
+  var actionLabelText = actionLabels[action] || action;
+  if (action === "toggleSubtitleNudge") {
+    // Check if the site rule is for YouTube.
+    // We look up the pattern from the site rule element this container belongs to.
+    var ruleEl = container.closest(".site-rule");
+    var pattern = ruleEl ? ruleEl.querySelector(".site-pattern").value : "";
+    if (!pattern.toLowerCase().includes("youtube.com")) {
+      actionLabelText += " (only for YouTube embeds)";
+    }
+  }
+  actionLabel.textContent = actionLabelText;
+
+  var keyInput = document.createElement("input");
+  keyInput.className = "customKey";
+  keyInput.type = "text";
+  keyInput.placeholder = "press a key";
+  updateCustomShortcutInputText(keyInput, binding || createDisabledBinding());
+
+  var valueInput = document.createElement("input");
+  valueInput.className = "customValue";
+  valueInput.type = "text";
+  valueInput.placeholder = "value (0.10)";
+  valueInput.value = value || 0;
+  if (customActionsNoValues.includes(action)) {
+    valueInput.disabled = true;
+  }
+
+  var forceLabel = document.createElement("label");
+  forceLabel.className = "force-label";
+  forceLabel.title = "Prevent website from capturing this key";
+  
+  var forceCheckbox = document.createElement("input");
+  forceCheckbox.type = "checkbox";
+  forceCheckbox.className = "customForce";
+  forceCheckbox.checked = force === true || force === "true";
+
+  var forceText = document.createElement("span");
+  forceText.textContent = "Block site from capturing keypress";
+  forceText.className = "force-text";
+
+  forceLabel.appendChild(forceCheckbox);
+  forceLabel.appendChild(forceText);
+
+  div.appendChild(actionLabel);
+  div.appendChild(keyInput);
+  div.appendChild(valueInput);
+  div.appendChild(forceLabel);
+
+  container.appendChild(div);
+}
+
+function createSiteRule(rule) {
+  var template = document.getElementById("siteRuleTemplate");
+  var clone = template.content.cloneNode(true);
+  var ruleEl = clone.querySelector(".site-rule");
+
+  var pattern = rule && rule.pattern ? rule.pattern : "";
+  ruleEl.querySelector(".site-pattern").value = pattern;
+
+  // Make the rule body collapsed by default
+  var ruleBody = ruleEl.querySelector(".site-rule-body");
+  ruleBody.style.display = "none";
+  ruleEl.classList.add("collapsed");
+
+  var enabledCheckbox = ruleEl.querySelector(".site-enabled");
+  var contentEl = ruleEl.querySelector(".site-rule-content");
+
+  function updateDisabledState() {
+    if (enabledCheckbox.checked) {
+      contentEl.classList.remove("disabled-rule");
+    } else {
+      contentEl.classList.add("disabled-rule");
+    }
+  }
+
+  enabledCheckbox.addEventListener("change", updateDisabledState);
+
+  if (rule) {
+    if (rule.enabled !== undefined) {
+      enabledCheckbox.checked = rule.enabled;
+    } else if (rule.disableExtension !== undefined) {
+      enabledCheckbox.checked = !rule.disableExtension;
+    } else {
+      enabledCheckbox.checked = true;
+    }
+  } else {
+    enabledCheckbox.checked = true;
+  }
+  updateDisabledState();
+
+  const settings = [
+    { key: "startHidden", type: "checkbox" },
+    { key: "controllerLocation", type: "select" },
+    { key: "rememberSpeed", type: "checkbox" },
+    { key: "forceLastSavedSpeed", type: "checkbox" },
+    { key: "audioBoolean", type: "checkbox" },
+    { key: "controllerOpacity", type: "text" }
+  ];
+
+  settings.forEach((s) => {
+    var input = ruleEl.querySelector(`.site-${s.key}`);
+    var value;
+    if (rule && rule[s.key] !== undefined) {
+      value = rule[s.key];
+    } else {
+      // Initialize with current global value
+      if (s.type === "checkbox") {
+        value = document.getElementById(s.key).checked;
+      } else {
+        value = document.getElementById(s.key).value;
+      }
+    }
+
+    if (s.type === "checkbox") {
+      input.checked = value;
+    } else {
+      input.value = value;
+    }
+  });
+
+  if (rule && Array.isArray(rule.shortcuts) && rule.shortcuts.length > 0) {
+    ruleEl.querySelector(".override-shortcuts").checked = true;
+    var container = ruleEl.querySelector(".site-shortcuts-container");
+    container.style.display = "block";
+
+    rule.shortcuts.forEach((shortcut) => {
+      addSiteRuleShortcut(
+        container,
+        shortcut.action,
+        shortcut,
+        shortcut.value,
+        shortcut.force
+      );
+    });
+  }
+
+  document.getElementById("siteRulesContainer").appendChild(ruleEl);
+}
+
+function populateDefaultSiteShortcuts(container) {
+  tcDefaults.keyBindings.forEach((binding) => {
+    addSiteRuleShortcut(container, binding.action, binding, binding.value, false);
+  });
+}
+
 function restore_options() {
   chrome.storage.sync.get(tcDefaults, function (storage) {
     document.getElementById("rememberSpeed").checked = storage.rememberSpeed;
@@ -616,13 +894,10 @@ function restore_options() {
       normalizeControllerLocation(storage.controllerLocation);
     document.getElementById("controllerOpacity").value =
       storage.controllerOpacity;
-    document.getElementById("blacklist").value = storage.blacklist;
     document.getElementById("enableSubtitleNudge").checked =
       storage.enableSubtitleNudge;
     document.getElementById("subtitleNudgeInterval").value =
       storage.subtitleNudgeInterval;
-    document.getElementById("subtitleNudgeAmount").value =
-      storage.subtitleNudgeAmount;
 
     if (!Array.isArray(storage.keyBindings) || storage.keyBindings.length === 0) {
       storage.keyBindings = tcDefaults.keyBindings.slice();
@@ -639,31 +914,48 @@ function restore_options() {
         item.action === "display"
           ? storage.displayKeyCode || tcDefaults.displayKeyCode
           : undefined;
-      var normalizedBinding = normalizeStoredBinding(item, fallbackKeyCode);
-      var row;
+      var row = document.getElementById(item.action);
+      var normalizedBinding = normalizeStoredBinding(item);
 
-      if (item.predefined) {
-        row = document.getElementById(item.action);
-      } else {
-        add_shortcut();
-        row = document.querySelector(".customs:last-of-type");
-        row.querySelector(".customDo").value = item.action;
+      if (!row) {
+        add_shortcut(item.action, item.value);
+        row = document.querySelector(".shortcut-row.customs:last-of-type");
       }
 
       if (!row) return;
 
       var valueInput = row.querySelector(".customValue");
       if (customActionsNoValues.includes(item.action)) {
-        valueInput.disabled = true;
+        if (valueInput) {
+          valueInput.value = "N/A";
+          valueInput.disabled = true;
+        }
+      } else if (valueInput) {
+        valueInput.value = item.value;
       }
-
-      updateCustomShortcutInputText(
-        row.querySelector(".customKey"),
-        normalizedBinding || createDisabledBinding()
-      );
-      valueInput.value = item.value;
-      row.querySelector(".customForce").value = String(item.force);
     });
+
+    refreshAddShortcutSelector();
+
+    // Load site rules (use defaults if none in storage or if storage has empty array)
+    var siteRules = Array.isArray(storage.siteRules) && storage.siteRules.length > 0
+      ? storage.siteRules
+      : (storage.blacklist ? migrateLegacyBlacklist(storage) : (tcDefaults.siteRules || []));
+
+    // If we migrated from blacklist, save the new format
+    if (storage.blacklist && siteRules.length > 0) {
+      chrome.storage.sync.set({ siteRules: siteRules });
+      chrome.storage.sync.remove(["blacklist"]);
+    }
+
+    document.getElementById("siteRulesContainer").innerHTML = "";
+    if (siteRules.length > 0) {
+      siteRules.forEach((rule) => {
+        if (rule && rule.pattern) {
+          createSiteRule(rule);
+        }
+      });
+    }
   });
 }
 
@@ -680,12 +972,6 @@ function restore_defaults() {
   });
 }
 
-function show_experimental() {
-  document
-    .querySelectorAll(".customForce")
-    .forEach((item) => (item.style.display = "inline-block"));
-}
-
 document.addEventListener("DOMContentLoaded", function () {
   var manifest = chrome.runtime.getManifest();
   var versionElement = document.getElementById("app-version");
@@ -695,13 +981,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
   restore_options();
   document.getElementById("save").addEventListener("click", save_options);
-  document.getElementById("add").addEventListener("click", add_shortcut);
+  
+  const addSelector = document.getElementById("addShortcutSelector");
+  if (addSelector) {
+    addSelector.addEventListener("change", function (e) {
+      if (e.target.value) {
+        add_shortcut(e.target.value);
+        e.target.value = ""; // Reset selector
+      }
+    });
+  }
   document
     .getElementById("restore")
     .addEventListener("click", restore_defaults);
   document
-    .getElementById("experimental")
-    .addEventListener("click", show_experimental);
+    .getElementById("addSiteRule")
+    .addEventListener("click", function () {
+      createSiteRule(null);
+    });
 
   function eventCaller(event, className, funcName) {
     if (!event.target.classList || !event.target.classList.contains(className)) {
@@ -722,13 +1019,35 @@ document.addEventListener("DOMContentLoaded", function () {
   document.addEventListener("keydown", (event) =>
     eventCaller(event, "customKey", recordKeyPress)
   );
-  document.addEventListener("click", (event) =>
-    eventCaller(event, "removeParent", function () {
+  document.addEventListener("click", (event) => {
+    if (event.target.classList.contains("removeParent")) {
       event.target.parentNode.remove();
-    })
-  );
+      refreshAddShortcutSelector();
+      return;
+    }
+    if (event.target.classList.contains("remove-site-rule")) {
+      event.target.closest(".site-rule").remove();
+      return;
+    }
+    if (event.target.classList.contains("toggle-site-rule")) {
+      var ruleEl = event.target.closest(".site-rule");
+      var ruleBody = ruleEl.querySelector(".site-rule-body");
+      var isCollapsed = ruleEl.classList.contains("collapsed");
+      
+      if (isCollapsed) {
+        ruleBody.style.display = "block";
+        ruleEl.classList.remove("collapsed");
+        event.target.textContent = "-";
+      } else {
+        ruleBody.style.display = "none";
+        ruleEl.classList.add("collapsed");
+        event.target.textContent = "+";
+      }
+      return;
+    }
+  });
   document.addEventListener("change", (event) => {
-    eventCaller(event, "customDo", function () {
+    if (event.target.classList.contains("customDo")) {
       var valueInput = event.target.nextElementSibling.nextElementSibling;
       if (customActionsNoValues.includes(event.target.value)) {
         valueInput.disabled = true;
@@ -736,6 +1055,21 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         valueInput.disabled = false;
       }
-    });
+    }
+
+    // Handle site rule override checkboxes
+    if (event.target.classList.contains("override-shortcuts")) {
+      var container = event.target
+        .closest(".site-rule-shortcuts")
+        .querySelector(".site-shortcuts-container");
+      if (event.target.checked) {
+        container.style.display = "block";
+        if (container.children.length === 0) {
+          populateDefaultSiteShortcuts(container);
+        }
+      } else {
+        container.style.display = "none";
+      }
+    }
   });
 });

@@ -1,7 +1,7 @@
 body {
   margin: 0;
   padding-left: 15px;
-  padding-top: 53px;
+  padding-top: 80px;
   font-family: sans-serif;
   font-size: 12px;
   color: rgb(48, 57, 66);
@@ -18,10 +18,10 @@ h3 {
 }
 h1 {
   font-size: 1.5em;
-  margin: 21px 0 13px;
+  margin: 21px 0 6px;
 }
 .version {
-  margin: 0 0 12px;
+  margin: 0 0 6px;
   color: #6b6b6b;
   font-size: 0.95em;
 }
@@ -39,8 +39,10 @@ header {
   top: 0;
   left: 15px;
   right: 0;
+  padding-bottom: 10px;
+  background: white;
+  z-index: 100;
   border-bottom: 1px solid #eee;
-  background: linear-gradient(white, white 40%, rgba(255, 255, 255, 0.92));
 }
 header,
 section {
@@ -58,6 +60,7 @@ section h3 {
 
 button {
   -webkit-appearance: none;
+  appearance: none;
   position: relative;
 
   margin: 0 1px 0 0;
@@ -87,6 +90,66 @@ input[type="text"] {
   margin: 5px 0px;
 }
 
+.shortcuts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.shortcut-label {
+  display: inline-block;
+  width: 170px;
+  padding: 4px 8px;
+  background-color: #f5f5f5;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: normal;
+  min-height: 26px;
+}
+
+.shortcut-row input[type="text"] {
+  height: 26px;
+  box-sizing: border-box;
+}
+
+.removeParent {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  background-color: #eee;
+  border: 1px solid #ccc;
+  color: #666;
+  cursor: pointer;
+  margin-left: 5px;
+}
+
+.removeParent:hover {
+  background-color: #ff4444;
+  color: white;
+  border-color: #cc0000;
+}
+
+#addShortcutSelector {
+  margin-top: 15px;
+  padding: 4px;
+  width: 200px;
+}
+
 label {
   display: inline-block;
   width: 170px;
@@ -105,11 +168,6 @@ label {
 
 select {
   width: 170px;
-}
-
-.customForce {
-  display: none;
-  width: 250px;
 }
 
 .customKey {
@@ -177,6 +235,11 @@ select {
     text-shadow: 0 0 0 #e0e0e0;
   }
 
+  .shortcut-label {
+    background-color: #2a2a2a;
+    border-color: #555;
+  }
+
   #status {
     color: #888;
   }
@@ -191,5 +254,155 @@ select {
 
   hr {
     border-color: #333;
+  }
+}
+
+/* Site Rules Styles */
+#siteRulesContainer {
+  margin-bottom: 15px;
+}
+
+.site-rule {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background-color: #f9f9f9;
+}
+
+.site-rule-header {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.site-rule.collapsed .site-rule-header {
+  margin-bottom: 0;
+}
+
+.toggle-site-rule {
+  min-width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.site-pattern {
+  flex: 1;
+  min-width: 300px;
+  padding: 6px;
+  font-family: monospace;
+}
+
+.remove-site-rule {
+  min-width: auto;
+  padding: 0 12px;
+}
+
+.site-rule-body {
+  margin-left: 10px;
+}
+
+.site-rule-content.disabled-rule {
+  opacity: 0.5;
+  pointer-events: none;
+  filter: grayscale(1);
+}
+
+.site-rule-option {
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 450px;
+}
+
+.site-rule-option label {
+  width: auto;
+  line-height: normal;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-rule-option input[type="text"],
+.site-rule-option select {
+  width: 150px;
+  text-align: left;
+}
+
+.site-rule-shortcuts {
+  margin-top: 12px;
+  padding-top: 12px;
+  padding-bottom: 8px;
+  border-top: 1px solid #ddd;
+}
+
+.site-rule-shortcuts > label {
+  display: block;
+  margin-bottom: 8px;
+  width: auto;
+}
+
+.site-shortcuts-container {
+  margin-left: 20px;
+  margin-top: 10px;
+  margin-bottom: 8px;
+}
+
+.site-shortcuts-container .shortcut-row {
+  margin: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.site-shortcuts-container .customKey {
+  width: 100px;
+}
+
+.site-shortcuts-container .customValue {
+  width: 80px;
+}
+
+.site-shortcuts-container .customDo {
+  width: 180px;
+}
+
+.site-shortcuts-container .customForce {
+  width: auto;
+  margin-left: 5px;
+}
+
+.site-shortcuts-container .force-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  width: auto;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.site-shortcuts-container .force-text {
+  user-select: none;
+}
+
+/* Dark mode for site rules */
+@media (prefers-color-scheme: dark) {
+  .site-rule {
+    border-color: #444;
+    background-color: #252525;
+  }
+
+  .site-pattern {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border: 1px solid #555;
+  }
+
+  .site-rule-shortcuts {
+    border-top-color: #444;
   }
 }

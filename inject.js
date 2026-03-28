@@ -16,13 +16,7 @@ var tc = {
     controllerLocation: "top-left",
     controllerOpacity: 0.3,
     keyBindings: [],
-    blacklist: `\
-      www.instagram.com
-      twitter.com
-      vine.co
-      imgur.com
-      teams.microsoft.com
-    `.replace(regStrip, ""),
+    siteRules: [],
     defaultLogLevel: 3,
     logLevel: 3,
     enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
@@ -33,7 +27,8 @@ var tc = {
   isNudging: false,
   pendingLastSpeedSave: null,
   pendingLastSpeedValue: null,
-  persistedLastSpeed: 1.0
+  persistedLastSpeed: 1.0,
+  activeSiteRule: null
 };
 
 var MIN_SPEED = 0.0625;
@@ -46,8 +41,8 @@ var requestIdle =
   typeof window.requestIdleCallback === "function"
     ? window.requestIdleCallback.bind(window)
     : function (callback, options) {
-        return setTimeout(callback, (options && options.timeout) || 1);
-      };
+      return setTimeout(callback, (options && options.timeout) || 1);
+    };
 var controllerLocations = [
   "top-left",
   "top-center",
@@ -274,7 +269,21 @@ function applyControllerLocationToElement(controller, location) {
 
   controller.dataset.location = normalizedLocation;
   controller.dataset.positionMode = "anchored";
-  controller.style.top = styles.top;
+
+  var top = styles.top;
+  // If in fullscreen, move the controller down to avoid overlapping video titles
+  if (
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  ) {
+    if (normalizedLocation.startsWith("top-")) {
+      top = "50px";
+    }
+  }
+
+  controller.style.top = top;
   controller.style.left = styles.left;
   controller.style.transform = styles.transform;
 
@@ -509,8 +518,8 @@ function tryYouTubeNativeSpeed(video, speed) {
 function isSubtitleNudgeSupported(video) {
   return Boolean(
     video &&
-      ((video.currentSrc && video.currentSrc.includes("googlevideo.com")) ||
-        isOnYouTube())
+    ((video.currentSrc && video.currentSrc.includes("googlevideo.com")) ||
+      isOnYouTube())
   );
 }
 
@@ -923,8 +932,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
       startHidden: tc.settings.startHidden,
       enabled: tc.settings.enabled,
       controllerLocation: tc.settings.controllerLocation,
-      controllerOpacity: tc.settings.controllerOpacity,
-      blacklist: tc.settings.blacklist.replace(regStrip, "")
+      controllerOpacity: tc.settings.controllerOpacity
     });
   }
   tc.settings.lastSpeed = Number(storage.lastSpeed);
@@ -947,7 +955,29 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     storage.controllerLocation
   );
   tc.settings.controllerOpacity = Number(storage.controllerOpacity);
-  tc.settings.blacklist = String(storage.blacklist);
+  tc.settings.siteRules = Array.isArray(storage.siteRules)
+    ? storage.siteRules
+    : [];
+
+  // Migrate legacy blacklist if present
+  if (storage.blacklist && typeof storage.blacklist === "string" && tc.settings.siteRules.length === 0) {
+    var lines = storage.blacklist.split("\n");
+    lines.forEach((line) => {
+      var pattern = line.replace(regStrip, "");
+      if (pattern.length > 0) {
+        tc.settings.siteRules.push({
+          pattern: pattern,
+          disableExtension: true
+        });
+      }
+    });
+    if (tc.settings.siteRules.length > 0) {
+      chrome.storage.sync.set({ siteRules: tc.settings.siteRules });
+      chrome.storage.sync.remove(["blacklist"]);
+      log("Migrated legacy blacklist to site rules", 4);
+    }
+  }
+
   tc.settings.enableSubtitleNudge =
     typeof storage.enableSubtitleNudge !== "undefined"
       ? Boolean(storage.enableSubtitleNudge)
@@ -1463,27 +1493,91 @@ function escapeStringRegExp(str) {
   const m = /[|\\{}()[\]^$+*?.]/g;
   return str.replace(m, "\\$&");
 }
-function isBlacklisted() {
-  let b = false;
-  const l = tc.settings.blacklist ? tc.settings.blacklist.split("\n") : [];
-  l.forEach((m) => {
-    if (b) return;
-    m = m.replace(regStrip, "");
-    if (m.length == 0) return;
-    let r;
-    if (m.startsWith("/") && m.lastIndexOf("/") > 0) {
+function applySiteRuleOverrides() {
+  if (!Array.isArray(tc.settings.siteRules) || tc.settings.siteRules.length === 0) {
+    return false;
+  }
+
+  var currentUrl = location.href;
+  var matchedRule = null;
+
+  for (var i = 0; i < tc.settings.siteRules.length; i++) {
+    var rule = tc.settings.siteRules[i];
+    var pattern = rule.pattern;
+    if (!pattern || pattern.length === 0) continue;
+
+    var regex;
+    if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
       try {
-        const ls = m.lastIndexOf("/");
-        r = new RegExp(m.substring(1, ls), m.substring(ls + 1));
+        var lastSlash = pattern.lastIndexOf("/");
+        regex = new RegExp(
+          pattern.substring(1, lastSlash),
+          pattern.substring(lastSlash + 1)
+        );
       } catch (e) {
-        log(`Invalid regex: ${m}. ${e.message}`, 2);
-        return;
+        log(`Invalid site rule regex: ${pattern}. ${e.message}`, 2);
+        continue;
       }
-    } else r = new RegExp(escapeStringRegExp(m));
-    if (r && r.test(location.href)) b = true;
+    } else {
+      regex = new RegExp(escapeStringRegExp(pattern));
+    }
+
+    if (regex && regex.test(currentUrl)) {
+      matchedRule = rule;
+      break;
+    }
+  }
+
+  if (!matchedRule) return false;
+
+  tc.activeSiteRule = matchedRule;
+  log(`Matched site rule: ${matchedRule.pattern}`, 4);
+
+  // Check if extension should be enabled/disabled on this site
+  if (matchedRule.enabled === false) {
+    log(`Extension disabled for site: ${currentUrl}`, 4);
+    return true;
+  } else if (matchedRule.disableExtension === true) {
+    // Handle old format
+    log(`Extension disabled (legacy) for site: ${currentUrl}`, 4);
+    return true;
+  }
+
+  // Override general settings with site-specific overrides
+  const siteSettings = [
+    "startHidden",
+    "controllerLocation",
+    "rememberSpeed",
+    "forceLastSavedSpeed",
+    "audioBoolean",
+    "controllerOpacity"
+  ];
+
+  siteSettings.forEach((key) => {
+    if (matchedRule[key] !== undefined) {
+      log(`Overriding ${key} for site: ${matchedRule[key]}`, 4);
+      tc.settings[key] = matchedRule[key];
+    }
   });
-  if (b) log(`Page ${location.href} blacklisted.`, 4);
-  return b;
+
+  // Override key bindings with site-specific shortcuts
+  if (Array.isArray(matchedRule.shortcuts) && matchedRule.shortcuts.length > 0) {
+    var overriddenActions = new Set();
+    matchedRule.shortcuts.forEach((shortcut) => {
+      overriddenActions.add(shortcut.action);
+    });
+
+    // Keep global bindings that aren't overridden, add site-specific ones
+    tc.settings.keyBindings = tc.settings.keyBindings
+      .filter((binding) => !overriddenActions.has(binding.action))
+      .concat(
+        matchedRule.shortcuts.map((shortcut) =>
+          normalizeStoredBinding(shortcut)
+        ).filter(Boolean)
+      );
+  }
+
+  return false;
 }
 
 function shouldPreserveDesiredSpeed(video, speed) {
@@ -1627,7 +1721,7 @@ function attachKeydownListeners(doc) {
   var docs = [doc];
   try {
     if (inIframe() && window.top.document !== doc) docs.push(window.top.document);
-  } catch (e) {}
+  } catch (e) { }
 
   docs.forEach(function (keyDoc) {
     if (keyDoc.vscKeydownListenerAttached) return;
@@ -1662,7 +1756,16 @@ function attachKeydownListeners(doc) {
 
         if (item) {
           runAction(item.action, item.value, event);
-          if (item.force === "true") {
+
+          // Check if we should disable website key bindings for this specific shortcut
+          var shouldPreventDefault = false;
+
+          // Check if this shortcut has force enabled (from site-specific shortcuts)
+          if (item.force === true || item.force === "true") {
+            shouldPreventDefault = true;
+          }
+
+          if (shouldPreventDefault) {
             event.preventDefault();
             event.stopPropagation();
           }
@@ -1772,7 +1875,7 @@ function attachIframeListeners(doc) {
           if (frame.contentDocument) {
             initializeWhenReady(frame.contentDocument, true);
           }
-        } catch (e) {}
+        } catch (e) { }
       });
       frame.vscLoadListenerAttached = true;
     }
@@ -1781,7 +1884,7 @@ function attachIframeListeners(doc) {
       if (frame.contentDocument) {
         initializeWhenReady(frame.contentDocument);
       }
-    } catch (e) {}
+    } catch (e) { }
   });
 }
 
@@ -1812,7 +1915,9 @@ function attachNavigationListeners() {
 
 function initializeNow(doc, forceReinit = false) {
   if ((!forceReinit && vscInitializedDocuments.has(doc)) || !doc.body) return;
-  if (!tc.settings.enabled || isBlacklisted()) return;
+
+  var siteDisabled = applySiteRuleOverrides();
+  if (!tc.settings.enabled || siteDisabled) return;
 
   if (!doc.body.classList.contains("vsc-initialized")) {
     doc.body.classList.add("vsc-initialized");
@@ -1831,7 +1936,7 @@ function initializeNow(doc, forceReinit = false) {
 
 function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   const numericSpeed = Number(speed);
-  
+
   if (!isValidSpeed(numericSpeed)) {
     log(
       `Invalid speed rejected: ${speed}, must be between ${MIN_SPEED} and ${MAX_SPEED}`,
@@ -1839,7 +1944,7 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
     );
     return;
   }
-  
+
   if (!video || !video.vsc || !video.vsc.speedIndicator) return;
 
   log(
@@ -1975,7 +2080,12 @@ function runAction(action, value, e) {
         resetSpeed(v, 1.0, false); // Use enhanced resetSpeed
         break;
       case "fast":
-        resetSpeed(v, numValue, true); // Use enhanced resetSpeed
+        var preferredSpeed = numValue;
+        // Apply site-specific preferred speed override if available
+        if (tc.activeSiteRule && typeof tc.activeSiteRule.preferredSpeed === "number") {
+          preferredSpeed = tc.activeSiteRule.preferredSpeed;
+        }
+        resetSpeed(v, preferredSpeed, true);
         break;
       case "display":
         if (controller.classList.contains("vsc-hidden")) {
@@ -2151,3 +2261,12 @@ function showController(controller, duration = 2000) {
     controller.showTimeOut = undefined;
   }, duration);
 }
+
+// Add global listener to handle fullscreen transitions and adjust controller positions
+document.addEventListener("fullscreenchange", () => {
+  tc.mediaElements.forEach((video) => {
+    if (video.vsc) {
+      applyControllerLocation(video.vsc, video.vsc.controllerLocation);
+    }
+  });
+});

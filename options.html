@@ -13,167 +13,120 @@
 
     <section id="customs">
       <h3>Shortcuts</h3>
-      <div class="row customs" id="display">
-        <select class="customDo">
-          <option value="display">Show/hide controller</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input class="customValue" type="text" placeholder="value (0.10)" />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
-      </div>
-      <div class="row customs" id="move">
-        <select class="customDo">
-          <option value="move">Move controller</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input
-          class="customValue"
-          type="text"
-          placeholder="value (0)"
-          disabled
-        />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
-      </div>
-      <div class="row customs" id="slower">
-        <select class="customDo">
-          <option value="slower">Decrease speed</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input class="customValue" type="text" placeholder="value (0.10)" />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
-      </div>
-      <div class="row customs" id="faster">
-        <select class="customDo">
-          <option value="faster">Increase speed</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input class="customValue" type="text" placeholder="value (0.10)" />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
-      </div>
-      <div class="row customs" id="rewind">
-        <select class="customDo">
-          <option value="rewind">Rewind</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input class="customValue" type="text" placeholder="value (10)" />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
-      </div>
-      <div class="row customs" id="advance">
-        <select class="customDo">
-          <option value="advance">Advance</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input class="customValue" type="text" placeholder="value (10)" />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
-      </div>
-      <div class="row customs" id="reset">
-        <select class="customDo">
-          <option value="reset">Reset speed</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input
-          class="customValue"
-          type="text"
-          placeholder="value (1.00)"
-          disabled
-        />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
-      </div>
-      <div class="row customs" id="fast">
-        <select class="customDo">
-          <option value="fast">Preferred speed</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input class="customValue" type="text" placeholder="value (1.80)" />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
-      </div>
-      <div class="row customs" id="toggleSubtitleNudge">
-        <select class="customDo">
-          <option value="toggleSubtitleNudge">Toggle subtitle nudge</option>
-        </select>
-        <input
-          class="customKey"
-          type="text"
-          value=""
-          placeholder="press a key"
-        />
-        <input
-          class="customValue"
-          type="text"
-          placeholder="value (0)"
-          disabled
-        />
-        <select class="customForce">
-          <option value="false">Do not disable website key bindings</option>
-          <option value="true">Disable website key bindings</option>
-        </select>
+      <div class="shortcuts-grid">
+        <div class="shortcut-row" id="display" data-action="display">
+          <div class="shortcut-label">Show/hide controller</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input class="customValue" type="text" placeholder="value" value="N/A" disabled />
+        </div>
+        <div class="shortcut-row" id="move" data-action="move">
+          <div class="shortcut-label">Move controller</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input
+            class="customValue"
+            type="text"
+            placeholder="value"
+            value="N/A"
+            disabled
+          />
+        </div>
+        <div class="shortcut-row" id="slower" data-action="slower">
+          <div class="shortcut-label">Decrease speed</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input class="customValue" type="text" placeholder="value (0.10)" />
+        </div>
+        <div class="shortcut-row" id="faster" data-action="faster">
+          <div class="shortcut-label">Increase speed</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input class="customValue" type="text" placeholder="value (0.10)" />
+        </div>
+        <div class="shortcut-row" id="rewind" data-action="rewind">
+          <div class="shortcut-label">Rewind</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input class="customValue" type="text" placeholder="value (10)" />
+        </div>
+        <div class="shortcut-row" id="advance" data-action="advance">
+          <div class="shortcut-label">Advance</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input class="customValue" type="text" placeholder="value (10)" />
+        </div>
+        <div class="shortcut-row" id="reset" data-action="reset">
+          <div class="shortcut-label">Reset speed</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input
+            class="customValue"
+            type="text"
+            placeholder="value"
+            value="N/A"
+            disabled
+          />
+        </div>
+        <div class="shortcut-row" id="fast" data-action="fast">
+          <div class="shortcut-label">Preferred speed</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input class="customValue" type="text" placeholder="value (1.80)" />
+        </div>
+        <div class="shortcut-row" id="toggleSubtitleNudge" data-action="toggleSubtitleNudge">
+          <div class="shortcut-label">Toggle subtitle nudge</div>
+          <input
+            class="customKey"
+            type="text"
+            value=""
+            placeholder="press a key"
+          />
+          <input
+            class="customValue"
+            type="text"
+            placeholder="value"
+            value="N/A"
+            disabled
+          />
+        </div>
       </div>
 
-      <button id="add">Add New</button>
+      <select id="addShortcutSelector">
+        <option value="">Add shortcut...</option>
+      </select>
     </section>
 
     <section>
@@ -221,23 +174,87 @@
         <label for="controllerOpacity">Controller opacity</label>
         <input id="controllerOpacity" type="text" value="" />
       </div>
-      <div class="row">
-        <label for="blacklist"
-          >Sites on which extension is disabled<br />
-          (one per line)<br />
-          <br />
-          <em>
-            <a href="https://www.regexpal.com/">Regex</a> is supported.<br />
-            Be sure it is in "//g" format.<br />
-            ie: /(.+)youtube\.com(\/*)$/gi
-          </em>
-        </label>
-        <textarea id="blacklist" rows="10" cols="50"></textarea>
-      </div>
     </section>
 
+    <section id="siteRules">
+      <h3>Site-Specific Settings</h3>
+      <p>
+        <em
+          >Override default settings for specific websites. Supports
+          <a href="https://www.regexpal.com/">Regex</a> patterns (e.g.,
+          /(.+)youtube\.com(\/*)$/gi).</em
+        >
+      </p>
+      <div id="siteRulesContainer"></div>
+      <button id="addSiteRule" type="button">Add Site Rule</button>
+    </section>
+
+    <template id="siteRuleTemplate">
+      <div class="site-rule">
+        <div class="site-rule-header">
+          <button type="button" class="toggle-site-rule" title="Expand/Collapse">+</button>
+          <input
+            type="text"
+            class="site-pattern"
+            placeholder="e.g., youtube.com or /regex/gi"
+          />
+          <button type="button" class="remove-site-rule">Remove</button>
+        </div>
+        <div class="site-rule-body">
+          <div class="site-rule-option">
+            <label>
+              <input type="checkbox" class="site-enabled" />
+              Enable Video Speed Controller on this site
+            </label>
+          </div>
+          <div class="site-rule-content">
+            <div class="site-rule-option">
+              <label>Hide controller by default:</label>
+              <input type="checkbox" class="site-startHidden" />
+            </div>
+            <div class="site-rule-option">
+              <label>Default controller location:</label>
+              <select class="site-controllerLocation">
+                <option value="top-left">Top left</option>
+                <option value="top-center">Top center</option>
+                <option value="top-right">Top right</option>
+                <option value="middle-right">Middle right</option>
+                <option value="bottom-right">Bottom right</option>
+                <option value="bottom-center">Bottom center</option>
+                <option value="bottom-left">Bottom left</option>
+                <option value="middle-left">Middle left</option>
+              </select>
+            </div>
+            <div class="site-rule-option">
+              <label>Remember playback speed:</label>
+              <input type="checkbox" class="site-rememberSpeed" />
+            </div>
+            <div class="site-rule-option">
+              <label>Force last saved speed:</label>
+              <input type="checkbox" class="site-forceLastSavedSpeed" />
+            </div>
+            <div class="site-rule-option">
+              <label>Work on audio:</label>
+              <input type="checkbox" class="site-audioBoolean" />
+            </div>
+            <div class="site-rule-option">
+              <label>Controller opacity:</label>
+              <input type="text" class="site-controllerOpacity" />
+            </div>
+            <div class="site-rule-shortcuts">
+              <label>
+                <input type="checkbox" class="override-shortcuts" />
+                Custom shortcuts for this site
+              </label>
+              <div class="site-shortcuts-container" style="display: none"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <section id="nudgeSettings">
-      <h3>Subtitle Nudge Settings (Experimental - YouTube Only)</h3>
+      <h3>Subtitle Nudge Settings</h3>
       <div class="row">
         <label for="enableSubtitleNudge"
           >Enable Subtitle Nudge <br /><em
@@ -261,25 +278,10 @@
           placeholder="50"
         />
       </div>
-      <div class="row">
-        <label for="subtitleNudgeAmount"
-          >Nudge Amount (decimal) <br /><em
-            >How much to change speed by (e.g., 0.001). Very small values
-            recommended. Default: 0.001.</em
-          >
-        </label>
-        <input
-          id="subtitleNudgeAmount"
-          type="text"
-          value=""
-          placeholder="0.001"
-        />
-      </div>
     </section>
 
     <button id="save">Save</button>
     <button id="restore">Restore Defaults</button>
-    <button id="experimental">Show Experimental Features</button>
 
     <div id="status"></div>
 

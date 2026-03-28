@@ -39,6 +39,46 @@
   display: none;
 }
 
+/* Standalone flash indicator next to speed text — hidden by default,
+   briefly shown when nudge is toggled via N key or click */
+#nudge-flash-indicator {
+  display: none;
+  vertical-align: middle;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35em;
+  height: 1.35em;
+  margin-left: 0.3em;
+  padding: 0 0.25em;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+#nudge-flash-indicator.visible {
+  display: inline-flex;
+}
+
+/* Hide flash indicator when hovering — the one in #controls is visible instead */
+#controller:hover #nudge-flash-indicator {
+  display: none;
+}
+
+#nudge-flash-indicator[data-enabled="true"] {
+  color: #bff3a2;
+  background: rgba(75, 145, 53, 0.28);
+  border-color: rgba(126, 199, 104, 0.7);
+}
+
+#nudge-flash-indicator[data-enabled="false"] {
+  color: #ffb8b8;
+  background: rgba(164, 73, 73, 0.24);
+  border-color: rgba(214, 118, 118, 0.65);
+}
+
 #nudge-indicator {
   display: inline-flex;
   vertical-align: middle;

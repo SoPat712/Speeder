@@ -330,13 +330,23 @@ function setSubtitleNudgeEnabledForVideo(video, enabled) {
   }
 
   updateSubtitleNudgeIndicator(video);
+
+  // Briefly flash the standalone indicator next to the speed text
+  var flashEl = video.vsc.nudgeFlashIndicator;
+  if (flashEl) {
+    flashEl.classList.add("visible");
+    clearTimeout(flashEl._flashTimer);
+    flashEl._flashTimer = setTimeout(function () {
+      flashEl.classList.remove("visible");
+    }, 1500);
+  }
+
   return normalizedEnabled;
 }
 
 function updateSubtitleNudgeIndicator(video) {
-  if (!video || !video.vsc || !video.vsc.subtitleNudgeIndicator) return;
+  if (!video || !video.vsc) return;
 
-  var indicator = video.vsc.subtitleNudgeIndicator;
   var isSupported = isSubtitleNudgeSupported(video);
   var isEnabled = isSupported && isSubtitleNudgeEnabledForVideo(video);
   var label = isEnabled ? "✓" : "×";
@@ -346,11 +356,23 @@ function updateSubtitleNudgeIndicator(video) {
       : "Subtitle nudge disabled"
     : "Subtitle nudge unavailable on this site";
 
-  indicator.textContent = label;
-  indicator.dataset.enabled = isEnabled ? "true" : "false";
-  indicator.dataset.supported = isSupported ? "true" : "false";
-  indicator.title = title;
-  indicator.setAttribute("aria-label", title);
+  // Update the hover indicator (inside #controls)
+  var indicator = video.vsc.subtitleNudgeIndicator;
+  if (indicator) {
+    indicator.textContent = label;
+    indicator.dataset.enabled = isEnabled ? "true" : "false";
+    indicator.dataset.supported = isSupported ? "true" : "false";
+    indicator.title = title;
+    indicator.setAttribute("aria-label", title);
+  }
+
+  // Sync the flash indicator (next to speed text)
+  var flashEl = video.vsc.nudgeFlashIndicator;
+  if (flashEl) {
+    flashEl.textContent = label;
+    flashEl.dataset.enabled = isEnabled ? "true" : "false";
+    flashEl.dataset.supported = isSupported ? "true" : "false";
+  }
 }
 
 function schedulePersistLastSpeed(speed) {
@@ -1089,13 +1111,21 @@ function defineVideoController() {
     subtitleNudgeIndicator.setAttribute("aria-live", "polite");
     subtitleNudgeIndicator.setAttribute("tabindex", "0");
 
+    // A second indicator that lives outside #controls, next to the speed text.
+    // Hidden by default, briefly shown when N is pressed to flash the state.
+    var nudgeFlashIndicator = doc.createElement("span");
+    nudgeFlashIndicator.id = "nudge-flash-indicator";
+    nudgeFlashIndicator.setAttribute("aria-hidden", "true");
+
     controller.appendChild(dragHandle);
+    controller.appendChild(nudgeFlashIndicator);
     controls.appendChild(subtitleNudgeIndicator);
     controller.appendChild(controls);
     shadow.appendChild(controller);
 
     this.speedIndicator = dragHandle;
     this.subtitleNudgeIndicator = subtitleNudgeIndicator;
+    this.nudgeFlashIndicator = nudgeFlashIndicator;
     updateSubtitleNudgeIndicator(this.video);
     dragHandle.addEventListener(
       "mousedown",

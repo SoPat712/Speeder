@@ -130,18 +130,21 @@ input[type="text"] {
   align-items: center;
   justify-content: center;
   font-size: 10px;
+  font-weight: bold;
   line-height: 1;
-  background-color: #eee;
-  border: 1px solid #ccc;
-  color: #666;
+  background-color: #fff;
+  border: 1px solid #ff4444;
+  color: #ff4444;
   cursor: pointer;
   margin-left: 5px;
+  transition: all 0.2s ease;
 }
 
 .removeParent:hover {
-  background-color: #ff4444;
-  color: white;
+  background-color: #ffeeee;
+  color: #cc0000;
   border-color: #cc0000;
+  box-shadow: 0 0 3px rgba(255, 68, 68, 0.3);
 }
 
 #addShortcutSelector {

@@ -81,17 +81,17 @@ var controllerLocationStyles = {
     transform: "translate(-100%, -50%)"
   },
   "bottom-right": {
-    top: "calc(100% - 10px)",
+    top: "calc(100% - 65px)",
     left: "calc(100% - 10px)",
     transform: "translate(-100%, -100%)"
   },
   "bottom-center": {
-    top: "calc(100% - 10px)",
+    top: "calc(100% - 65px)",
     left: "50%",
     transform: "translate(-50%, -100%)"
   },
   "bottom-left": {
-    top: "calc(100% - 10px)",
+    top: "calc(100% - 65px)",
     left: "15px",
     transform: "translate(0, -100%)"
   },

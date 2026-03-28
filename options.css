@@ -81,6 +81,13 @@ button {
   user-select: none;
 }
 
+#exportSettings,
+#importSettings {
+  background-image: linear-gradient(#e3f2fd, #e3f2fd 38%, #bbdefb);
+  border-color: rgba(33, 150, 243, 0.4);
+  color: #1976d2;
+}
+
 input[type="text"] {
   width: 75px;
   text-align: center;
@@ -209,6 +216,13 @@ select {
 
   button:hover {
     background-image: linear-gradient(#4a4a4a, #4a4a4a 38%, #3f3f3f);
+  }
+
+  #exportSettings,
+  #importSettings {
+    background-image: linear-gradient(#1e3a5f, #1e3a5f 38%, #152d47);
+    border-color: rgba(100, 181, 246, 0.4);
+    color: #90caf9;
   }
 
   input[type="text"], 

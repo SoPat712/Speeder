@@ -351,7 +351,7 @@ function normalizeStoredBinding(binding, fallbackKeyCode) {
 
 function getBindingLabel(binding) {
   if (!binding) return "";
-  if (binding.disabled) return "null";
+  if (binding.disabled) return "";
   if (binding.key) {
     return displayKeyAliases[binding.key] || binding.key;
   }
@@ -556,7 +556,8 @@ function save_options() {
   var status = document.getElementById("status");
   var saveError = null;
 
-  Array.from(document.querySelectorAll(".customs")).forEach((item) => {
+  // Only collect shortcuts from the main shortcuts section, NOT from site rules
+  Array.from(document.querySelectorAll("#customs .customs")).forEach((item) => {
     if (saveError) return;
     var result = createKeyBindings(item);
     if (!result.valid) saveError = result.message;

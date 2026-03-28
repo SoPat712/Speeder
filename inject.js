@@ -303,7 +303,8 @@ function isSubtitleNudgeSupported(video) {
   return Boolean(
     video &&
       ((video.currentSrc && video.currentSrc.includes("googlevideo.com")) ||
-        location.hostname.includes("youtube.com"))
+        location.hostname.includes("youtube.com") ||
+        location.hostname.includes("youtube-nocookie.com"))
   );
 }
 
@@ -585,20 +586,31 @@ function scanNodeForMedia(node, parent, added) {
   var ownerDocument = node.ownerDocument || document;
   if (!added && ownerDocument.body && ownerDocument.body.contains(node)) return;
 
+  // Check if the node itself is a media element
   if (isMediaElement(node)) {
     if (added) ensureController(node, parent);
     else removeController(node);
   }
 
-  if (node.children) {
-    Array.from(node.children).forEach(function (child) {
-      scanNodeForMedia(child, child.parentNode || parent, added);
-    });
+  // Use querySelectorAll instead of recursive child walking — the browser's
+  // native selector engine is orders of magnitude faster than JS recursion.
+  if (typeof node.querySelectorAll === "function") {
+    var selector = mediaSelector();
+    try {
+      var mediaElements = node.querySelectorAll(selector);
+      for (var i = 0; i < mediaElements.length; i++) {
+        var el = mediaElements[i];
+        if (added) ensureController(el, el.parentNode || parent);
+        else removeController(el);
+      }
+    } catch (e) {
+      // querySelectorAll may throw on detached or unusual nodes
+    }
   }
 
+  // Still need to observe shadow roots for media inside web components
   if (node.shadowRoot) {
     observeRoot(node.shadowRoot);
-    scanNodeForMedia(node.shadowRoot, node, added);
   }
 }
 
@@ -1465,9 +1477,12 @@ function attachMutationObserver(root) {
         mutationsToProcess.forEach(function (mutation) {
           if (mutation.type === "childList") {
             mutation.addedNodes.forEach(function (node) {
+              // Skip text nodes, comments, etc. — only elements can contain media
+              if (node.nodeType !== Node.ELEMENT_NODE) return;
               scanNodeForMedia(node, node.parentNode || mutation.target, true);
             });
             mutation.removedNodes.forEach(function (node) {
+              if (node.nodeType !== Node.ELEMENT_NODE) return;
               scanNodeForMedia(node, node.parentNode || mutation.target, false);
             });
             return;

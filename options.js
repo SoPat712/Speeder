@@ -150,6 +150,7 @@ var tcDefaults = {
   rememberSpeed: false,
   audioBoolean: false,
   startHidden: false,
+  hideWithYouTubeControls: false,
   controllerLocation: "top-left",
   forceLastSavedSpeed: false,
   enabled: true,
@@ -575,6 +576,7 @@ function save_options() {
   settings.audioBoolean = document.getElementById("audioBoolean").checked;
   settings.enabled = document.getElementById("enabled").checked;
   settings.startHidden = document.getElementById("startHidden").checked;
+  settings.hideWithYouTubeControls = document.getElementById("hideWithYouTubeControls").checked;
   settings.controllerLocation = normalizeControllerLocation(
     document.getElementById("controllerLocation").value
   );
@@ -609,6 +611,7 @@ function save_options() {
     // Handle other site settings
     const siteSettings = [
       { key: "startHidden", type: "checkbox" },
+      { key: "hideWithYouTubeControls", type: "checkbox" },
       { key: "controllerLocation", type: "select" },
       { key: "rememberSpeed", type: "checkbox" },
       { key: "forceLastSavedSpeed", type: "checkbox" },
@@ -830,6 +833,7 @@ function createSiteRule(rule) {
 
   const settings = [
     { key: "startHidden", type: "checkbox" },
+    { key: "hideWithYouTubeControls", type: "checkbox" },
     { key: "controllerLocation", type: "select" },
     { key: "rememberSpeed", type: "checkbox" },
     { key: "forceLastSavedSpeed", type: "checkbox" },
@@ -891,6 +895,7 @@ function restore_options() {
     document.getElementById("audioBoolean").checked = storage.audioBoolean;
     document.getElementById("enabled").checked = storage.enabled;
     document.getElementById("startHidden").checked = storage.startHidden;
+    document.getElementById("hideWithYouTubeControls").checked = storage.hideWithYouTubeControls;
     document.getElementById("controllerLocation").value =
       normalizeControllerLocation(storage.controllerLocation);
     document.getElementById("controllerOpacity").value =

@@ -13,6 +13,7 @@ var tc = {
     forceLastSavedSpeed: false,
     audioBoolean: false,
     startHidden: false,
+    hideWithYouTubeControls: false,
     controllerLocation: "top-left",
     controllerOpacity: 0.3,
     keyBindings: [],
@@ -951,6 +952,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   tc.settings.audioBoolean = Boolean(storage.audioBoolean);
   tc.settings.enabled = Boolean(storage.enabled);
   tc.settings.startHidden = Boolean(storage.startHidden);
+  tc.settings.hideWithYouTubeControls = Boolean(storage.hideWithYouTubeControls);
   tc.settings.controllerLocation = normalizeControllerLocation(
     storage.controllerLocation
   );
@@ -1189,6 +1191,10 @@ function defineVideoController() {
 
   tc.videoController.prototype.remove = function () {
     this.stopSubtitleNudge();
+    if (this.youTubeAutoHideObserver) {
+      this.youTubeAutoHideObserver.disconnect();
+      this.youTubeAutoHideObserver = null;
+    }
     if (this.div) this.div.remove();
     if (this.restoreSpeedTimer) clearTimeout(this.restoreSpeedTimer);
     if (this.video) {
@@ -1325,6 +1331,49 @@ function defineVideoController() {
     log(`Immediate nudge performed at rate ${targetRate.toFixed(2)}`, 5);
   };
 
+  tc.videoController.prototype.setupYouTubeAutoHide = function (wrapper) {
+    if (!wrapper || !isOnYouTube()) return;
+
+    const video = this.video;
+    const ytPlayer = video.closest(".html5-video-player");
+    if (!ytPlayer) {
+      log("YouTube player not found for auto-hide setup", 4);
+      return;
+    }
+
+    const syncControllerVisibility = () => {
+      // YouTube adds ytp-autohide class to the player when controls should be hidden
+      // We mirror this class state to enable CSS-based hiding
+      // The vsc-hidden class (from V key) takes precedence via CSS specificity
+      if (ytPlayer.classList.contains("ytp-autohide")) {
+        wrapper.classList.add("ytp-autohide");
+        log("YouTube controls hidden, hiding controller", 5);
+      } else {
+        wrapper.classList.remove("ytp-autohide");
+        log("YouTube controls visible, showing controller", 5);
+      }
+    };
+
+    // Initial sync
+    syncControllerVisibility();
+
+    // Observe YouTube player class changes
+    this.youTubeAutoHideObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === "attributes" && mutation.attributeName === "class") {
+          syncControllerVisibility();
+        }
+      });
+    });
+
+    this.youTubeAutoHideObserver.observe(ytPlayer, {
+      attributes: true,
+      attributeFilter: ["class"]
+    });
+
+    log("YouTube auto-hide observer setup complete", 4);
+  };
+
   tc.videoController.prototype.initializeControls = function () {
     const doc = this.video.ownerDocument;
     const speed = this.video.playbackRate.toFixed(2);
@@ -1426,6 +1475,12 @@ function defineVideoController() {
     );
     controller.addEventListener("click", (e) => e.stopPropagation(), false);
     controller.addEventListener("mousedown", (e) => e.stopPropagation(), false);
+    
+    // Setup YouTube auto-hide observer if enabled
+    if (tc.settings.hideWithYouTubeControls && isOnYouTube()) {
+      this.setupYouTubeAutoHide(wrapper);
+    }
+    
     var fragment = doc.createDocumentFragment();
     fragment.appendChild(wrapper);
     const parentEl = this.parent || this.video.parentElement;
@@ -1548,6 +1603,7 @@ function applySiteRuleOverrides() {
   // Override general settings with site-specific overrides
   const siteSettings = [
     "startHidden",
+    "hideWithYouTubeControls",
     "controllerLocation",
     "rememberSpeed",
     "forceLastSavedSpeed",
@@ -2092,10 +2148,8 @@ function runAction(action, value, e) {
       case "display":
         if (controller.classList.contains("vsc-hidden")) {
           controller.classList.remove("vsc-hidden");
-          controller.classList.add("vsc-manual");
         } else {
           controller.classList.add("vsc-hidden");
-          controller.classList.remove("vsc-manual");
         }
         break;
       case "blink":

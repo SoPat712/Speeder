@@ -13,6 +13,7 @@ var tc = {
     forceLastSavedSpeed: false,
     audioBoolean: false,
     startHidden: false,
+    controllerLocation: "top-left",
     controllerOpacity: 0.3,
     keyBindings: [],
     blacklist: `\
@@ -47,6 +48,59 @@ var requestIdle =
     : function (callback, options) {
         return setTimeout(callback, (options && options.timeout) || 1);
       };
+var controllerLocations = [
+  "top-left",
+  "top-center",
+  "top-right",
+  "middle-right",
+  "bottom-right",
+  "bottom-center",
+  "bottom-left",
+  "middle-left"
+];
+var defaultControllerLocation = controllerLocations[0];
+var controllerLocationStyles = {
+  "top-left": {
+    top: "10px",
+    left: "15px",
+    transform: "translate(0, 0)"
+  },
+  "top-center": {
+    top: "10px",
+    left: "50%",
+    transform: "translate(-50%, 0)"
+  },
+  "top-right": {
+    top: "10px",
+    left: "calc(100% - 10px)",
+    transform: "translate(-100%, 0)"
+  },
+  "middle-right": {
+    top: "50%",
+    left: "calc(100% - 10px)",
+    transform: "translate(-100%, -50%)"
+  },
+  "bottom-right": {
+    top: "calc(100% - 10px)",
+    left: "calc(100% - 10px)",
+    transform: "translate(-100%, -100%)"
+  },
+  "bottom-center": {
+    top: "calc(100% - 10px)",
+    left: "50%",
+    transform: "translate(-50%, -100%)"
+  },
+  "bottom-left": {
+    top: "calc(100% - 10px)",
+    left: "15px",
+    transform: "translate(0, -100%)"
+  },
+  "middle-left": {
+    top: "50%",
+    left: "15px",
+    transform: "translate(0, -50%)"
+  }
+};
 
 var keyCodeToEventKey = {
   32: " ",
@@ -147,6 +201,12 @@ function defaultKeyBindings(storage) {
       Number(storage.fastSpeed) || 1.8
     ),
     createDefaultBinding(
+      "move",
+      "P",
+      80,
+      0
+    ),
+    createDefaultBinding(
       "toggleSubtitleNudge",
       "N",
       78,
@@ -173,6 +233,104 @@ function getLegacyKeyCode(binding) {
     return binding.key;
   }
   return null;
+}
+
+function normalizeControllerLocation(location) {
+  if (controllerLocations.includes(location)) return location;
+  return defaultControllerLocation;
+}
+
+function getNextControllerLocation(location) {
+  var normalizedLocation = normalizeControllerLocation(location);
+  var currentIndex = controllerLocations.indexOf(normalizedLocation);
+  return controllerLocations[(currentIndex + 1) % controllerLocations.length];
+}
+
+function getControllerElement(videoOrController) {
+  if (!videoOrController) return null;
+
+  if (
+    videoOrController.shadowRoot &&
+    typeof videoOrController.shadowRoot.querySelector === "function"
+  ) {
+    return videoOrController.shadowRoot.querySelector("#controller");
+  }
+
+  if (
+    videoOrController.div &&
+    videoOrController.div.shadowRoot &&
+    typeof videoOrController.div.shadowRoot.querySelector === "function"
+  ) {
+    return videoOrController.div.shadowRoot.querySelector("#controller");
+  }
+
+  return null;
+}
+
+function applyControllerLocationToElement(controller, location) {
+  if (!controller) return defaultControllerLocation;
+  var normalizedLocation = normalizeControllerLocation(location);
+  var styles = controllerLocationStyles[normalizedLocation];
+
+  controller.dataset.location = normalizedLocation;
+  controller.dataset.positionMode = "anchored";
+  controller.style.top = styles.top;
+  controller.style.left = styles.left;
+  controller.style.transform = styles.transform;
+
+  return normalizedLocation;
+}
+
+function applyControllerLocation(videoController, location) {
+  if (!videoController) return;
+
+  var controller = getControllerElement(videoController);
+  if (!controller) return;
+
+  videoController.controllerLocation = applyControllerLocationToElement(
+    controller,
+    location
+  );
+}
+
+function clearManualControllerPosition(videoController) {
+  if (!videoController) return;
+  applyControllerLocation(
+    videoController,
+    videoController.controllerLocation || tc.settings.controllerLocation
+  );
+}
+
+function convertControllerToManualPosition(videoController) {
+  if (!videoController) return null;
+
+  var controller = getControllerElement(videoController);
+  if (!controller) return null;
+
+  var offsetParent = controller.offsetParent;
+  if (offsetParent) {
+    var controllerRect = controller.getBoundingClientRect();
+    var offsetParentRect = offsetParent.getBoundingClientRect();
+
+    controller.style.left = controllerRect.left - offsetParentRect.left + "px";
+    controller.style.top = controllerRect.top - offsetParentRect.top + "px";
+  } else {
+    controller.style.left = controller.offsetLeft + "px";
+    controller.style.top = controller.offsetTop + "px";
+  }
+  controller.style.transform = "none";
+  controller.dataset.positionMode = "manual";
+
+  return controller;
+}
+
+function cycleControllerLocation(video) {
+  if (!video || !video.vsc) return;
+
+  video.vsc.controllerLocation = getNextControllerLocation(
+    video.vsc.controllerLocation || tc.settings.controllerLocation
+  );
+  clearManualControllerPosition(video.vsc);
 }
 
 function normalizeBindingKey(key) {
@@ -764,6 +922,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
       audioBoolean: tc.settings.audioBoolean,
       startHidden: tc.settings.startHidden,
       enabled: tc.settings.enabled,
+      controllerLocation: tc.settings.controllerLocation,
       controllerOpacity: tc.settings.controllerOpacity,
       blacklist: tc.settings.blacklist.replace(regStrip, "")
     });
@@ -784,6 +943,9 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   tc.settings.audioBoolean = Boolean(storage.audioBoolean);
   tc.settings.enabled = Boolean(storage.enabled);
   tc.settings.startHidden = Boolean(storage.startHidden);
+  tc.settings.controllerLocation = normalizeControllerLocation(
+    storage.controllerLocation
+  );
   tc.settings.controllerOpacity = Number(storage.controllerOpacity);
   tc.settings.blacklist = String(storage.blacklist);
   tc.settings.enableSubtitleNudge =
@@ -804,6 +966,8 @@ chrome.storage.sync.get(tc.settings, function (storage) {
       Number(storage.displayKeyCode) || 86,
       0
     ) || addedDefaultBinding;
+  addedDefaultBinding =
+    ensureDefaultKeyBinding("move", "P", 80, 0) || addedDefaultBinding;
   addedDefaultBinding =
     ensureDefaultKeyBinding("toggleSubtitleNudge", "N", 78, 0) ||
     addedDefaultBinding;
@@ -873,6 +1037,9 @@ function defineVideoController() {
     this.suppressedRateChangeCount = 0;
     this.suppressedRateChangeUntil = 0;
     this.visibilityResumeHandler = null;
+    this.controllerLocation = normalizeControllerLocation(
+      tc.settings.controllerLocation
+    );
 
     log(`Creating video controller for ${target.tagName} with src: ${target.src || target.currentSrc || 'none'}`, 4);
 
@@ -1131,8 +1298,6 @@ function defineVideoController() {
   tc.videoController.prototype.initializeControls = function () {
     const doc = this.video.ownerDocument;
     const speed = this.video.playbackRate.toFixed(2);
-    var top = "0px",
-      left = "0px";
     var wrapper = doc.createElement("div");
     wrapper.classList.add("vsc-controller");
     if (!this.video.src && !this.video.currentSrc)
@@ -1146,9 +1311,11 @@ function defineVideoController() {
 
     var controller = doc.createElement("div");
     controller.id = "controller";
-    controller.style.top = top;
-    controller.style.left = left;
     controller.style.opacity = String(tc.settings.controllerOpacity);
+    this.controllerLocation = applyControllerLocationToElement(
+      controller,
+      this.controllerLocation
+    );
 
     var dragHandle = doc.createElement("span");
     dragHandle.dataset.action = "drag";
@@ -1765,6 +1932,7 @@ function runAction(action, value, e) {
       "slower",
       "reset",
       "fast",
+      "move",
       "pause",
       "muted",
       "mark",
@@ -1852,6 +2020,9 @@ function runAction(action, value, e) {
       case "drag":
         if (e) handleDrag(v, e);
         break;
+      case "move":
+        cycleControllerLocation(v);
+        break;
       case "pause":
         pause(v);
         break;
@@ -1928,7 +2099,8 @@ function jumpToMark(v) {
 }
 function handleDrag(video, e) {
   const c = video.vsc.div;
-  const sC = c.shadowRoot.querySelector("#controller");
+  const sC = convertControllerToManualPosition(video.vsc);
+  if (!sC) return;
   var pE = c.parentElement;
   while (
     pE.parentNode &&

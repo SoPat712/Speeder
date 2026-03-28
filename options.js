@@ -121,6 +121,16 @@ var displayKeyAliases = {
   ArrowRight: "Right",
   ArrowDown: "Down"
 };
+var controllerLocations = [
+  "top-left",
+  "top-center",
+  "top-right",
+  "middle-right",
+  "bottom-right",
+  "bottom-center",
+  "bottom-left",
+  "middle-left"
+];
 
 function createDefaultBinding(action, key, keyCode, value) {
   return {
@@ -140,11 +150,13 @@ var tcDefaults = {
   rememberSpeed: false,
   audioBoolean: false,
   startHidden: false,
+  controllerLocation: "top-left",
   forceLastSavedSpeed: false,
   enabled: true,
   controllerOpacity: 0.3,
   keyBindings: [
     createDefaultBinding("display", "V", 86, 0),
+    createDefaultBinding("move", "P", 80, 0),
     createDefaultBinding("slower", "S", 83, 0.1),
     createDefaultBinding("faster", "D", 68, 0.1),
     createDefaultBinding("rewind", "Z", 90, 10),
@@ -169,6 +181,7 @@ var customActionsNoValues = [
   "mark",
   "jump",
   "display",
+  "move",
   "toggleSubtitleNudge"
 ];
 
@@ -176,6 +189,11 @@ function ensureDefaultBinding(storage, action, key, keyCode, value) {
   if (storage.keyBindings.some((item) => item.action === action)) return;
 
   storage.keyBindings.push(createDefaultBinding(action, key, keyCode, value));
+}
+
+function normalizeControllerLocation(location) {
+  if (controllerLocations.includes(location)) return location;
+  return tcDefaults.controllerLocation;
 }
 
 function normalizeBindingKey(key) {
@@ -389,6 +407,7 @@ function add_shortcut() {
     { value: "mark", label: "Set marker" },
     { value: "jump", label: "Jump to marker" },
     { value: "display", label: "Show/hide controller" },
+    { value: "move", label: "Move controller" },
     { value: "toggleSubtitleNudge", label: "Toggle subtitle nudge" }
   ]);
 
@@ -514,6 +533,9 @@ function save_options() {
   settings.audioBoolean = document.getElementById("audioBoolean").checked;
   settings.enabled = document.getElementById("enabled").checked;
   settings.startHidden = document.getElementById("startHidden").checked;
+  settings.controllerLocation = normalizeControllerLocation(
+    document.getElementById("controllerLocation").value
+  );
   settings.controllerOpacity =
     document.getElementById("controllerOpacity").value;
   settings.blacklist = document
@@ -574,6 +596,10 @@ function ensureDisplayBinding(storage) {
   );
 }
 
+function ensureMoveBinding(storage) {
+  ensureDefaultBinding(storage, "move", "P", 80, 0);
+}
+
 function ensureSubtitleNudgeBinding(storage) {
   ensureDefaultBinding(storage, "toggleSubtitleNudge", "N", 78, 0);
 }
@@ -586,6 +612,8 @@ function restore_options() {
     document.getElementById("audioBoolean").checked = storage.audioBoolean;
     document.getElementById("enabled").checked = storage.enabled;
     document.getElementById("startHidden").checked = storage.startHidden;
+    document.getElementById("controllerLocation").value =
+      normalizeControllerLocation(storage.controllerLocation);
     document.getElementById("controllerOpacity").value =
       storage.controllerOpacity;
     document.getElementById("blacklist").value = storage.blacklist;
@@ -601,6 +629,7 @@ function restore_options() {
     }
 
     ensureDisplayBinding(storage);
+    ensureMoveBinding(storage);
     ensureSubtitleNudgeBinding(storage);
 
     document.querySelectorAll(".customs:not([id])").forEach((row) => row.remove());

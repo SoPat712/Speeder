@@ -29,6 +29,27 @@
           <option value="true">Disable website key bindings</option>
         </select>
       </div>
+      <div class="row customs" id="move">
+        <select class="customDo">
+          <option value="move">Move controller</option>
+        </select>
+        <input
+          class="customKey"
+          type="text"
+          value=""
+          placeholder="press a key"
+        />
+        <input
+          class="customValue"
+          type="text"
+          placeholder="value (0)"
+          disabled
+        />
+        <select class="customForce">
+          <option value="false">Do not disable website key bindings</option>
+          <option value="true">Disable website key bindings</option>
+        </select>
+      </div>
       <div class="row customs" id="slower">
         <select class="customDo">
           <option value="slower">Decrease speed</option>
@@ -164,6 +185,19 @@
       <div class="row">
         <label for="startHidden">Hide controller by default</label>
         <input id="startHidden" type="checkbox" />
+      </div>
+      <div class="row">
+        <label for="controllerLocation">Default controller location</label>
+        <select id="controllerLocation">
+          <option value="top-left">Top left</option>
+          <option value="top-center">Top center</option>
+          <option value="top-right">Top right</option>
+          <option value="middle-right">Middle right</option>
+          <option value="bottom-right">Bottom right</option>
+          <option value="bottom-center">Bottom center</option>
+          <option value="bottom-left">Bottom left</option>
+          <option value="middle-left">Middle left</option>
+        </select>
       </div>
       <div class="row">
         <label for="rememberSpeed">Remember playback speed</label>

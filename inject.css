@@ -1,3 +1,15 @@
+/* Base styles for the controller wrapper (the shadow host) */
+.vsc-controller {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  z-index: 2147483646 !important;
+  white-space: normal;
+}
+
 .vsc-nosource {
   display: none !important;
 }
@@ -9,72 +21,9 @@
   opacity: 1 !important;
 }
 
-.vsc-controller {
-  /* In case of pages using `white-space: pre-line` (eg Discord), don't render vsc's whitespace */
-  white-space: normal;
-}
-
-/* Origin specific overrides */
-/* YouTube player */
-.ytp-hide-info-bar .vsc-controller {
-  position: relative;
-  top: 10px;
-}
-
-/* Ensure controller sits above all YouTube player overlay layers */
-.html5-video-player .vsc-controller {
-  position: relative;
-  z-index: 2147483646;
-  pointer-events: auto;
-}
-/* Keep Speeder visibility independent from YouTube's chrome autohide state. */
-
-/* YouTube embedded player */
-/* e.g. https://www.igvita.com/2012/09/12/web-fonts-performance-making-pretty-fast/ */
-.html5-video-player:not(.ytp-hide-info-bar) .vsc-controller {
-  position: relative;
-  top: 60px;
-}
-
-/* Facebook player */
-#facebook .vsc-controller {
-  position: relative;
-  top: 40px;
-}
-
-/* Google Photos player */
-/* Inline preview doesn't have any additional hooks, relying on Aria label */
-a[aria-label^="Video"] .vsc-controller {
-  position: relative;
-  top: 35px;
-}
-/* Google Photos full-screen view */
-#player .house-brand .vsc-controller {
-  position: relative;
-  top: 50px;
-}
-
-/* Netflix player */
-#netflix-player:not(.player-cinema-mode) .vsc-controller {
-  position: relative;
-  top: 85px;
-}
-
-/* shift controller on vine.co */
-/* e.g. https://vine.co/v/OrJj39YlL57 */
-.video-container .vine-video-container .vsc-controller {
-  margin-left: 40px;
-}
-
-/* shift YT 3D controller down */
-/* e.g. https://www.youtube.com/watch?v=erftYPflJzQ */
-.ytp-webgl-spherical-control {
-  top: 60px !important;
-}
-
-.ytp-fullscreen .ytp-webgl-spherical-control {
-  top: 100px !important;
-}
+/* Original overrides removed to avoid interference with the new anchoring system.
+   The .vsc-controller wrapper now fills the player container exactly, 
+   allowing #controller (inside shadow root) to anchor correctly to all 8 positions. */
 
 /* disable Vimeo video overlay */
 div.video-wrapper + div.target {

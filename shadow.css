@@ -14,17 +14,21 @@
   position: absolute;
   top: 0;
   left: 0;
+  transform: translate(0, 0);
+  pointer-events: auto;
 
   background: black;
   color: white;
 
   border-radius: 5px;
   padding: 5px;
-  margin: 10px 10px 10px 15px;
+  margin: 0;
 
   cursor: default;
   /* Stay above the local video surface without overtaking page-level dialogs. */
   z-index: 1;
+  transition: top 160ms ease, left 160ms ease, transform 160ms ease,
+    opacity 160ms ease;
 }
 
 #controller:hover {
@@ -117,6 +121,7 @@
   cursor: -webkit-grabbing;
   cursor: -moz-grabbing;
   opacity: 0.7;
+  transition: none;
 }
 
 #controller.dragging #controls {

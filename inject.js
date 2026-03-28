@@ -279,7 +279,7 @@ function applyControllerLocationToElement(controller, location) {
     document.msFullscreenElement
   ) {
     if (normalizedLocation.startsWith("top-")) {
-      top = "50px";
+      top = "63px";
     }
   }
 
@@ -1333,6 +1333,8 @@ function defineVideoController() {
     if (!this.video.src && !this.video.currentSrc)
       wrapper.classList.add("vsc-nosource");
     if (tc.settings.startHidden) wrapper.classList.add("vsc-hidden");
+    // Use lower z-index for non-YouTube sites to avoid overlapping modals
+    if (!isOnYouTube()) wrapper.classList.add("vsc-non-youtube");
     var shadow = wrapper.attachShadow({ mode: "open" });
     var shadowStylesheet = doc.createElement("link");
     shadowStylesheet.rel = "stylesheet";

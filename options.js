@@ -611,7 +611,6 @@ function save_options() {
     // Handle other site settings
     const siteSettings = [
       { key: "startHidden", type: "checkbox" },
-      { key: "hideWithYouTubeControls", type: "checkbox" },
       { key: "controllerLocation", type: "select" },
       { key: "rememberSpeed", type: "checkbox" },
       { key: "forceLastSavedSpeed", type: "checkbox" },
@@ -833,7 +832,6 @@ function createSiteRule(rule) {
 
   const settings = [
     { key: "startHidden", type: "checkbox" },
-    { key: "hideWithYouTubeControls", type: "checkbox" },
     { key: "controllerLocation", type: "select" },
     { key: "rememberSpeed", type: "checkbox" },
     { key: "forceLastSavedSpeed", type: "checkbox" },

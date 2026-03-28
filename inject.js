@@ -1603,7 +1603,6 @@ function applySiteRuleOverrides() {
   // Override general settings with site-specific overrides
   const siteSettings = [
     "startHidden",
-    "hideWithYouTubeControls",
     "controllerLocation",
     "rememberSpeed",
     "forceLastSavedSpeed",

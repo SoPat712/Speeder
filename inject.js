@@ -1725,7 +1725,7 @@ function setupListener(root) {
   if (root.vscRateListenerAttached) return;
   function updateSpeedFromEvent(video) {
     if (!video.vsc || !video.vsc.speedIndicator) return;
-    var speed = Number(video.playbackRate.toFixed(2));
+    var speed = video.playbackRate; // Preserve full precision (e.g. 0.0625)
     video.vsc.speedIndicator.textContent = speed.toFixed(2);
     video.vsc.targetSpeed = speed;
     var sourceKey = getVideoSourceKey(video);
@@ -1756,7 +1756,7 @@ function setupListener(root) {
         }
         event.stopImmediatePropagation();
       } else {
-        var currentSpeed = Number(video.playbackRate.toFixed(2));
+        var currentSpeed = video.playbackRate; // Preserve full precision (e.g. 0.0625)
         var desiredSpeed = getDesiredSpeed(video);
         var pendingRateChange = takePendingRateChange(video, currentSpeed);
 
@@ -1767,7 +1767,7 @@ function setupListener(root) {
 
         if (shouldPreserveDesiredSpeed(video, currentSpeed)) {
           log(
-            `Ignoring external rate change to ${currentSpeed.toFixed(2)} while preserving ${desiredSpeed.toFixed(2)}`,
+            `Ignoring external rate change to ${currentSpeed.toFixed(4)} while preserving ${desiredSpeed.toFixed(4)}`,
             4
           );
           video.vsc.speedIndicator.textContent = desiredSpeed.toFixed(2);
@@ -2189,18 +2189,21 @@ function runAction(action, value, e) {
         v.currentTime += numValue;
         break;
       case "faster":
-        // Round to the step precision to avoid floating-point issues (e.g., 1.80 + 0.1 = 1.9000000000000001)
         var fasterStep = numValue;
-        var fasterPrecision = Math.round(1 / fasterStep); // e.g., 0.1 -> 10, 0.05 -> 20, 0.25 -> 4
-        var newFasterSpeed = (v.playbackRate < MIN_SPEED ? MIN_SPEED : v.playbackRate) + fasterStep;
-        newFasterSpeed = Math.round(newFasterSpeed * fasterPrecision) / fasterPrecision;
+        // Use grid-snapping: always move to the next multiple of fasterStep
+        // Add a tiny epsilon (1% of step) to jump clear of the current point
+        var newFasterSpeed = Math.ceil((v.playbackRate + (fasterStep * 0.01)) / fasterStep) * fasterStep;
+        // Clean up JS floating point math (e.g. 0.30000000000000004 -> 0.30)
+        newFasterSpeed = Math.round(newFasterSpeed * 1000) / 1000;
         setSpeed(v, Math.min(newFasterSpeed, MAX_SPEED), false, true);
         break;
       case "slower":
         var slowerStep = numValue;
-        var slowerPrecision = Math.round(1 / slowerStep);
-        var newSlowerSpeed = v.playbackRate - slowerStep;
-        newSlowerSpeed = Math.round(newSlowerSpeed * slowerPrecision) / slowerPrecision;
+        // Use grid-snapping: always move to the previous multiple of slowerStep
+        // Subtract a tiny epsilon (1% of step) to jump clear of the current point
+        var newSlowerSpeed = Math.floor((v.playbackRate - (slowerStep * 0.01)) / slowerStep) * slowerStep;
+        // Clean up JS floating point math
+        newSlowerSpeed = Math.round(newSlowerSpeed * 1000) / 1000;
         setSpeed(v, Math.max(newSlowerSpeed, MIN_SPEED), false, true);
         break;
       case "reset":

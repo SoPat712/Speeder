@@ -109,27 +109,27 @@ def main():
         print("❌ No version entered. Exiting.")
         return
 
-    firefox_version = f"{base_version}.0"
+    github_version = f"{base_version}.0"
 
-    # Step 1: Update manifest.json on disk to base_version
+    # Step 1: Update manifest.json on disk to base_version (for Firefox)
     if os.path.exists(manifest_path):
         update_version_line(manifest_path, base_version)
     else:
         print(f"❌ {TARGET_FILE} not found. Aborting.")
         return
 
-    # Step 2: Create videospeed-github.xpi (exclude script, .git, AND videospeed-github.xpi itself)
-    exclude_files = [SCRIPT_NAME, "videospeed-github.xpi"]
+    # Step 2: Create videospeed-firefox.xpi (exclude script, .git, AND videospeed-firefox.xpi itself)
+    exclude_files = [SCRIPT_NAME, "videospeed-firefox.xpi"]
     exclude_dirs = [".git"]
-    zip_folder("videospeed-github.xpi", current_dir, exclude_files, exclude_dirs)
-    print("✅ Created videospeed-github.xpi")
+    zip_folder("videospeed-firefox.xpi", current_dir, exclude_files, exclude_dirs)
+    print("✅ Created videospeed-firefox.xpi")
 
-    # Step 3: Re-scan for .xpi files after GitHub archive creation, exclude them for Firefox zip
+    # Step 3: Re-scan for .xpi files after Firefox archive creation, exclude them for GitHub zip
     current_xpi_files = set(glob.glob("*.xpi"))
     exclude_temp_files = current_xpi_files.union({SCRIPT_NAME})
     exclude_temp_dirs = set(exclude_dirs)
 
-    # Step 4: Create videospeed-firefox.xpi from temp folder with version bumped to .0
+    # Step 4: Create videospeed-github.xpi from temp folder with version bumped to .0
     with tempfile.TemporaryDirectory() as temp_dir:
         for item in os.listdir(current_dir):
             if should_exclude(item, exclude_temp_files, exclude_temp_dirs):
@@ -143,14 +143,14 @@ def main():
 
         temp_manifest = os.path.join(temp_dir, TARGET_FILE)
         if os.path.exists(temp_manifest):
-            update_version_line(temp_manifest, firefox_version)
+            update_version_line(temp_manifest, github_version)
         else:
             print(f"⚠️ {TARGET_FILE} not found in temp folder.")
 
         zip_folder(
-            "videospeed-firefox.xpi", temp_dir, exclude_files=[], exclude_dirs=[]
+            "videospeed-github.xpi", temp_dir, exclude_files=[], exclude_dirs=[]
         )
-        print("✅ Created videospeed-firefox.xpi")
+        print("✅ Created videospeed-github.xpi")
 
 
 if __name__ == "__main__":

@@ -1203,6 +1203,10 @@ function defineVideoController() {
       this.youTubeAutoHideObserver.disconnect();
       this.youTubeAutoHideObserver = null;
     }
+    if (this.youTubeAutoHideCleanup) {
+      this.youTubeAutoHideCleanup();
+      this.youTubeAutoHideCleanup = null;
+    }
     if (this.genericAutoHideCleanup) {
       this.genericAutoHideCleanup();
       this.genericAutoHideCleanup = null;
@@ -1359,6 +1363,17 @@ function defineVideoController() {
       // The vsc-hidden class (from V key) takes precedence via CSS specificity
       if (ytPlayer.classList.contains("ytp-autohide")) {
         wrapper.classList.add("ytp-autohide");
+        
+        // Immediately end any temporary "vsc-show" state to hide with YouTube
+        // UNLESS it was forced by a shortcut (vsc-forced-show)
+        if (!wrapper.classList.contains("vsc-forced-show")) {
+          wrapper.classList.remove("vsc-show");
+          if (wrapper.showTimeOut) {
+            clearTimeout(wrapper.showTimeOut);
+            wrapper.showTimeOut = undefined;
+          }
+        }
+        
         log("YouTube controls hidden, hiding controller", 5);
       } else {
         wrapper.classList.remove("ytp-autohide");
@@ -1384,6 +1399,28 @@ function defineVideoController() {
     });
 
     log("YouTube auto-hide observer setup complete", 4);
+
+    // Also reveal on hover/activity independently of YouTube's own controls
+    // for immediate responsiveness, UNLESS Speeder is actually toggled hidden (vsc-hidden)
+    const resetTimer = () => {
+      showController(wrapper, tc.settings.hideWithControlsTimer * 1000);
+    };
+
+    const activityEvents = ["mousemove", "mousedown", "touchstart"];
+    activityEvents.forEach((type) => {
+      video.addEventListener(type, resetTimer, { passive: true });
+      wrapper.addEventListener(type, resetTimer, { passive: true });
+      ytPlayer.addEventListener(type, resetTimer, { passive: true });
+    });
+
+    // Store a cleanup function
+    this.youTubeAutoHideCleanup = () => {
+      activityEvents.forEach((type) => {
+        video.removeEventListener(type, resetTimer);
+        wrapper.removeEventListener(type, resetTimer);
+        ytPlayer.removeEventListener(type, resetTimer);
+      });
+    };
   };
 
   tc.videoController.prototype.setupGenericAutoHide = function (wrapper) {
@@ -1394,6 +1431,7 @@ function defineVideoController() {
 
     const resetTimer = () => {
       wrapper.classList.remove("vsc-idle-hidden");
+      showController(wrapper, tc.settings.hideWithControlsTimer * 1000);
       if (timer) {
         clearTimeout(timer);
       }
@@ -1414,9 +1452,13 @@ function defineVideoController() {
     // The wrapper covers the player area on most sites due to inject.css styles,
     // but we listen on both the video and the wrapper for maximum coverage.
     const activityEvents = ["mousemove", "mousedown", "keydown", "touchstart"];
+    const parentEl = video.parentElement;
     activityEvents.forEach((type) => {
       video.addEventListener(type, resetTimer, { passive: true });
       wrapper.addEventListener(type, resetTimer, { passive: true });
+      if (parentEl) {
+        parentEl.addEventListener(type, resetTimer, { passive: true });
+      }
     });
 
     // Also reset timer on play/pause events to ensure sync when player state changes
@@ -1429,6 +1471,9 @@ function defineVideoController() {
       activityEvents.forEach((type) => {
         video.removeEventListener(type, resetTimer);
         wrapper.removeEventListener(type, resetTimer);
+        if (parentEl) {
+          parentEl.removeEventListener(type, resetTimer);
+        }
       });
       video.removeEventListener("play", resetTimer);
       video.removeEventListener("pause", resetTimer);
@@ -1883,18 +1928,10 @@ function attachKeydownListeners(doc) {
         if (item) {
           runAction(item.action, item.value, event);
 
-          // Check if we should disable website key bindings for this specific shortcut
-          var shouldPreventDefault = false;
-
-          // Check if this shortcut has force enabled (from site-specific shortcuts)
-          if (item.force === true || item.force === "true") {
-            shouldPreventDefault = true;
-          }
-
-          if (shouldPreventDefault) {
-            event.preventDefault();
-            event.stopPropagation();
-          }
+          // Always prevent default and stop propagation for Speeder shortcuts
+          // to prevent the website (e.g. YouTube) from reacting to these keys.
+          event.preventDefault();
+          event.stopPropagation();
         }
       },
       true
@@ -2170,10 +2207,11 @@ function runAction(action, value, e) {
       "mark",
       "jump",
       "drag",
-      "toggleSubtitleNudge"
+      "toggleSubtitleNudge",
+      "display"
     ];
-    if (userDrivenActionsThatShowController.includes(action)) {
-      showController(controller);
+    if (userDrivenActionsThatShowController.includes(action) && action !== "display") {
+      showController(controller, 2000, true);
     }
     if (v.classList.contains("vsc-cancelled")) return;
     const numValue = parseFloat(value);
@@ -2220,8 +2258,16 @@ function runAction(action, value, e) {
       case "display":
         if (controller.classList.contains("vsc-hidden")) {
           controller.classList.remove("vsc-hidden");
+          showController(controller, 2000, true);
         } else {
           controller.classList.add("vsc-hidden");
+          // Clear any show state when explicitly hiding
+          controller.classList.remove("vsc-show");
+          controller.classList.remove("vsc-forced-show");
+          if (controller.showTimeOut) {
+            clearTimeout(controller.showTimeOut);
+            controller.showTimeOut = undefined;
+          }
         }
         break;
       case "blink":
@@ -2366,7 +2412,7 @@ function handleDrag(video, e) {
   pE.addEventListener("mouseleave", eD);
   pE.addEventListener("mousemove", sD);
 }
-function showController(controller, duration = 2000) {
+function showController(controller, duration = 2000, forced = false) {
   if (!controller || typeof controller.classList === "undefined") return;
   var restoreHidden =
     controller.restoreHiddenAfterShow === true ||
@@ -2375,6 +2421,9 @@ function showController(controller, duration = 2000) {
   controller.restoreHiddenAfterShow = restoreHidden;
   controller.classList.remove("vsc-hidden");
   controller.classList.add("vsc-show");
+  if (forced) {
+    controller.classList.add("vsc-forced-show");
+  }
 
   if (controller.showTimeOut !== undefined) {
     clearTimeout(controller.showTimeOut);
@@ -2382,6 +2431,7 @@ function showController(controller, duration = 2000) {
 
   controller.showTimeOut = setTimeout(function () {
     controller.classList.remove("vsc-show");
+    controller.classList.remove("vsc-forced-show");
     if (controller.restoreHiddenAfterShow === true) {
       controller.classList.add("vsc-hidden");
     }

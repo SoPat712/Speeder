@@ -33,9 +33,10 @@
 
 /* Show it temporarily when it has vsc-show class */
 .vsc-controller.ytp-autohide.vsc-show:not(.vsc-hidden),
-.vsc-controller.vsc-idle-hidden.vsc-show:not(.vsc-hidden) {
-  visibility: visible;
-  opacity: 1;
+.vsc-controller.vsc-idle-hidden.vsc-show:not(.vsc-hidden),
+.vsc-controller.vsc-forced-show:not(.vsc-hidden) {
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 /* Original overrides removed to avoid interference with the new anchoring system.

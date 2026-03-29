@@ -151,6 +151,8 @@ var tcDefaults = {
   audioBoolean: false,
   startHidden: false,
   hideWithYouTubeControls: false,
+  hideWithControls: false,
+  hideWithControlsTimer: 2.0,
   controllerLocation: "top-left",
   forceLastSavedSpeed: false,
   enabled: true,
@@ -575,7 +577,16 @@ function save_options() {
   settings.audioBoolean = document.getElementById("audioBoolean").checked;
   settings.enabled = document.getElementById("enabled").checked;
   settings.startHidden = document.getElementById("startHidden").checked;
-  settings.hideWithYouTubeControls = document.getElementById("hideWithYouTubeControls").checked;
+  settings.hideWithControls = document.getElementById("hideWithControls").checked;
+  settings.hideWithControlsTimer =
+    Math.min(15, Math.max(0.1, parseFloat(document.getElementById("hideWithControlsTimer").value) || tcDefaults.hideWithControlsTimer));
+
+  // Sync back to the legacy key if it exists, for backward compatibility
+  settings.hideWithYouTubeControls = settings.hideWithControls;
+
+  if (settings.hideWithControlsTimer < 0.1) settings.hideWithControlsTimer = 0.1;
+  if (settings.hideWithControlsTimer > 15) settings.hideWithControlsTimer = 15;
+
   settings.controllerLocation = normalizeControllerLocation(
     document.getElementById("controllerLocation").value
   );
@@ -615,7 +626,9 @@ function save_options() {
       { key: "rememberSpeed", type: "checkbox" },
       { key: "forceLastSavedSpeed", type: "checkbox" },
       { key: "audioBoolean", type: "checkbox" },
-      { key: "controllerOpacity", type: "text" }
+      { key: "controllerOpacity", type: "text" },
+      { key: "hideWithControls", type: "checkbox" },
+      { key: "hideWithControlsTimer", type: "text" }
     ];
 
     siteSettings.forEach((s) => {
@@ -829,20 +842,27 @@ function createSiteRule(rule) {
     { key: "rememberSpeed", type: "checkbox" },
     { key: "forceLastSavedSpeed", type: "checkbox" },
     { key: "audioBoolean", type: "checkbox" },
-    { key: "controllerOpacity", type: "text" }
+    { key: "controllerOpacity", type: "text" },
+    { key: "hideWithControls", type: "checkbox" },
+    { key: "hideWithControlsTimer", type: "text" }
   ];
 
   settings.forEach((s) => {
     var input = ruleEl.querySelector(`.site-${s.key}`);
+    if (!input) return;
+
     var value;
     if (rule && rule[s.key] !== undefined) {
       value = rule[s.key];
     } else {
       // Initialize with current global value
-      if (s.type === "checkbox") {
-        value = document.getElementById(s.key).checked;
-      } else {
-        value = document.getElementById(s.key).value;
+      var globalInput = document.getElementById(s.key);
+      if (globalInput) {
+        if (s.type === "checkbox") {
+          value = globalInput.checked;
+        } else {
+          value = globalInput.value;
+        }
       }
     }
 
@@ -886,7 +906,16 @@ function restore_options() {
     document.getElementById("audioBoolean").checked = storage.audioBoolean;
     document.getElementById("enabled").checked = storage.enabled;
     document.getElementById("startHidden").checked = storage.startHidden;
-    document.getElementById("hideWithYouTubeControls").checked = storage.hideWithYouTubeControls;
+    
+    // Migration/Normalization for hideWithControls
+    const hideWithControls = typeof storage.hideWithControls !== "undefined"
+      ? storage.hideWithControls
+      : storage.hideWithYouTubeControls;
+    
+    document.getElementById("hideWithControls").checked = hideWithControls;
+    document.getElementById("hideWithControlsTimer").value = 
+      storage.hideWithControlsTimer || tcDefaults.hideWithControlsTimer;
+
     document.getElementById("controllerLocation").value =
       normalizeControllerLocation(storage.controllerLocation);
     document.getElementById("controllerOpacity").value =

@@ -14,6 +14,8 @@ var tc = {
     audioBoolean: false,
     startHidden: false,
     hideWithYouTubeControls: false,
+    hideWithControls: false,
+    hideWithControlsTimer: 2.0,
     controllerLocation: "top-left",
     controllerOpacity: 0.3,
     keyBindings: [],
@@ -952,7 +954,13 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   tc.settings.audioBoolean = Boolean(storage.audioBoolean);
   tc.settings.enabled = Boolean(storage.enabled);
   tc.settings.startHidden = Boolean(storage.startHidden);
-  tc.settings.hideWithYouTubeControls = Boolean(storage.hideWithYouTubeControls);
+  tc.settings.hideWithControls =
+    typeof storage.hideWithControls !== "undefined"
+      ? Boolean(storage.hideWithControls)
+      : Boolean(storage.hideWithYouTubeControls);
+  tc.settings.hideWithControlsTimer =
+    Math.min(15, Math.max(0.1, Number(storage.hideWithControlsTimer) || 2.0));
+  tc.settings.hideWithYouTubeControls = tc.settings.hideWithControls;
   tc.settings.controllerLocation = normalizeControllerLocation(
     storage.controllerLocation
   );
@@ -1195,6 +1203,10 @@ function defineVideoController() {
       this.youTubeAutoHideObserver.disconnect();
       this.youTubeAutoHideObserver = null;
     }
+    if (this.genericAutoHideCleanup) {
+      this.genericAutoHideCleanup();
+      this.genericAutoHideCleanup = null;
+    }
     if (this.div) this.div.remove();
     if (this.restoreSpeedTimer) clearTimeout(this.restoreSpeedTimer);
     if (this.video) {
@@ -1374,6 +1386,57 @@ function defineVideoController() {
     log("YouTube auto-hide observer setup complete", 4);
   };
 
+  tc.videoController.prototype.setupGenericAutoHide = function (wrapper) {
+    if (!wrapper) return;
+
+    const video = this.video;
+    let timer = null;
+
+    const resetTimer = () => {
+      wrapper.classList.remove("vsc-idle-hidden");
+      if (timer) {
+        clearTimeout(timer);
+      }
+      timer = setTimeout(() => {
+        // Only hide if the video is not paused
+        // (Many players keep controls visible while paused)
+        // However, the user said "Reveal on every mouse and keyboard input"
+        // and "auto-hidden after timespan". 
+        // We'll follow the timer strictly.
+        wrapper.classList.add("vsc-idle-hidden");
+        log("Generic hide: controller hidden due to inactivity", 5);
+      }, tc.settings.hideWithControlsTimer * 1000);
+    };
+
+    // Initial show/timer
+    resetTimer();
+
+    // The wrapper covers the player area on most sites due to inject.css styles,
+    // but we listen on both the video and the wrapper for maximum coverage.
+    const activityEvents = ["mousemove", "mousedown", "keydown", "touchstart"];
+    activityEvents.forEach((type) => {
+      video.addEventListener(type, resetTimer, { passive: true });
+      wrapper.addEventListener(type, resetTimer, { passive: true });
+    });
+
+    // Also reset timer on play/pause events to ensure sync when player state changes
+    video.addEventListener("play", resetTimer, { passive: true });
+    video.addEventListener("pause", resetTimer, { passive: true });
+
+    // Store a cleanup function
+    this.genericAutoHideCleanup = () => {
+      if (timer) clearTimeout(timer);
+      activityEvents.forEach((type) => {
+        video.removeEventListener(type, resetTimer);
+        wrapper.removeEventListener(type, resetTimer);
+      });
+      video.removeEventListener("play", resetTimer);
+      video.removeEventListener("pause", resetTimer);
+    };
+
+    log(`Generic auto-hide setup complete with ${tc.settings.hideWithControlsTimer}s timer`, 4);
+  };
+
   tc.videoController.prototype.initializeControls = function () {
     const doc = this.video.ownerDocument;
     const speed = this.video.playbackRate.toFixed(2);
@@ -1476,9 +1539,13 @@ function defineVideoController() {
     controller.addEventListener("click", (e) => e.stopPropagation(), false);
     controller.addEventListener("mousedown", (e) => e.stopPropagation(), false);
     
-    // Setup YouTube auto-hide observer if enabled
-    if (tc.settings.hideWithYouTubeControls && isOnYouTube()) {
-      this.setupYouTubeAutoHide(wrapper);
+    // Setup auto-hide observers if enabled
+    if (tc.settings.hideWithControls) {
+      if (isOnYouTube()) {
+        this.setupYouTubeAutoHide(wrapper);
+      } else {
+        this.setupGenericAutoHide(wrapper);
+      }
     }
     
     var fragment = doc.createDocumentFragment();
@@ -1607,7 +1674,9 @@ function applySiteRuleOverrides() {
     "rememberSpeed",
     "forceLastSavedSpeed",
     "audioBoolean",
-    "controllerOpacity"
+    "controllerOpacity",
+    "hideWithControls",
+    "hideWithControlsTimer"
   ];
 
   siteSettings.forEach((key) => {

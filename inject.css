@@ -24,14 +24,16 @@
 
 /* YouTube auto-hide feature: fade controller with YouTube's controls */
 /* When the wrapper has ytp-autohide class, hide it (unless vsc-hidden overrides) */
-.vsc-controller.ytp-autohide:not(.vsc-hidden) {
+.vsc-controller.ytp-autohide:not(.vsc-hidden),
+.vsc-controller.vsc-idle-hidden:not(.vsc-hidden) {
   visibility: hidden;
   transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
 }
 
 /* Show it temporarily when it has vsc-show class */
-.vsc-controller.ytp-autohide.vsc-show:not(.vsc-hidden) {
+.vsc-controller.ytp-autohide.vsc-show:not(.vsc-hidden),
+.vsc-controller.vsc-idle-hidden.vsc-show:not(.vsc-hidden) {
   visibility: visible;
   opacity: 1;
 }

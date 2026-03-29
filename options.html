@@ -141,10 +141,16 @@
         <input id="startHidden" type="checkbox" />
       </div>
       <div class="row">
-        <label for="hideWithYouTubeControls">Hide with controls (YouTube)<br />
-          <em>Fade controller in/out with YouTube's video interface</em>
+        <label for="hideWithControls">Hide with controls (All sites)<br />
+          <em>Fade controller in/out with video interface (perfect sync on YouTube; idle-based elsewhere)</em>
         </label>
-        <input id="hideWithYouTubeControls" type="checkbox" />
+        <input id="hideWithControls" type="checkbox" />
+      </div>
+      <div class="row">
+        <label for="hideWithControlsTimer">Auto-hide timer (seconds)<br />
+          <em>Seconds of inactivity before hiding (0.1 - 15). Used for non-YouTube sites.</em>
+        </label>
+        <input id="hideWithControlsTimer" type="text" placeholder="2" />
       </div>
       <div class="row">
         <label for="controllerLocation">Default controller location</label>
@@ -247,6 +253,16 @@
             <div class="site-rule-option">
               <label>Controller opacity:</label>
               <input type="text" class="site-controllerOpacity" />
+            </div>
+            <div class="site-rule-option">
+              <label>
+                <input type="checkbox" class="site-hideWithControls" />
+                Hide with controls (idle-based)
+              </label>
+            </div>
+            <div class="site-rule-option">
+              <label>Auto-hide timer (0.1 - 15s):</label>
+              <input type="text" class="site-hideWithControlsTimer" />
             </div>
             <div class="site-rule-shortcuts">
               <label>

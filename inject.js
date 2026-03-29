@@ -1309,8 +1309,8 @@ function defineVideoController() {
       );
       this.visibilityResumeHandler = null;
     }
-    // Clear the target speed when stopping
-    this.targetSpeed = null;
+    // Clear the animation state, but PRESERVE targetSpeed so getDesiredSpeed
+    // doesn't lose the user's intended speed if the site hijacks it.
   };
 
   tc.videoController.prototype.performImmediateNudge = function () {
@@ -2085,6 +2085,7 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
 
   if (isUserKeyPress && !isInitialCall && video.vsc && video.vsc.div) {
     runAction("blink", 1000, null, video); // Pass video to blink
+    extendSpeedRestoreWindow(video); // Protect against immediate site-driven resets
   }
 
   // Try YouTube's native speed API first — keeps subtitles in sync without nudge

@@ -556,8 +556,8 @@ function save_options() {
   var status = document.getElementById("status");
   var saveError = null;
 
-  // Only collect shortcuts from the main shortcuts section, NOT from site rules
-  Array.from(document.querySelectorAll("#customs .customs")).forEach((item) => {
+  // Collect shortcuts from the main shortcuts section (both default and custom)
+  Array.from(document.querySelectorAll("#customs .shortcut-row")).forEach((item) => {
     if (saveError) return;
     var result = createKeyBindings(item);
     if (!result.valid) saveError = result.message;
@@ -580,7 +580,8 @@ function save_options() {
     document.getElementById("controllerLocation").value
   );
   settings.controllerOpacity =
-    document.getElementById("controllerOpacity").value;
+    parseFloat(document.getElementById("controllerOpacity").value) ||
+    tcDefaults.controllerOpacity;
   settings.keyBindings = keyBindings;
   settings.enableSubtitleNudge =
     document.getElementById("enableSubtitleNudge").checked;
@@ -655,45 +656,38 @@ function save_options() {
     settings.siteRules.push(rule);
   });
 
-  chrome.storage.sync.remove([
-    "resetSpeed",
-    "speedStep",
-    "fastSpeed",
-    "rewindTime",
-    "advanceTime",
-    "resetKeyCode",
-    "slowerKeyCode",
-    "fasterKeyCode",
-    "rewindKeyCode",
-    "advanceKeyCode",
-    "fastKeyCode",
-    "blacklist"
-  ]);
+  // Legacy keys to remove
+  const legacyKeys = [
+    "resetSpeed", "speedStep", "fastSpeed", "rewindTime", "advanceTime",
+    "resetKeyCode", "slowerKeyCode", "fasterKeyCode", "rewindKeyCode",
+    "advanceKeyCode", "fastKeyCode", "blacklist"
+  ];
 
-  chrome.storage.sync.set(settings, function () {
-    status.textContent = "Options saved";
-    setTimeout(function () {
-      status.textContent = "";
-    }, 1000);
+  chrome.storage.sync.remove(legacyKeys, function () {
+    chrome.storage.sync.set(settings, function () {
+      status.textContent = "Options saved";
+      setTimeout(function () {
+        status.textContent = "";
+      }, 1000);
+    });
   });
 }
 
-function ensureDisplayBinding(storage) {
-  ensureDefaultBinding(
-    storage,
-    "display",
-    "V",
-    storage.displayKeyCode || tcDefaults.displayKeyCode,
-    0
-  );
-}
-
-function ensureMoveBinding(storage) {
-  ensureDefaultBinding(storage, "move", "P", 80, 0);
-}
-
-function ensureSubtitleNudgeBinding(storage) {
-  ensureDefaultBinding(storage, "toggleSubtitleNudge", "N", 78, 0);
+function ensureAllDefaultBindings(storage) {
+  tcDefaults.keyBindings.forEach((binding) => {
+    // Special case for "display" to support legacy displayKeyCode
+    if (binding.action === "display" && storage.displayKeyCode) {
+      ensureDefaultBinding(storage, "display", "V", storage.displayKeyCode, 0);
+    } else {
+      ensureDefaultBinding(
+        storage,
+        binding.action,
+        binding.key,
+        binding.keyCode,
+        binding.value
+      );
+    }
+  });
 }
 
 function migrateLegacyBlacklist(storage) {
@@ -906,9 +900,7 @@ function restore_options() {
       storage.keyBindings = tcDefaults.keyBindings.slice();
     }
 
-    ensureDisplayBinding(storage);
-    ensureMoveBinding(storage);
-    ensureSubtitleNudgeBinding(storage);
+    ensureAllDefaultBindings(storage);
 
     document.querySelectorAll(".customs:not([id])").forEach((row) => row.remove());
 

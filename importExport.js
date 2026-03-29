@@ -48,15 +48,28 @@ function importSettings() {
     reader.onload = function (e) {
       try {
         const backup = JSON.parse(e.target.result);
+        let settingsToImport = null;
 
-        if (!backup.settings) {
+        // Detect backup format: check for 'settings' wrapper or raw storage keys
+        if (backup.settings && typeof backup.settings === "object") {
+          settingsToImport = backup.settings;
+        } else if (typeof backup === "object" && (backup.keyBindings || backup.rememberSpeed !== undefined)) {
+          settingsToImport = backup; // Raw storage object
+        }
+
+        if (!settingsToImport) {
           showStatus("Error: Invalid backup file format", true);
           return;
         }
 
         // Import all settings
         chrome.storage.sync.clear(function () {
-          chrome.storage.sync.set(backup.settings, function () {
+          // If clear fails, we still try to set
+          chrome.storage.sync.set(settingsToImport, function () {
+            if (chrome.runtime.lastError) {
+              showStatus("Error: Failed to save imported settings - " + chrome.runtime.lastError.message, true);
+              return;
+            }
             showStatus("Settings imported successfully. Reloading...");
             setTimeout(function () {
               if (typeof restore_options === "function") {

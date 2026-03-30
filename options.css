@@ -176,6 +176,29 @@ label {
   margin-top: 2em;
 }
 
+.support-footer {
+  min-width: 600px;
+  max-width: 738px;
+  margin: 28px 0 24px;
+  padding-left: 18px;
+  color: #6b6b6b;
+  font-size: 0.95em;
+}
+
+.support-footer p {
+  margin: 0;
+}
+
+.support-footer a {
+  color: #2f5ca8;
+  text-decoration: none;
+}
+
+.support-footer a:hover,
+.support-footer a:focus {
+  text-decoration: underline;
+}
+
 select {
   width: 170px;
 }
@@ -267,6 +290,15 @@ select {
 
   a:visited {
     color: #cc99ff;
+  }
+
+  .support-footer {
+    color: #a8a8a8;
+  }
+
+  .support-footer a,
+  .support-footer a:visited {
+    color: #8bb8ff;
   }
 
   hr {

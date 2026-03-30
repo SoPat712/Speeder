@@ -239,7 +239,7 @@ function refreshAddShortcutSelector() {
     selector.options[0].text = "All shortcuts added";
   } else {
     selector.disabled = false;
-    selector.options[0].text = "Add shortcut...";
+    selector.options[0].text = "Add shortcut\u2026";
   }
 }
 
@@ -477,7 +477,7 @@ function add_shortcut(action, value) {
   var removeButton = document.createElement("button");
   removeButton.className = "removeParent";
   removeButton.type = "button";
-  removeButton.textContent = "X";
+  removeButton.textContent = "\u00d7";
 
   div.appendChild(actionLabel);
   div.appendChild(keyInput);
@@ -622,13 +622,13 @@ function save_options() {
     // Handle other site settings
     const siteSettings = [
       { key: "startHidden", type: "checkbox" },
+      { key: "hideWithControls", type: "checkbox" },
+      { key: "hideWithControlsTimer", type: "text" },
       { key: "controllerLocation", type: "select" },
       { key: "rememberSpeed", type: "checkbox" },
       { key: "forceLastSavedSpeed", type: "checkbox" },
       { key: "audioBoolean", type: "checkbox" },
-      { key: "controllerOpacity", type: "text" },
-      { key: "hideWithControls", type: "checkbox" },
-      { key: "hideWithControlsTimer", type: "text" }
+      { key: "controllerOpacity", type: "text" }
     ];
 
     siteSettings.forEach((s) => {
@@ -838,13 +838,13 @@ function createSiteRule(rule) {
 
   const settings = [
     { key: "startHidden", type: "checkbox" },
+    { key: "hideWithControls", type: "checkbox" },
+    { key: "hideWithControlsTimer", type: "text" },
     { key: "controllerLocation", type: "select" },
     { key: "rememberSpeed", type: "checkbox" },
     { key: "forceLastSavedSpeed", type: "checkbox" },
     { key: "audioBoolean", type: "checkbox" },
-    { key: "controllerOpacity", type: "text" },
-    { key: "hideWithControls", type: "checkbox" },
-    { key: "hideWithControlsTimer", type: "text" }
+    { key: "controllerOpacity", type: "text" }
   ];
 
   settings.forEach((s) => {
@@ -1062,11 +1062,11 @@ document.addEventListener("DOMContentLoaded", function () {
       if (isCollapsed) {
         ruleBody.style.display = "block";
         ruleEl.classList.remove("collapsed");
-        event.target.textContent = "-";
+        event.target.textContent = "\u2212";
       } else {
         ruleBody.style.display = "none";
         ruleEl.classList.add("collapsed");
-        event.target.textContent = "+";
+        event.target.textContent = "\u002b";
       }
       return;
     }

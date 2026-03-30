@@ -1715,13 +1715,13 @@ function applySiteRuleOverrides() {
   // Override general settings with site-specific overrides
   const siteSettings = [
     "startHidden",
+    "hideWithControls",
+    "hideWithControlsTimer",
     "controllerLocation",
     "rememberSpeed",
     "forceLastSavedSpeed",
     "audioBoolean",
-    "controllerOpacity",
-    "hideWithControls",
-    "hideWithControlsTimer"
+    "controllerOpacity"
   ];
 
   siteSettings.forEach((key) => {

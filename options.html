@@ -1,346 +1,416 @@
 <!doctype html>
 <html>
   <head>
-    <title>Video Speed Controller: Options</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Speeder Settings</title>
     <link rel="stylesheet" href="options.css" />
     <script src="options.js"></script>
     <script src="importExport.js"></script>
   </head>
   <body>
-    <header>
-      <h1>Video Speed Controller</h1>
-      <div class="version">Version <span id="app-version"></span></div>
-    </header>
+    <div class="page-shell">
+      <header class="page-header">
+        <div class="title-row">
+          <div class="title-block">
+            <h1>Speeder settings</h1>
+            <p class="page-subtitle">Shortcuts, defaults, and site rules.</p>
+          </div>
+          <div class="version">v<span id="app-version"></span></div>
+        </div>
+      </header>
 
-    <section id="customs">
-      <h3>Shortcuts</h3>
-      <div class="shortcuts-grid">
-        <div class="shortcut-row" id="display" data-action="display">
-          <div class="shortcut-label">Show/hide controller</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input class="customValue" type="text" placeholder="value" value="N/A" disabled />
-        </div>
-        <div class="shortcut-row" id="move" data-action="move">
-          <div class="shortcut-label">Move controller</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input
-            class="customValue"
-            type="text"
-            placeholder="value"
-            value="N/A"
-            disabled
-          />
-        </div>
-        <div class="shortcut-row" id="slower" data-action="slower">
-          <div class="shortcut-label">Decrease speed</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input class="customValue" type="text" placeholder="value (0.10)" />
-        </div>
-        <div class="shortcut-row" id="faster" data-action="faster">
-          <div class="shortcut-label">Increase speed</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input class="customValue" type="text" placeholder="value (0.10)" />
-        </div>
-        <div class="shortcut-row" id="rewind" data-action="rewind">
-          <div class="shortcut-label">Rewind</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input class="customValue" type="text" placeholder="value (10)" />
-        </div>
-        <div class="shortcut-row" id="advance" data-action="advance">
-          <div class="shortcut-label">Advance</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input class="customValue" type="text" placeholder="value (10)" />
-        </div>
-        <div class="shortcut-row" id="reset" data-action="reset">
-          <div class="shortcut-label">Reset speed</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input
-            class="customValue"
-            type="text"
-            placeholder="value"
-            value="N/A"
-            disabled
-          />
-        </div>
-        <div class="shortcut-row" id="fast" data-action="fast">
-          <div class="shortcut-label">Preferred speed</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input class="customValue" type="text" placeholder="value (1.80)" />
-        </div>
-        <div class="shortcut-row" id="toggleSubtitleNudge" data-action="toggleSubtitleNudge">
-          <div class="shortcut-label">Toggle subtitle nudge</div>
-          <input
-            class="customKey"
-            type="text"
-            value=""
-            placeholder="press a key"
-          />
-          <input
-            class="customValue"
-            type="text"
-            placeholder="value"
-            value="N/A"
-            disabled
-          />
-        </div>
-      </div>
+      <main class="settings-stack">
+        <section id="customs" class="settings-card">
+          <div class="section-heading">
+            <h3>Shortcuts</h3>
+            <p class="section-intro">Backspace clears a shortcut. Escape disables it.</p>
+          </div>
+          <div class="shortcuts-grid">
+            <div class="shortcut-row" id="display" data-action="display">
+              <div class="shortcut-label">Show/hide controller</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value"
+                value="N/A"
+                disabled
+              />
+            </div>
+            <div class="shortcut-row" id="move" data-action="move">
+              <div class="shortcut-label">Move controller</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value"
+                value="N/A"
+                disabled
+              />
+            </div>
+            <div class="shortcut-row" id="slower" data-action="slower">
+              <div class="shortcut-label">Decrease speed</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value (0.10)"
+              />
+            </div>
+            <div class="shortcut-row" id="faster" data-action="faster">
+              <div class="shortcut-label">Increase speed</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value (0.10)"
+              />
+            </div>
+            <div class="shortcut-row" id="rewind" data-action="rewind">
+              <div class="shortcut-label">Rewind</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value (10)"
+              />
+            </div>
+            <div class="shortcut-row" id="advance" data-action="advance">
+              <div class="shortcut-label">Advance</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value (10)"
+              />
+            </div>
+            <div class="shortcut-row" id="reset" data-action="reset">
+              <div class="shortcut-label">Reset speed</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value"
+                value="N/A"
+                disabled
+              />
+            </div>
+            <div class="shortcut-row" id="fast" data-action="fast">
+              <div class="shortcut-label">Preferred speed</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value (1.80)"
+              />
+            </div>
+            <div
+              class="shortcut-row"
+              id="toggleSubtitleNudge"
+              data-action="toggleSubtitleNudge"
+            >
+              <div class="shortcut-label">Toggle subtitle nudge</div>
+              <input
+                class="customKey"
+                type="text"
+                value=""
+                placeholder="press a key"
+              />
+              <input
+                class="customValue"
+                type="text"
+                placeholder="value"
+                value="N/A"
+                disabled
+              />
+            </div>
+          </div>
 
-      <select id="addShortcutSelector">
-        <option value="">Add shortcut...</option>
-      </select>
-    </section>
+          <select id="addShortcutSelector">
+            <option value="">Add shortcut&hellip;</option>
+          </select>
+        </section>
 
-    <section>
-      <h3>Other</h3>
-      <div class="row">
-        <label for="enabled">Enable</label>
-        <input id="enabled" type="checkbox" />
-      </div>
-      <div class="row">
-        <label for="startHidden">Hide controller by default</label>
-        <input id="startHidden" type="checkbox" />
-      </div>
-      <div class="row">
-        <label for="hideWithControls">Hide with controls (All sites)<br />
-          <em>Fade controller in/out with video interface (perfect sync on YouTube; idle-based elsewhere)</em>
-        </label>
-        <input id="hideWithControls" type="checkbox" />
-      </div>
-      <div class="row">
-        <label for="hideWithControlsTimer">Auto-hide timer (seconds)<br />
-          <em>Seconds of inactivity before hiding (0.1 - 15). Used for non-YouTube sites.</em>
-        </label>
-        <input id="hideWithControlsTimer" type="text" placeholder="2" />
-      </div>
-      <div class="row">
-        <label for="controllerLocation">Default controller location</label>
-        <select id="controllerLocation">
-          <option value="top-left">Top left</option>
-          <option value="top-center">Top center</option>
-          <option value="top-right">Top right</option>
-          <option value="middle-right">Middle right</option>
-          <option value="bottom-right">Bottom right</option>
-          <option value="bottom-center">Bottom center</option>
-          <option value="bottom-left">Bottom left</option>
-          <option value="middle-left">Middle left</option>
-        </select>
-      </div>
-      <div class="row">
-        <label for="rememberSpeed">Remember playback speed</label>
-        <input id="rememberSpeed" type="checkbox" />
-      </div>
-      <div class="row">
-        <label for="forceLastSavedSpeed"
-          >Force last saved speed<br />
-          <em
-            >Useful for video players that override the speeds set by
-            VideoSpeed</em
-          ></label
-        >
-        <input id="forceLastSavedSpeed" type="checkbox" />
-      </div>
-      <div class="row">
-        <label for="audioBoolean">Work on audio</label>
-        <input id="audioBoolean" type="checkbox" />
-      </div>
-      <div class="row">
-        <label for="controllerOpacity">Controller opacity</label>
-        <input id="controllerOpacity" type="text" value="" />
-      </div>
-    </section>
-
-    <section id="siteRules">
-      <h3>Site-Specific Settings</h3>
-      <p>
-        <em
-          >Override default settings for specific websites. Supports
-          <a href="https://www.regexpal.com/">Regex</a> patterns (e.g.,
-          /(.+)youtube\.com(\/*)$/gi).</em
-        >
-      </p>
-      <div id="siteRulesContainer"></div>
-      <button id="addSiteRule" type="button">Add Site Rule</button>
-    </section>
-
-    <template id="siteRuleTemplate">
-      <div class="site-rule">
-        <div class="site-rule-header">
-          <button type="button" class="toggle-site-rule" title="Expand/Collapse">+</button>
-          <input
-            type="text"
-            class="site-pattern"
-            placeholder="e.g., youtube.com or /regex/gi"
-          />
-          <button type="button" class="remove-site-rule">Remove</button>
-        </div>
-        <div class="site-rule-body">
-          <div class="site-rule-option">
-            <label>
-              <input type="checkbox" class="site-enabled" />
-              Enable Video Speed Controller on this site
+        <section id="generalSettings" class="settings-card">
+          <div class="section-heading">
+            <h3>Defaults</h3>
+            <p class="section-intro">Used unless a site rule overrides it.</p>
+          </div>
+          <div class="row">
+            <label for="enabled">Enable</label>
+            <input id="enabled" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="startHidden">Hide controller by default</label>
+            <input id="startHidden" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="hideWithControls"
+              >Hide with controls (all sites)<br />
+              <em
+                >Fade the controller in and out with the video interface:
+                perfect sync on YouTube, idle-based elsewhere.</em
+              >
             </label>
+            <input id="hideWithControls" type="checkbox" />
           </div>
-          <div class="site-rule-content">
-            <div class="site-rule-option">
-              <label>Hide controller by default:</label>
-              <input type="checkbox" class="site-startHidden" />
+          <div class="row">
+            <label for="hideWithControlsTimer"
+              >Auto-hide timer (seconds)<br />
+              <em
+                >Seconds of inactivity before hiding: 0.1&ndash;15 for non-YouTube
+                sites.</em
+              >
+            </label>
+            <input id="hideWithControlsTimer" type="text" placeholder="2" />
+          </div>
+          <div class="row">
+            <label for="controllerLocation">Default controller location</label>
+            <select id="controllerLocation">
+              <option value="top-left">Top left</option>
+              <option value="top-center">Top center</option>
+              <option value="top-right">Top right</option>
+              <option value="middle-right">Middle right</option>
+              <option value="bottom-right">Bottom right</option>
+              <option value="bottom-center">Bottom center</option>
+              <option value="bottom-left">Bottom left</option>
+              <option value="middle-left">Middle left</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="rememberSpeed">Remember playback speed</label>
+            <input id="rememberSpeed" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="forceLastSavedSpeed"
+              >Force last saved speed<br />
+              <em
+                >Useful when a video player tries to override the speed you set
+                in Speeder.</em
+              >
+            </label>
+            <input id="forceLastSavedSpeed" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="audioBoolean">Work on audio</label>
+            <input id="audioBoolean" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="controllerOpacity">Controller opacity</label>
+            <input id="controllerOpacity" type="text" value="" />
+          </div>
+        </section>
+
+        <section id="siteRules" class="settings-card">
+          <div class="section-heading">
+            <h3>Site rules</h3>
+            <p class="section-intro">
+              Use plain domains or
+              <a
+                href="https://www.regexpal.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Regex</a
+              >
+              patterns like <code>/(.+)youtube\.com(\/*)$/gi</code>.
+            </p>
+          </div>
+          <div id="siteRulesContainer"></div>
+          <button id="addSiteRule" type="button">Add Site Rule</button>
+        </section>
+
+        <template id="siteRuleTemplate">
+          <div class="site-rule">
+            <div class="site-rule-header">
+              <button type="button" class="toggle-site-rule" title="Expand/Collapse">&plus;</button>
+              <input
+                type="text"
+                class="site-pattern"
+                placeholder="e.g., youtube.com or /regex/gi"
+              />
+              <button type="button" class="remove-site-rule">Remove</button>
             </div>
-            <div class="site-rule-option">
-              <label>Default controller location:</label>
-              <select class="site-controllerLocation">
-                <option value="top-left">Top left</option>
-                <option value="top-center">Top center</option>
-                <option value="top-right">Top right</option>
-                <option value="middle-right">Middle right</option>
-                <option value="bottom-right">Bottom right</option>
-                <option value="bottom-center">Bottom center</option>
-                <option value="bottom-left">Bottom left</option>
-                <option value="middle-left">Middle left</option>
-              </select>
-            </div>
-            <div class="site-rule-option">
-              <label>Remember playback speed:</label>
-              <input type="checkbox" class="site-rememberSpeed" />
-            </div>
-            <div class="site-rule-option">
-              <label>Force last saved speed:</label>
-              <input type="checkbox" class="site-forceLastSavedSpeed" />
-            </div>
-            <div class="site-rule-option">
-              <label>Work on audio:</label>
-              <input type="checkbox" class="site-audioBoolean" />
-            </div>
-            <div class="site-rule-option">
-              <label>Controller opacity:</label>
-              <input type="text" class="site-controllerOpacity" />
-            </div>
-            <div class="site-rule-option">
-              <label>
-                <input type="checkbox" class="site-hideWithControls" />
-                Hide with controls (idle-based)
-              </label>
-            </div>
-            <div class="site-rule-option">
-              <label>Auto-hide timer (0.1 - 15s):</label>
-              <input type="text" class="site-hideWithControlsTimer" />
-            </div>
-            <div class="site-rule-shortcuts">
-              <label>
-                <input type="checkbox" class="override-shortcuts" />
-                Custom shortcuts for this site
-              </label>
-              <div class="site-shortcuts-container" style="display: none"></div>
+            <div class="site-rule-body">
+              <div class="site-rule-option">
+                <label>
+                  <input type="checkbox" class="site-enabled" />
+                  Enable Speeder on this site
+                </label>
+              </div>
+              <div class="site-rule-content">
+                <div class="site-rule-option">
+                  <label>Hide controller by default:</label>
+                  <input type="checkbox" class="site-startHidden" />
+                </div>
+                <div class="site-rule-option">
+                <label>
+                  <input type="checkbox" class="site-hideWithControls" />
+                  Hide with controls (idle-based)
+                </label>
+              </div>
+              <div class="site-rule-option">
+                <label>Auto-hide timer (0.1&ndash;15s):</label>
+                <input type="text" class="site-hideWithControlsTimer" />
+              </div>
+              <div class="site-rule-option">
+                  <label>Default controller location:</label>
+                  <select class="site-controllerLocation">
+                    <option value="top-left">Top left</option>
+                    <option value="top-center">Top center</option>
+                    <option value="top-right">Top right</option>
+                    <option value="middle-right">Middle right</option>
+                    <option value="bottom-right">Bottom right</option>
+                    <option value="bottom-center">Bottom center</option>
+                    <option value="bottom-left">Bottom left</option>
+                    <option value="middle-left">Middle left</option>
+                  </select>
+                </div>
+                <div class="site-rule-option">
+                  <label>Remember playback speed:</label>
+                  <input type="checkbox" class="site-rememberSpeed" />
+                </div>
+                <div class="site-rule-option">
+                  <label>Force last saved speed:</label>
+                  <input type="checkbox" class="site-forceLastSavedSpeed" />
+                </div>
+                <div class="site-rule-option">
+                  <label>Work on audio:</label>
+                  <input type="checkbox" class="site-audioBoolean" />
+                </div>
+                <div class="site-rule-option">
+                  <label>Controller opacity:</label>
+                  <input type="text" class="site-controllerOpacity" />
+                </div>
+                <div class="site-rule-shortcuts">
+                  <label>
+                    <input type="checkbox" class="override-shortcuts" />
+                    Custom shortcuts for this site
+                  </label>
+                  <div class="site-shortcuts-container" style="display: none"></div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-    </template>
+        </template>
 
-    <section id="nudgeSettings">
-      <h3>Subtitle Nudge Settings</h3>
-      <div class="row">
-        <label for="enableSubtitleNudge"
-          >Enable Subtitle Nudge <br /><em
-            >Periodically 'nudges' video speed by a tiny amount to help keep
-            subtitles in sync on some sites (e.g. YouTube).</em
-          >
-        </label>
-        <input id="enableSubtitleNudge" type="checkbox" />
-      </div>
-      <div class="row">
-        <label for="subtitleNudgeInterval"
-          >Nudge Interval (milliseconds) <br /><em
-            >How often to nudge (e.g., 10-1000). Smaller values are more
-            frequent. Default: 50.</em
-          >
-        </label>
-        <input
-          id="subtitleNudgeInterval"
-          type="text"
-          value=""
-          placeholder="50"
-        />
-      </div>
-    </section>
+        <section id="nudgeSettings" class="settings-card">
+          <div class="section-heading">
+            <h3>Subtitle sync</h3>
+            <p class="section-intro">Use small speed nudges if subtitles drift.</p>
+          </div>
+          <div class="row">
+            <label for="enableSubtitleNudge"
+              >Enable subtitle nudge<br /><em
+                >Makes tiny playback changes to help keep subtitles aligned on
+                some sites, especially YouTube.</em
+              >
+            </label>
+            <input id="enableSubtitleNudge" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="subtitleNudgeInterval"
+              >Nudge interval (milliseconds)<br /><em
+                >How often to nudge: 10&ndash;1000. Smaller values are more frequent.
+                Default: 50.</em
+              >
+            </label>
+            <input
+              id="subtitleNudgeInterval"
+              type="text"
+              value=""
+              placeholder="50"
+            />
+          </div>
+        </section>
 
-    <button id="save">Save</button>
-    <button id="restore">Restore Defaults</button>
-    <button id="exportSettings">Export Settings</button>
-    <button id="importSettings">Import Settings</button>
+        <section class="settings-card action-card">
+          <div class="section-heading">
+            <h3>Actions</h3>
+            <p class="section-intro">Save, restore, export, or import settings.</p>
+          </div>
+          <div class="action-row">
+            <button id="save">Save Changes</button>
+            <button id="restore">Restore Defaults</button>
+            <button id="exportSettings">Export Settings</button>
+            <button id="importSettings">Import Settings</button>
+          </div>
 
-    <div id="status"></div>
+          <div id="status" role="status" aria-live="polite"></div>
+        </section>
 
-    <div id="faq">
-      <hr />
+        <section id="faq" class="settings-card info-card">
+          <hr />
 
-      <h4>Extension controls not appearing?</h4>
-      <p>
-        This extension is only compatible with HTML5 audio and video. If you
-        don't see the controls showing up, chances are you are viewing a Flash
-        content. If you want to confirm, try right-clicking on the content and
-        inspect the menu: if it mentions flash, then that's the issue. That
-        said, <b>most sites will fallback to HTML5</b> if they detect that Flash
-        is not available. You can try manually disabling Flash from the browser.
-      </p>
+          <h4>Extension controls not appearing?</h4>
+          <p>
+            This extension only works with HTML5 audio and video. If the
+            controls never appear, you may be looking at Flash content instead.
+            Right-click the player to check: if the menu mentions Flash, that
+            is the issue. Most sites will fall back to HTML5 when Flash is not
+            available, so disabling Flash in the browser can help.
+          </p>
+        </section>
+
+        <footer class="support-footer settings-card">
+          <p>
+            If Speeder has been useful, consider supporting its development via
+            <a
+              href="https://github.com/sponsors/SoPat712"
+              target="_blank"
+              rel="noopener noreferrer"
+              >GitHub Sponsor</a
+            >
+            or
+            <a
+              href="https://ko-fi.com/joshpatra"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Ko-Fi</a
+            >.
+          </p>
+        </footer>
+      </main>
     </div>
-
-    <footer class="support-footer">
-      <p>
-        If Speeder has been useful, consider supporting its development via
-        <a
-          href="https://github.com/sponsors/SoPat712"
-          target="_blank"
-          rel="noopener noreferrer"
-          >GitHub Sponsor</a
-        >
-        or
-        <a
-          href="https://ko-fi.com/joshpatra"
-          target="_blank"
-          rel="noopener noreferrer"
-          >Ko-Fi</a
-        >.
-      </p>
-    </footer>
   </body>
 </html>

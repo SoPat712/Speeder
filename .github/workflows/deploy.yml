@@ -20,22 +20,28 @@ jobs:
       - name: Lint
         run: web-ext lint
 
-      # Build & release steps only run on tags (not dev branch CI pushes)
-      - name: Build XPI
-        if: startsWith(github.ref, 'refs/tags/')
-        run: web-ext build --overwrite-dest
+      # Beta tag (v*-beta) → Sign as unlisted on AMO, attach signed XPI to GitHub Prerelease
+      # Firefox blocks all unsigned XPIs, even for self-hosted installs — unlisted signing is required
+      - name: Sign XPI via AMO (unlisted, beta)
+        if: contains(github.ref_name, '-beta')
+        run: |
+          web-ext sign \
+            --api-key ${{ secrets.FIREFOX_API_KEY }} \
+            --api-secret ${{ secrets.FIREFOX_API_SECRET }} \
+            --source-dir . \
+            --artifacts-dir web-ext-artifacts \
+            --channel unlisted
 
-      - name: Rename XPI
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Get signed XPI path (beta)
+        if: contains(github.ref_name, '-beta')
         id: xpi
         run: |
-          FILE=$(ls web-ext-artifacts/*.zip | head -n 1)
+          FILE=$(ls web-ext-artifacts/*.xpi | head -n 1)
           XPI="web-ext-artifacts/speeder-${{ github.ref_name }}.xpi"
           mv "$FILE" "$XPI"
           echo "file=$XPI" >> $GITHUB_OUTPUT
 
-      # Beta tag (v*-beta) → GitHub Prerelease with XPI for self-hosting
-      - name: Create GitHub Release (beta)
+      - name: Create GitHub Prerelease (beta)
         if: contains(github.ref_name, '-beta')
         uses: softprops/action-gh-release@v2
         with:
@@ -44,7 +50,7 @@ jobs:
           files: ${{ steps.xpi.outputs.file }}
           prerelease: true
           body: |
-            Beta build — manual installation only.
+            Beta build — signed for self-hosted manual installation.
 
             ### Installation Instructions
             1. Download the `.xpi` file

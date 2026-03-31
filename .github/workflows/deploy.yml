@@ -1,62 +1,66 @@
 name: Build & Release Firefox Addon
 
-# Trigger only on tags
 on:
   push:
     tags:
-      - "v*" # any tag starting with v
+      - "v*"
+    branches:
+      - dev
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
       - uses: actions/checkout@v4
 
-      # 2️⃣ Install dependencies
       - name: Install deps
         run: npm install -g web-ext
 
-      # 3️⃣ Build XPI
-      - name: Build extension
+      - name: Lint
+        run: web-ext lint
+
+      # Build & release steps only run on tags (not dev branch CI pushes)
+      - name: Build XPI
+        if: startsWith(github.ref, 'refs/tags/')
         run: web-ext build --overwrite-dest
 
-      # 4️⃣ Get built XPI path
-      - name: Get XPI path
+      - name: Rename XPI
+        if: startsWith(github.ref, 'refs/tags/')
         id: xpi
         run: |
           FILE=$(ls web-ext-artifacts/*.xpi | head -n 1)
-          echo "file=$FILE" >> $GITHUB_OUTPUT
+          XPI="web-ext-artifacts/speeder-${{ github.ref_name }}.xpi"
+          mv "$FILE" "$XPI"
+          echo "file=$XPI" >> $GITHUB_OUTPUT
 
-      # 5️⃣ Determine if prerelease or main
-      - name: Determine release type
-        id: release_type
-        run: |
-          if [[ "${GITHUB_REF#refs/tags/}" == *"-beta"* ]]; then
-            echo "prerelease=true" >> $GITHUB_OUTPUT
-          else
-            echo "prerelease=false" >> $GITHUB_OUTPUT
-          fi
-
-      # 6️⃣ Create GitHub Release
-      - name: Create GitHub Release
+      # Beta tag (v*-beta) → GitHub Prerelease with XPI for self-hosting
+      - name: Create GitHub Release (beta)
+        if: contains(github.ref_name, '-beta')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          name: Beta ${{ github.ref_name }}
           files: ${{ steps.xpi.outputs.file }}
-          prerelease: ${{ steps.release_type.outputs.prerelease }}
+          prerelease: true
+          body: |
+            Beta build — manual installation only.
+
+            ### Installation Instructions
+            1. Download the `.xpi` file
+            2. Open Firefox and go to `about:addons`
+            3. Click the gear icon and select "Install Add-on From File"
+            4. Select the downloaded `.xpi` file
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 7️⃣ AMO deploy (main only)
-      - name: Sign & Upload to AMO
-        if: steps.release_type.outputs.prerelease == 'false'
+      # Stable tag (v* without -beta) → Sign & submit to public AMO listing
+      - name: Sign & Submit to AMO (stable)
+        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-beta')
         run: |
           web-ext sign \
             --api-key ${{ secrets.FIREFOX_API_KEY }} \
             --api-secret ${{ secrets.FIREFOX_API_SECRET }} \
             --source-dir . \
             --artifacts-dir web-ext-artifacts \
-            --channel unlisted
+            --channel listed

@@ -17,6 +17,22 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   var defaultButtons = ["rewind", "slower", "faster", "advance", "display"];
+  var storageDefaults = {
+    enabled: true,
+    showPopupControlBar: true,
+    controllerButtons: defaultButtons,
+    popupMatchHoverControls: true,
+    popupControllerButtons: defaultButtons,
+    siteRules: [],
+    blacklist: `\
+      www.instagram.com
+      twitter.com
+      vine.co
+      imgur.com
+      teams.microsoft.com
+    `.replace(/^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm, "")
+  };
+  var renderToken = 0;
 
   function escapeStringRegExp(str) {
     const m = /[|\\{}()[\]^$+*?.]/g;
@@ -67,6 +83,35 @@ document.addEventListener("DOMContentLoaded", function () {
     return null;
   }
 
+  function isSiteRuleDisabled(rule) {
+    return Boolean(
+      rule &&
+      (rule.enabled === false || rule.disableExtension === true)
+    );
+  }
+
+  function resolvePopupButtons(storage, siteRule) {
+    if (siteRule && Array.isArray(siteRule.popupControllerButtons)) {
+      return siteRule.popupControllerButtons;
+    }
+
+    if (storage.popupMatchHoverControls) {
+      if (siteRule && Array.isArray(siteRule.controllerButtons)) {
+        return siteRule.controllerButtons;
+      }
+
+      if (Array.isArray(storage.controllerButtons)) {
+        return storage.controllerButtons;
+      }
+    }
+
+    if (Array.isArray(storage.popupControllerButtons)) {
+      return storage.popupControllerButtons;
+    }
+
+    return defaultButtons;
+  }
+
   function setControlBarVisible(visible) {
     var bar = document.getElementById("popupControlBar");
     var dividers = document.querySelectorAll(".popup-divider");
@@ -87,6 +132,37 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         if (callback) callback(null);
       }
+    });
+  }
+
+  function getActiveTabContext(callback) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      var activeTab = tabs && tabs[0] ? tabs[0] : null;
+      if (!activeTab || !activeTab.id) {
+        if (callback) callback({ tab: null, url: "" });
+        return;
+      }
+
+      var tabUrl = typeof activeTab.url === "string" ? activeTab.url : "";
+      if (tabUrl.length > 0) {
+        if (callback) callback({ tab: activeTab, url: tabUrl });
+        return;
+      }
+
+      chrome.tabs.sendMessage(
+        activeTab.id,
+        { action: "get_page_context" },
+        function (response) {
+          if (chrome.runtime.lastError) {
+            if (callback) callback({ tab: activeTab, url: "" });
+            return;
+          }
+
+          var pageUrl =
+            response && typeof response.url === "string" ? response.url : "";
+          if (callback) callback({ tab: activeTab, url: pageUrl });
+        }
+      );
     });
   }
 
@@ -193,56 +269,80 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  chrome.storage.sync.get(
-    {
-      enabled: true,
-      showPopupControlBar: true,
-      controllerButtons: defaultButtons,
-      popupMatchHoverControls: true,
-      popupControllerButtons: defaultButtons,
-      siteRules: [],
-      blacklist: `\
-      www.instagram.com
-      twitter.com
-      vine.co
-      imgur.com
-      teams.microsoft.com
-    `.replace(/^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm, "")
-    },
-    function (storage) {
-      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        const url = tabs[0]?.url || "";
-        const blacklisted = isBlacklisted(url, storage.blacklist);
-        toggleEnabledUI(storage.enabled && !blacklisted);
-        if (blacklisted) {
-          setStatusMessage("Site is blacklisted.");
-        }
+  function renderForActiveTab() {
+    var currentRenderToken = ++renderToken;
 
+    chrome.storage.sync.get(storageDefaults, function (storage) {
+      if (currentRenderToken !== renderToken) return;
+
+      getActiveTabContext(function (context) {
+        if (currentRenderToken !== renderToken) return;
+
+        var url = context && context.url ? context.url : "";
         var siteRule = matchSiteRule(url, storage.siteRules);
-
-        var buttons = storage.popupMatchHoverControls
-          ? storage.controllerButtons
-          : storage.popupControllerButtons;
-
-        if (siteRule && Array.isArray(siteRule.popupControllerButtons) && siteRule.popupControllerButtons.length > 0) {
-          buttons = siteRule.popupControllerButtons;
-        }
-
-        if (!Array.isArray(buttons) || buttons.length === 0) {
-          buttons = defaultButtons;
-        }
-
-        buildControlBar(buttons);
-        querySpeed();
-
+        var blacklisted = isBlacklisted(url, storage.blacklist);
+        var siteDisabled = isSiteRuleDisabled(siteRule);
+        var siteAvailable =
+          storage.enabled !== false && !blacklisted && !siteDisabled;
         var showBar = storage.showPopupControlBar !== false;
+
         if (siteRule && siteRule.showPopupControlBar !== undefined) {
           showBar = siteRule.showPopupControlBar;
         }
-        setControlBarVisible(showBar);
+
+        toggleEnabledUI(storage.enabled !== false);
+        buildControlBar(resolvePopupButtons(storage, siteRule));
+        setControlBarVisible(siteAvailable && showBar);
+
+        if (blacklisted) {
+          setStatusMessage("Site is blacklisted.");
+          updateSpeedDisplay(1);
+          return;
+        }
+
+        if (siteDisabled) {
+          setStatusMessage("Speeder is disabled for this site.");
+          updateSpeedDisplay(1);
+          return;
+        }
+
+        clearStatusMessage();
+        if (siteAvailable) {
+          querySpeed();
+        } else {
+          updateSpeedDisplay(1);
+        }
       });
+    });
+  }
+
+  chrome.tabs.onActivated.addListener(function () {
+    renderForActiveTab();
+  });
+
+  chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
+    if (!tab || tab.active !== true) return;
+    if (changeInfo.url !== undefined || changeInfo.status === "complete") {
+      renderForActiveTab();
     }
-  );
+  });
+
+  chrome.storage.onChanged.addListener(function (changes, areaName) {
+    if (areaName !== "sync") return;
+    if (
+      changes.enabled ||
+      changes.showPopupControlBar ||
+      changes.controllerButtons ||
+      changes.popupMatchHoverControls ||
+      changes.popupControllerButtons ||
+      changes.siteRules ||
+      changes.blacklist
+    ) {
+      renderForActiveTab();
+    }
+  });
+
+  renderForActiveTab();
 
   function toggleEnabled(enabled, callback) {
     chrome.storage.sync.set({ enabled: enabled }, function () {
@@ -275,5 +375,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const status_element = document.querySelector("#status");
     status_element.classList.toggle("hide", false);
     status_element.innerText = str;
+  }
+
+  function clearStatusMessage() {
+    const status_element = document.querySelector("#status");
+    status_element.classList.toggle("hide", true);
+    status_element.innerText = "";
   }
 });

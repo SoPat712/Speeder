@@ -932,7 +932,7 @@ function createSiteRule(rule) {
     }
   });
 
-  if (rule && Array.isArray(rule.controllerButtons) && rule.controllerButtons.length > 0) {
+  if (rule && Array.isArray(rule.controllerButtons)) {
     ruleEl.querySelector(".override-controlbar").checked = true;
     var cbContainer = ruleEl.querySelector(".site-controlbar-container");
     cbContainer.style.display = "block";
@@ -943,7 +943,7 @@ function createSiteRule(rule) {
     );
   }
 
-  if (rule && Array.isArray(rule.popupControllerButtons) && rule.popupControllerButtons.length > 0) {
+  if (rule && Array.isArray(rule.popupControllerButtons)) {
     ruleEl.querySelector(".override-popup-controlbar").checked = true;
     var popupCbContainer = ruleEl.querySelector(".site-popup-controlbar-container");
     popupCbContainer.style.display = "block";
@@ -1085,8 +1085,15 @@ function getDragAfterElement(container, x, y) {
 }
 
 function initControlBarEditor() {
-  var zones = document.querySelectorAll(".cb-dropzone");
   var draggedBlock = null;
+
+  function clearControlBarDropTargets(activeZone) {
+    document.querySelectorAll(".cb-dropzone.cb-over").forEach(function (zone) {
+      if (zone !== activeZone) {
+        zone.classList.remove("cb-over");
+      }
+    });
+  }
 
   document.addEventListener("dragstart", function (e) {
     var block = e.target.closest(".cb-block");
@@ -1104,36 +1111,40 @@ function initControlBarEditor() {
     if (!block) return;
     block.classList.remove("cb-dragging");
     draggedBlock = null;
-    zones.forEach(function (zone) {
-      zone.classList.remove("cb-over");
-    });
+    clearControlBarDropTargets(null);
   });
 
-  zones.forEach(function (zone) {
-    zone.addEventListener("dragover", function (e) {
-      e.preventDefault();
+  document.addEventListener("dragover", function (e) {
+    var zone = e.target.closest(".cb-dropzone");
+    if (!zone) {
+      clearControlBarDropTargets(null);
+      return;
+    }
+
+    e.preventDefault();
+    if (e.dataTransfer) {
       e.dataTransfer.dropEffect = "move";
-      zone.classList.add("cb-over");
+    }
+    clearControlBarDropTargets(zone);
+    zone.classList.add("cb-over");
 
-      if (!draggedBlock) return;
+    if (!draggedBlock) return;
 
-      var afterEl = getDragAfterElement(zone, e.clientX, e.clientY);
-      if (afterEl) {
-        zone.insertBefore(draggedBlock, afterEl);
-      } else {
-        zone.appendChild(draggedBlock);
-      }
-    });
+    var afterEl = getDragAfterElement(zone, e.clientX, e.clientY);
+    if (afterEl) {
+      zone.insertBefore(draggedBlock, afterEl);
+    } else {
+      zone.appendChild(draggedBlock);
+    }
+  });
 
-    zone.addEventListener("dragleave", function (e) {
-      if (zone.contains(e.relatedTarget)) return;
-      zone.classList.remove("cb-over");
-    });
-
-    zone.addEventListener("drop", function (e) {
+  document.addEventListener("drop", function (e) {
+    var zone = e.target.closest(".cb-dropzone");
+    if (zone) {
       e.preventDefault();
-      zone.classList.remove("cb-over");
-    });
+    }
+
+    clearControlBarDropTargets(null);
   });
 }
 
@@ -1223,21 +1234,17 @@ function restore_options() {
       });
     }
 
-    var controllerButtons =
-      Array.isArray(storage.controllerButtons) &&
-      storage.controllerButtons.length > 0
-        ? storage.controllerButtons
-        : tcDefaults.controllerButtons;
+    var controllerButtons = Array.isArray(storage.controllerButtons)
+      ? storage.controllerButtons
+      : tcDefaults.controllerButtons;
     populateControlBarEditor(controllerButtons);
 
     document.getElementById("popupMatchHoverControls").checked =
       storage.popupMatchHoverControls !== false;
 
-    var popupButtons =
-      Array.isArray(storage.popupControllerButtons) &&
-      storage.popupControllerButtons.length > 0
-        ? storage.popupControllerButtons
-        : tcDefaults.popupControllerButtons;
+    var popupButtons = Array.isArray(storage.popupControllerButtons)
+      ? storage.popupControllerButtons
+      : tcDefaults.popupControllerButtons;
     populatePopupControlBarEditor(popupButtons);
     updatePopupEditorDisabledState();
   });
@@ -1368,10 +1375,16 @@ document.addEventListener("DOMContentLoaded", function () {
       if (event.target.checked) {
         cbContainer.style.display = "block";
         var activeZone = cbContainer.querySelector(".site-cb-active");
-        if (activeZone && activeZone.children.length === 0) {
+        var availableZone = cbContainer.querySelector(".site-cb-available");
+        if (
+          activeZone &&
+          availableZone &&
+          activeZone.children.length === 0 &&
+          availableZone.children.length === 0
+        ) {
           populateControlBarZones(
             activeZone,
-            cbContainer.querySelector(".site-cb-available"),
+            availableZone,
             getControlBarOrder()
           );
         }
@@ -1387,10 +1400,16 @@ document.addEventListener("DOMContentLoaded", function () {
       if (event.target.checked) {
         popupCbContainer.style.display = "block";
         var popupActiveZone = popupCbContainer.querySelector(".site-popup-cb-active");
-        if (popupActiveZone && popupActiveZone.children.length === 0) {
+        var popupAvailableZone = popupCbContainer.querySelector(".site-popup-cb-available");
+        if (
+          popupActiveZone &&
+          popupAvailableZone &&
+          popupActiveZone.children.length === 0 &&
+          popupAvailableZone.children.length === 0
+        ) {
           populateControlBarZones(
             popupActiveZone,
-            popupCbContainer.querySelector(".site-popup-cb-available"),
+            popupAvailableZone,
             getPopupControlBarOrder()
           );
         }

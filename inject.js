@@ -1065,6 +1065,8 @@ chrome.storage.sync.get(tc.settings, function (storage) {
             }
           }
           sendResponse({ speed: speed });
+        } else if (request.action === "get_page_context") {
+          sendResponse({ url: location.href });
         } else if (request.action === "run_action") {
           var value = request.value;
           if (value === undefined || value === null) {
@@ -1793,7 +1795,7 @@ function applySiteRuleOverrides() {
     }
   });
 
-  if (Array.isArray(matchedRule.controllerButtons) && matchedRule.controllerButtons.length > 0) {
+  if (Array.isArray(matchedRule.controllerButtons)) {
     log(`Overriding controllerButtons for site`, 4);
     tc.settings.controllerButtons = matchedRule.controllerButtons;
   }

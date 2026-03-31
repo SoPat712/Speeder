@@ -335,19 +335,36 @@ function convertControllerToManualPosition(videoController) {
   var controller = getControllerElement(videoController);
   if (!controller) return null;
 
+  controller.dataset.positionMode = "manual";
+
   var offsetParent = controller.offsetParent;
   if (offsetParent) {
     var controllerRect = controller.getBoundingClientRect();
     var offsetParentRect = offsetParent.getBoundingClientRect();
 
-    controller.style.left = controllerRect.left - offsetParentRect.left + "px";
-    controller.style.top = controllerRect.top - offsetParentRect.top + "px";
+    controller.style.setProperty(
+      "left",
+      controllerRect.left - offsetParentRect.left + "px",
+      "important"
+    );
+    controller.style.setProperty(
+      "top",
+      controllerRect.top - offsetParentRect.top + "px",
+      "important"
+    );
   } else {
-    controller.style.left = controller.offsetLeft + "px";
-    controller.style.top = controller.offsetTop + "px";
+    controller.style.setProperty(
+      "left",
+      controller.offsetLeft + "px",
+      "important"
+    );
+    controller.style.setProperty(
+      "top",
+      controller.offsetTop + "px",
+      "important"
+    );
   }
-  controller.style.transform = "none";
-  controller.dataset.positionMode = "manual";
+  controller.style.setProperty("transform", "none", "important");
 
   return controller;
 }
@@ -2451,9 +2468,16 @@ function handleDrag(video, e) {
   const iXY = [e.clientX, e.clientY],
     iCXY = [parseInt(sC.style.left), parseInt(sC.style.top)];
   const sD = (e) => {
-    let s = sC.style;
-    s.left = iCXY[0] + e.clientX - iXY[0] + "px";
-    s.top = iCXY[1] + e.clientY - iXY[1] + "px";
+    sC.style.setProperty(
+      "left",
+      iCXY[0] + e.clientX - iXY[0] + "px",
+      "important"
+    );
+    sC.style.setProperty(
+      "top",
+      iCXY[1] + e.clientY - iXY[1] + "px",
+      "important"
+    );
   };
   const eD = () => {
     pE.removeEventListener("mousemove", sD);

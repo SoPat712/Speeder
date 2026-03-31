@@ -1,15 +1,14 @@
 name: Build & Release Firefox Addon
 
+# Trigger only on tags
 on:
   push:
-    branches: [main, beta] # dev is ignored
+    tags:
+      - "v*" # any tag starting with v
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    outputs:
-      version: ${{ steps.version.outputs.version }}
 
     steps:
       # 1️⃣ Checkout code
@@ -19,41 +18,41 @@ jobs:
       - name: Install deps
         run: npm install -g web-ext
 
-      # 3️⃣ Auto version bump (numeric only)
-      - name: Generate version
-        id: version
-        run: |
-          BASE=$(jq -r .version manifest.json)
-          VERSION="${BASE}.${GITHUB_RUN_NUMBER}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          jq ".version = \"$VERSION\"" manifest.json > tmp.json
-          mv tmp.json manifest.json
-
-      # 4️⃣ Build XPI
+      # 3️⃣ Build XPI
       - name: Build extension
-        run: web-ext build
+        run: web-ext build --overwrite-dest
 
-      # 5️⃣ Get built XPI path
+      # 4️⃣ Get built XPI path
       - name: Get XPI path
         id: xpi
         run: |
           FILE=$(ls web-ext-artifacts/*.xpi | head -n 1)
           echo "file=$FILE" >> $GITHUB_OUTPUT
 
-      # 6️⃣ GitHub Release (both main and beta)
+      # 5️⃣ Determine if prerelease or main
+      - name: Determine release type
+        id: release_type
+        run: |
+          if [[ "${GITHUB_REF#refs/tags/}" == *"-beta"* ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      # 6️⃣ Create GitHub Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: v${{ steps.version.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: ${{ steps.xpi.outputs.file }}
-          prerelease: ${{ github.ref == 'refs/heads/beta' }}
+          prerelease: ${{ steps.release_type.outputs.prerelease }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # 7️⃣ AMO deploy (main only)
       - name: Sign & Upload to AMO
-        if: github.ref == 'refs/heads/main'
+        if: steps.release_type.outputs.prerelease == 'false'
         run: |
           web-ext sign \
             --api-key ${{ secrets.FIREFOX_API_KEY }} \

@@ -20,6 +20,7 @@ var tc = {
     controllerOpacity: 0.3,
     keyBindings: [],
     siteRules: [],
+    controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
     defaultLogLevel: 3,
     logLevel: 3,
     enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
@@ -98,6 +99,21 @@ var controllerLocationStyles = {
     left: "15px",
     transform: "translate(0, -50%)"
   }
+};
+
+var controllerButtonDefs = {
+  rewind:   { label: "\u00AB", className: "rw" },
+  slower:   { label: "\u2212", className: "" },
+  faster:   { label: "+",      className: "" },
+  advance:  { label: "\u00BB", className: "rw" },
+  display:  { label: "\u00D7", className: "hideButton" },
+  reset:    { label: "\u21BA", className: "" },
+  fast:     { label: "\u2605", className: "" },
+  settings: { label: "\u2699", className: "" },
+  pause:    { label: "\u23EF", className: "" },
+  muted:    { label: "M",      className: "" },
+  mark:     { label: "\u2691", className: "" },
+  jump:     { label: "\u21E5", className: "" }
 };
 
 var keyCodeToEventKey = {
@@ -519,11 +535,7 @@ function tryYouTubeNativeSpeed(video, speed) {
 }
 
 function isSubtitleNudgeSupported(video) {
-  return Boolean(
-    video &&
-    ((video.currentSrc && video.currentSrc.includes("googlevideo.com")) ||
-      isOnYouTube())
-  );
+  return Boolean(video);
 }
 
 function isSubtitleNudgeEnabledForVideo(video) {
@@ -566,31 +578,24 @@ function setSubtitleNudgeEnabledForVideo(video, enabled) {
 function updateSubtitleNudgeIndicator(video) {
   if (!video || !video.vsc) return;
 
-  var isSupported = isSubtitleNudgeSupported(video);
-  var isEnabled = isSupported && isSubtitleNudgeEnabledForVideo(video);
+  var isEnabled = isSubtitleNudgeEnabledForVideo(video);
   var label = isEnabled ? "✓" : "×";
-  var title = isSupported
-    ? isEnabled
-      ? "Subtitle nudge enabled"
-      : "Subtitle nudge disabled"
-    : "Subtitle nudge unavailable on this site";
+  var title = isEnabled ? "Subtitle nudge enabled" : "Subtitle nudge disabled";
 
-  // Update the hover indicator (inside #controls)
   var indicator = video.vsc.subtitleNudgeIndicator;
   if (indicator) {
     indicator.textContent = label;
     indicator.dataset.enabled = isEnabled ? "true" : "false";
-    indicator.dataset.supported = isSupported ? "true" : "false";
+    indicator.dataset.supported = "true";
     indicator.title = title;
     indicator.setAttribute("aria-label", title);
   }
 
-  // Sync the flash indicator (next to speed text)
   var flashEl = video.vsc.nudgeFlashIndicator;
   if (flashEl) {
     flashEl.textContent = label;
     flashEl.dataset.enabled = isEnabled ? "true" : "false";
-    flashEl.dataset.supported = isSupported ? "true" : "false";
+    flashEl.dataset.supported = "true";
   }
 }
 
@@ -969,6 +974,10 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     ? storage.siteRules
     : [];
 
+  tc.settings.controllerButtons = Array.isArray(storage.controllerButtons)
+    ? storage.controllerButtons
+    : tc.settings.controllerButtons;
+
   // Migrate legacy blacklist if present
   if (storage.blacklist && typeof storage.blacklist === "string" && tc.settings.siteRules.length === 0) {
     var lines = storage.blacklist.split("\n");
@@ -1021,15 +1030,37 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   if (!window.vscMessageListener) {
     chrome.runtime.onMessage.addListener(
       function (request, sender, sendResponse) {
-        // Check if the message is a request to re-scan the page.
         if (request.action === "rescan_page") {
           log("Re-scan command received from popup.", 4);
           initializeWhenReady(document, true);
-
           sendResponse({ status: "complete" });
+        } else if (request.action === "get_speed") {
+          var speed = 1.0;
+          if (tc.mediaElements && tc.mediaElements.length > 0) {
+            for (var i = 0; i < tc.mediaElements.length; i++) {
+              if (tc.mediaElements[i] && !tc.mediaElements[i].paused) {
+                speed = tc.mediaElements[i].playbackRate;
+                break;
+              }
+            }
+            if (speed === 1.0 && tc.mediaElements[0]) {
+              speed = tc.mediaElements[0].playbackRate;
+            }
+          }
+          sendResponse({ speed: speed });
+        } else if (request.action === "run_action") {
+          var value = request.value;
+          if (value === undefined || value === null) {
+            value = getKeyBindings(request.actionName, "value");
+          }
+          runAction(request.actionName, value);
+          var newSpeed = 1.0;
+          if (tc.mediaElements && tc.mediaElements.length > 0) {
+            newSpeed = tc.mediaElements[0].playbackRate;
+          }
+          sendResponse({ speed: newSpeed });
         }
 
-        // Required to allow for asynchronous responses.
         return true;
       }
     );
@@ -1513,36 +1544,46 @@ function defineVideoController() {
 
     var controls = doc.createElement("span");
     controls.id = "controls";
-    controls.appendChild(createControllerButton(doc, "rewind", "«", "rw"));
-    controls.appendChild(createControllerButton(doc, "slower", "−"));
-    controls.appendChild(createControllerButton(doc, "faster", "+"));
-    controls.appendChild(createControllerButton(doc, "advance", "»", "rw"));
-    controls.appendChild(
-      createControllerButton(doc, "display", "×", "hideButton")
-    );
 
-    var subtitleNudgeIndicator = doc.createElement("span");
-    subtitleNudgeIndicator.id = "nudge-indicator";
-    subtitleNudgeIndicator.setAttribute("role", "button");
-    subtitleNudgeIndicator.setAttribute("aria-live", "polite");
-    subtitleNudgeIndicator.setAttribute("tabindex", "0");
+    var buttonConfig = Array.isArray(tc.settings.controllerButtons)
+      ? tc.settings.controllerButtons
+      : ["rewind", "slower", "faster", "advance", "display"];
 
-    // A second indicator that lives outside #controls, next to the speed text.
-    // Hidden by default, briefly shown when N is pressed to flash the state.
+    var subtitleNudgeIndicator = null;
+
+    buttonConfig.forEach(function (btnId) {
+      if (btnId === "nudge") {
+        subtitleNudgeIndicator = doc.createElement("span");
+        subtitleNudgeIndicator.id = "nudge-indicator";
+        subtitleNudgeIndicator.setAttribute("role", "button");
+        subtitleNudgeIndicator.setAttribute("aria-live", "polite");
+        subtitleNudgeIndicator.setAttribute("tabindex", "0");
+        controls.appendChild(subtitleNudgeIndicator);
+      } else {
+        var def = controllerButtonDefs[btnId];
+        if (def) {
+          controls.appendChild(
+            createControllerButton(doc, btnId, def.label, def.className)
+          );
+        }
+      }
+    });
+
     var nudgeFlashIndicator = doc.createElement("span");
     nudgeFlashIndicator.id = "nudge-flash-indicator";
     nudgeFlashIndicator.setAttribute("aria-hidden", "true");
 
     controller.appendChild(dragHandle);
     controller.appendChild(nudgeFlashIndicator);
-    controls.appendChild(subtitleNudgeIndicator);
     controller.appendChild(controls);
     shadow.appendChild(controller);
 
     this.speedIndicator = dragHandle;
     this.subtitleNudgeIndicator = subtitleNudgeIndicator;
     this.nudgeFlashIndicator = nudgeFlashIndicator;
-    updateSubtitleNudgeIndicator(this.video);
+    if (subtitleNudgeIndicator) {
+      updateSubtitleNudgeIndicator(this.video);
+    }
     dragHandle.addEventListener(
       "mousedown",
       (e) => {
@@ -1569,21 +1610,23 @@ function defineVideoController() {
         true
       );
     });
-    subtitleNudgeIndicator.addEventListener(
-      "click",
-      (e) => {
-        var video = this.video;
-        if (video) {
-          var newState = !isSubtitleNudgeEnabledForVideo(video);
-          setSubtitleNudgeEnabledForVideo(video, newState);
-        }
-        e.stopPropagation();
-      },
-      true
-    );
+    if (subtitleNudgeIndicator) {
+      subtitleNudgeIndicator.addEventListener(
+        "click",
+        (e) => {
+          var video = this.video;
+          if (video) {
+            var newState = !isSubtitleNudgeEnabledForVideo(video);
+            setSubtitleNudgeEnabledForVideo(video, newState);
+          }
+          e.stopPropagation();
+        },
+        true
+      );
+    }
     controller.addEventListener("click", (e) => e.stopPropagation(), false);
     controller.addEventListener("mousedown", (e) => e.stopPropagation(), false);
-    
+
     // Setup auto-hide observers if enabled
     if (tc.settings.hideWithControls) {
       if (isOnYouTube()) {
@@ -1721,7 +1764,9 @@ function applySiteRuleOverrides() {
     "rememberSpeed",
     "forceLastSavedSpeed",
     "audioBoolean",
-    "controllerOpacity"
+    "controllerOpacity",
+    "enableSubtitleNudge",
+    "subtitleNudgeInterval"
   ];
 
   siteSettings.forEach((key) => {
@@ -1730,6 +1775,11 @@ function applySiteRuleOverrides() {
       tc.settings[key] = matchedRule[key];
     }
   });
+
+  if (Array.isArray(matchedRule.controllerButtons) && matchedRule.controllerButtons.length > 0) {
+    log(`Overriding controllerButtons for site`, 4);
+    tc.settings.controllerButtons = matchedRule.controllerButtons;
+  }
 
   // Override key bindings with site-specific shortcuts
   if (Array.isArray(matchedRule.shortcuts) && matchedRule.shortcuts.length > 0) {
@@ -2182,6 +2232,10 @@ function runAction(action, value, e) {
     }
   } else {
     mediaTagsToProcess = tc.mediaElements;
+  }
+  if (action === "settings") {
+    chrome.runtime.sendMessage({ action: "openOptions" });
+    return;
   }
   if (mediaTagsToProcess.length === 0 && action !== "display") return;
 

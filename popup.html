@@ -1,21 +1,42 @@
 <!doctype html>
 <html>
   <head>
-    <title>Video Speed Controller: Popup</title>
+    <meta charset="utf-8" />
+    <title>Speeder</title>
     <link rel="stylesheet" href="popup.css" />
     <script src="popup.js"></script>
   </head>
   <body>
-    <button id="refresh">Re-scan Page for Videos</button>
-    <hr />
-    <button id="enable" class="hide">Enable</button>
-    <button id="disable">Disable</button>
-    <span id="status" class="hide"></span>
-    <hr />
-    <button id="config">Settings</button>
-    <hr />
-    <button id="feedback" class="secondary">Send feedback</button>
-    <button id="about" class="secondary">About</button>
-    <div class="version">Version <span id="app-version"></span></div>
+    <div class="popup-shell">
+      <div class="popup-header">
+        <span class="popup-title">Speeder</span>
+        <span class="popup-version">v<span id="app-version"></span></span>
+      </div>
+      <div class="popup-actions">
+        <button id="refresh">Rescan page for videos</button>
+        <div class="popup-divider"></div>
+        <div id="popupControlBar" class="popup-control-bar">
+          <span id="popupSpeed" class="popup-speed">1.00</span>
+        </div>
+        <div class="popup-divider"></div>
+        <button id="enable" class="hide">Enable</button>
+        <button id="disable">Disable</button>
+      </div>
+      <div id="status" class="popup-status hide"></div>
+      <div class="popup-links">
+        <button id="config">Settings</button>
+        <div class="popup-secondary">
+          <button id="feedback" class="secondary">Feedback</button>
+          <button id="about" class="secondary">About</button>
+        </div>
+        <div id="donateWrap" class="donate-wrap">
+          <button id="donate" class="secondary">Donate</button>
+          <div id="donateOptions" class="donate-split hide">
+            <button id="donateKofi" class="secondary">Ko-fi</button>
+            <button id="donateGithub" class="secondary">Sponsors</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

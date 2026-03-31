@@ -132,6 +132,22 @@ var controllerLocations = [
   "middle-left"
 ];
 
+var controllerButtonDefs = {
+  rewind:   { icon: "\u00AB", name: "Rewind" },
+  slower:   { icon: "\u2212", name: "Decrease speed" },
+  faster:   { icon: "+",      name: "Increase speed" },
+  advance:  { icon: "\u00BB", name: "Advance" },
+  display:  { icon: "\u00D7", name: "Close controller" },
+  reset:    { icon: "\u21BA", name: "Reset speed" },
+  fast:     { icon: "\u2605", name: "Preferred speed" },
+  nudge:    { icon: "\u2713", name: "Subtitle nudge" },
+  settings: { icon: "\u2699", name: "Settings" },
+  pause:    { icon: "\u23EF", name: "Pause / Play" },
+  muted:    { icon: "M",      name: "Mute / Unmute" },
+  mark:     { icon: "\u2691", name: "Set marker" },
+  jump:     { icon: "\u21E5", name: "Jump to marker" }
+};
+
 function createDefaultBinding(action, key, keyCode, value) {
   return {
     action: action,
@@ -169,11 +185,16 @@ var tcDefaults = {
     createDefaultBinding("toggleSubtitleNudge", "N", 78, 0)
   ],
   siteRules: [
+    { pattern: "youtube.com", enabled: true, enableSubtitleNudge: true },
     { pattern: "example1.com", enabled: false },
     { pattern: "/example2\\.com/i", enabled: false },
     { pattern: "/(example3|sample3)\\.com/gi", enabled: false }
   ],
-  enableSubtitleNudge: true,
+  controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
+  showPopupControlBar: true,
+  popupMatchHoverControls: true,
+  popupControllerButtons: ["rewind", "slower", "faster", "advance", "display"],
+  enableSubtitleNudge: false,
   subtitleNudgeInterval: 50,
   subtitleNudgeAmount: 0.001
 };
@@ -608,6 +629,13 @@ function save_options() {
     settings.subtitleNudgeInterval = 1000;
   }
 
+  settings.controllerButtons = getControlBarOrder();
+  settings.showPopupControlBar =
+    document.getElementById("showPopupControlBar").checked;
+  settings.popupMatchHoverControls =
+    document.getElementById("popupMatchHoverControls").checked;
+  settings.popupControllerButtons = getPopupControlBarOrder();
+
   // Collect site rules
   settings.siteRules = [];
   document.querySelectorAll(".site-rule").forEach((ruleEl) => {
@@ -628,17 +656,45 @@ function save_options() {
       { key: "rememberSpeed", type: "checkbox" },
       { key: "forceLastSavedSpeed", type: "checkbox" },
       { key: "audioBoolean", type: "checkbox" },
-      { key: "controllerOpacity", type: "text" }
+      { key: "controllerOpacity", type: "text" },
+      { key: "showPopupControlBar", type: "checkbox" },
+      { key: "enableSubtitleNudge", type: "checkbox" },
+      { key: "subtitleNudgeInterval", type: "text" }
     ];
 
     siteSettings.forEach((s) => {
       var input = ruleEl.querySelector(`.site-${s.key}`);
+      if (!input) return;
+      var siteValue;
       if (s.type === "checkbox") {
-        rule[s.key] = input.checked;
+        siteValue = input.checked;
       } else {
-        rule[s.key] = input.value;
+        siteValue = input.value;
+      }
+      var globalInput = document.getElementById(s.key);
+      if (globalInput) {
+        var globalValue = s.type === "checkbox" ? globalInput.checked : globalInput.value;
+        if (String(siteValue) !== String(globalValue)) {
+          rule[s.key] = siteValue;
+        }
+      } else {
+        rule[s.key] = siteValue;
       }
     });
+
+    if (ruleEl.querySelector(".override-controlbar").checked) {
+      var activeZone = ruleEl.querySelector(".site-cb-active");
+      if (activeZone) {
+        rule.controllerButtons = readControlBarOrder(activeZone);
+      }
+    }
+
+    if (ruleEl.querySelector(".override-popup-controlbar").checked) {
+      var popupActiveZone = ruleEl.querySelector(".site-popup-cb-active");
+      if (popupActiveZone) {
+        rule.popupControllerButtons = readControlBarOrder(popupActiveZone);
+      }
+    }
 
     if (ruleEl.querySelector(".override-shortcuts").checked) {
       var shortcuts = [];
@@ -844,7 +900,10 @@ function createSiteRule(rule) {
     { key: "rememberSpeed", type: "checkbox" },
     { key: "forceLastSavedSpeed", type: "checkbox" },
     { key: "audioBoolean", type: "checkbox" },
-    { key: "controllerOpacity", type: "text" }
+    { key: "controllerOpacity", type: "text" },
+    { key: "showPopupControlBar", type: "checkbox" },
+    { key: "enableSubtitleNudge", type: "checkbox" },
+    { key: "subtitleNudgeInterval", type: "text" }
   ];
 
   settings.forEach((s) => {
@@ -873,6 +932,28 @@ function createSiteRule(rule) {
     }
   });
 
+  if (rule && Array.isArray(rule.controllerButtons) && rule.controllerButtons.length > 0) {
+    ruleEl.querySelector(".override-controlbar").checked = true;
+    var cbContainer = ruleEl.querySelector(".site-controlbar-container");
+    cbContainer.style.display = "block";
+    populateControlBarZones(
+      ruleEl.querySelector(".site-cb-active"),
+      ruleEl.querySelector(".site-cb-available"),
+      rule.controllerButtons
+    );
+  }
+
+  if (rule && Array.isArray(rule.popupControllerButtons) && rule.popupControllerButtons.length > 0) {
+    ruleEl.querySelector(".override-popup-controlbar").checked = true;
+    var popupCbContainer = ruleEl.querySelector(".site-popup-controlbar-container");
+    popupCbContainer.style.display = "block";
+    populateControlBarZones(
+      ruleEl.querySelector(".site-popup-cb-active"),
+      ruleEl.querySelector(".site-popup-cb-available"),
+      rule.popupControllerButtons
+    );
+  }
+
   if (rule && Array.isArray(rule.shortcuts) && rule.shortcuts.length > 0) {
     ruleEl.querySelector(".override-shortcuts").checked = true;
     var container = ruleEl.querySelector(".site-shortcuts-container");
@@ -898,6 +979,164 @@ function populateDefaultSiteShortcuts(container) {
   });
 }
 
+function createControlBarBlock(buttonId) {
+  var def = controllerButtonDefs[buttonId];
+  if (!def) return null;
+
+  var block = document.createElement("div");
+  block.className = "cb-block";
+  block.dataset.buttonId = buttonId;
+  block.draggable = true;
+
+  var grip = document.createElement("span");
+  grip.className = "cb-grip";
+
+  var icon = document.createElement("span");
+  icon.className = "cb-icon";
+  icon.textContent = def.icon;
+
+  var label = document.createElement("span");
+  label.className = "cb-label";
+  label.textContent = def.name;
+
+  block.appendChild(grip);
+  block.appendChild(icon);
+  block.appendChild(label);
+
+  return block;
+}
+
+function populateControlBarZones(activeZone, availableZone, activeIds) {
+  activeZone.innerHTML = "";
+  availableZone.innerHTML = "";
+
+  activeIds.forEach(function (id) {
+    var block = createControlBarBlock(id);
+    if (block) activeZone.appendChild(block);
+  });
+
+  Object.keys(controllerButtonDefs).forEach(function (id) {
+    if (!activeIds.includes(id)) {
+      var block = createControlBarBlock(id);
+      if (block) availableZone.appendChild(block);
+    }
+  });
+}
+
+function readControlBarOrder(activeZone) {
+  var blocks = activeZone.querySelectorAll(".cb-block");
+  return Array.from(blocks).map(function (block) {
+    return block.dataset.buttonId;
+  });
+}
+
+function populateControlBarEditor(activeIds) {
+  populateControlBarZones(
+    document.getElementById("controlBarActive"),
+    document.getElementById("controlBarAvailable"),
+    activeIds
+  );
+}
+
+function getControlBarOrder() {
+  return readControlBarOrder(document.getElementById("controlBarActive"));
+}
+
+function populatePopupControlBarEditor(activeIds) {
+  populateControlBarZones(
+    document.getElementById("popupControlBarActive"),
+    document.getElementById("popupControlBarAvailable"),
+    activeIds
+  );
+}
+
+function getPopupControlBarOrder() {
+  return readControlBarOrder(document.getElementById("popupControlBarActive"));
+}
+
+function updatePopupEditorDisabledState() {
+  var checkbox = document.getElementById("popupMatchHoverControls");
+  var wrap = document.getElementById("popupCbEditorWrap");
+  if (!checkbox || !wrap) return;
+  if (checkbox.checked) {
+    wrap.classList.add("cb-editor-disabled");
+  } else {
+    wrap.classList.remove("cb-editor-disabled");
+  }
+}
+
+function getDragAfterElement(container, x, y) {
+  var elements = Array.from(
+    container.querySelectorAll(".cb-block:not(.cb-dragging)")
+  );
+
+  for (var i = 0; i < elements.length; i++) {
+    var box = elements[i].getBoundingClientRect();
+    var centerX = box.left + box.width / 2;
+    var centerY = box.top + box.height / 2;
+    var rowThresh = box.height * 0.5;
+
+    if (y - centerY > rowThresh) continue;
+    if (centerY - y > rowThresh) return elements[i];
+    if (x < centerX) return elements[i];
+  }
+
+  return undefined;
+}
+
+function initControlBarEditor() {
+  var zones = document.querySelectorAll(".cb-dropzone");
+  var draggedBlock = null;
+
+  document.addEventListener("dragstart", function (e) {
+    var block = e.target.closest(".cb-block");
+    if (!block) return;
+    draggedBlock = block;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", block.dataset.buttonId);
+    requestAnimationFrame(function () {
+      block.classList.add("cb-dragging");
+    });
+  });
+
+  document.addEventListener("dragend", function (e) {
+    var block = e.target.closest(".cb-block");
+    if (!block) return;
+    block.classList.remove("cb-dragging");
+    draggedBlock = null;
+    zones.forEach(function (zone) {
+      zone.classList.remove("cb-over");
+    });
+  });
+
+  zones.forEach(function (zone) {
+    zone.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      zone.classList.add("cb-over");
+
+      if (!draggedBlock) return;
+
+      var afterEl = getDragAfterElement(zone, e.clientX, e.clientY);
+      if (afterEl) {
+        zone.insertBefore(draggedBlock, afterEl);
+      } else {
+        zone.appendChild(draggedBlock);
+      }
+    });
+
+    zone.addEventListener("dragleave", function (e) {
+      if (zone.contains(e.relatedTarget)) return;
+      zone.classList.remove("cb-over");
+    });
+
+    zone.addEventListener("drop", function (e) {
+      e.preventDefault();
+      zone.classList.remove("cb-over");
+    });
+  });
+}
+
 function restore_options() {
   chrome.storage.sync.get(tcDefaults, function (storage) {
     document.getElementById("rememberSpeed").checked = storage.rememberSpeed;
@@ -906,7 +1145,7 @@ function restore_options() {
     document.getElementById("audioBoolean").checked = storage.audioBoolean;
     document.getElementById("enabled").checked = storage.enabled;
     document.getElementById("startHidden").checked = storage.startHidden;
-    
+
     // Migration/Normalization for hideWithControls
     const hideWithControls = typeof storage.hideWithControls !== "undefined"
       ? storage.hideWithControls
@@ -920,6 +1159,8 @@ function restore_options() {
       normalizeControllerLocation(storage.controllerLocation);
     document.getElementById("controllerOpacity").value =
       storage.controllerOpacity;
+    document.getElementById("showPopupControlBar").checked =
+      storage.showPopupControlBar !== false;
     document.getElementById("enableSubtitleNudge").checked =
       storage.enableSubtitleNudge;
     document.getElementById("subtitleNudgeInterval").value =
@@ -981,6 +1222,24 @@ function restore_options() {
         }
       });
     }
+
+    var controllerButtons =
+      Array.isArray(storage.controllerButtons) &&
+      storage.controllerButtons.length > 0
+        ? storage.controllerButtons
+        : tcDefaults.controllerButtons;
+    populateControlBarEditor(controllerButtons);
+
+    document.getElementById("popupMatchHoverControls").checked =
+      storage.popupMatchHoverControls !== false;
+
+    var popupButtons =
+      Array.isArray(storage.popupControllerButtons) &&
+      storage.popupControllerButtons.length > 0
+        ? storage.popupControllerButtons
+        : tcDefaults.popupControllerButtons;
+    populatePopupControlBarEditor(popupButtons);
+    updatePopupEditorDisabledState();
   });
 }
 
@@ -1005,6 +1264,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   restore_options();
+  initControlBarEditor();
+
+  document.getElementById("popupMatchHoverControls")
+    .addEventListener("change", updatePopupEditorDisabledState);
+
   document.getElementById("save").addEventListener("click", save_options);
   
   const addSelector = document.getElementById("addShortcutSelector");
@@ -1094,6 +1358,44 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       } else {
         container.style.display = "none";
+      }
+    }
+
+    if (event.target.classList.contains("override-controlbar")) {
+      var cbContainer = event.target
+        .closest(".site-rule-controlbar")
+        .querySelector(".site-controlbar-container");
+      if (event.target.checked) {
+        cbContainer.style.display = "block";
+        var activeZone = cbContainer.querySelector(".site-cb-active");
+        if (activeZone && activeZone.children.length === 0) {
+          populateControlBarZones(
+            activeZone,
+            cbContainer.querySelector(".site-cb-available"),
+            getControlBarOrder()
+          );
+        }
+      } else {
+        cbContainer.style.display = "none";
+      }
+    }
+
+    if (event.target.classList.contains("override-popup-controlbar")) {
+      var popupCbContainer = event.target
+        .closest(".site-rule-controlbar")
+        .querySelector(".site-popup-controlbar-container");
+      if (event.target.checked) {
+        popupCbContainer.style.display = "block";
+        var popupActiveZone = popupCbContainer.querySelector(".site-popup-cb-active");
+        if (popupActiveZone && popupActiveZone.children.length === 0) {
+          populateControlBarZones(
+            popupActiveZone,
+            popupCbContainer.querySelector(".site-popup-cb-available"),
+            getPopupControlBarOrder()
+          );
+        }
+      } else {
+        popupCbContainer.style.display = "none";
       }
     }
   });

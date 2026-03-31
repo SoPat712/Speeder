@@ -177,33 +177,42 @@
             <h3>Defaults</h3>
             <p class="section-intro">Used unless a site rule overrides it.</p>
           </div>
+
+          <h4 class="defaults-sub-heading">General</h4>
+
           <div class="row">
             <label for="enabled">Enable</label>
             <input id="enabled" type="checkbox" />
           </div>
           <div class="row">
+            <label for="audioBoolean">Work on audio</label>
+            <input id="audioBoolean" type="checkbox" />
+          </div>
+
+          <div class="defaults-divider"></div>
+          <h4 class="defaults-sub-heading">Playback</h4>
+
+          <div class="row">
+            <label for="rememberSpeed">Remember playback speed</label>
+            <input id="rememberSpeed" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="forceLastSavedSpeed"
+              >Force last saved speed<br />
+              <em
+                >Useful when a video player tries to override the speed you set
+                in Speeder.</em
+              >
+            </label>
+            <input id="forceLastSavedSpeed" type="checkbox" />
+          </div>
+
+          <div class="defaults-divider"></div>
+          <h4 class="defaults-sub-heading">Controller</h4>
+
+          <div class="row">
             <label for="startHidden">Hide controller by default</label>
             <input id="startHidden" type="checkbox" />
-          </div>
-          <div class="row">
-            <label for="hideWithControls"
-              >Hide with controls (all sites)<br />
-              <em
-                >Fade the controller in and out with the video interface:
-                perfect sync on YouTube, idle-based elsewhere.</em
-              >
-            </label>
-            <input id="hideWithControls" type="checkbox" />
-          </div>
-          <div class="row">
-            <label for="hideWithControlsTimer"
-              >Auto-hide timer (seconds)<br />
-              <em
-                >Seconds of inactivity before hiding: 0.1&ndash;15 for non-YouTube
-                sites.</em
-              >
-            </label>
-            <input id="hideWithControlsTimer" type="text" placeholder="2" />
           </div>
           <div class="row">
             <label for="controllerLocation">Default controller location</label>
@@ -219,26 +228,113 @@
             </select>
           </div>
           <div class="row">
-            <label for="rememberSpeed">Remember playback speed</label>
-            <input id="rememberSpeed" type="checkbox" />
-          </div>
-          <div class="row">
-            <label for="forceLastSavedSpeed"
-              >Force last saved speed<br />
-              <em
-                >Useful when a video player tries to override the speed you set
-                in Speeder.</em
-              >
-            </label>
-            <input id="forceLastSavedSpeed" type="checkbox" />
-          </div>
-          <div class="row">
-            <label for="audioBoolean">Work on audio</label>
-            <input id="audioBoolean" type="checkbox" />
-          </div>
-          <div class="row">
             <label for="controllerOpacity">Controller opacity</label>
             <input id="controllerOpacity" type="text" value="" />
+          </div>
+          <div class="row">
+            <label for="hideWithControls"
+              >Hide with controls<br />
+              <em
+                >Fade the controller in and out with the video interface:
+                perfect sync on YouTube, idle-based elsewhere.</em
+              >
+            </label>
+            <input id="hideWithControls" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="hideWithControlsTimer"
+              >Auto-hide timer (seconds)<br />
+              <em
+                >Seconds of inactivity before hiding: 0.1&ndash;15 for
+                non-YouTube sites.</em
+              >
+            </label>
+            <input id="hideWithControlsTimer" type="text" placeholder="2" />
+          </div>
+          <div class="row">
+            <label for="showPopupControlBar">Show popup control bar</label>
+            <input id="showPopupControlBar" type="checkbox" />
+          </div>
+
+          <div class="defaults-divider"></div>
+          <h4 class="defaults-sub-heading">Subtitle sync</h4>
+
+          <div class="row">
+            <label for="enableSubtitleNudge"
+              >Enable subtitle nudge<br /><em
+                >Makes tiny playback changes to help keep subtitles aligned.</em
+              >
+            </label>
+            <input id="enableSubtitleNudge" type="checkbox" />
+          </div>
+          <div class="row">
+            <label for="subtitleNudgeInterval"
+              >Nudge interval (milliseconds)<br /><em
+                >How often to nudge: 10&ndash;1000. Smaller values are more
+                frequent. Default: 50.</em
+              >
+            </label>
+            <input
+              id="subtitleNudgeInterval"
+              type="text"
+              value=""
+              placeholder="50"
+            />
+          </div>
+        </section>
+
+        <section id="controlBarSettings" class="settings-card">
+          <div class="section-heading">
+            <h3>Control bar</h3>
+            <p class="section-intro">
+              Drag blocks to reorder. Move between Active and Available to show
+              or hide buttons.
+            </p>
+          </div>
+          <div class="cb-editor">
+            <div class="cb-zone">
+              <div class="cb-zone-label">Active</div>
+              <div
+                id="controlBarActive"
+                class="cb-dropzone cb-active-zone"
+              ></div>
+            </div>
+            <div class="cb-zone">
+              <div class="cb-zone-label">Available</div>
+              <div
+                id="controlBarAvailable"
+                class="cb-dropzone cb-available-zone"
+              ></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="popupControlBarSettings" class="settings-card">
+          <div class="section-heading">
+            <h3>Popup control bar</h3>
+            <p class="section-intro">
+              Configure which buttons appear in the browser popup control bar.
+            </p>
+          </div>
+          <div class="row">
+            <label for="popupMatchHoverControls">Match hover controls</label>
+            <input id="popupMatchHoverControls" type="checkbox" />
+          </div>
+          <div id="popupCbEditorWrap" class="cb-editor cb-editor-disabled">
+            <div class="cb-zone">
+              <div class="cb-zone-label">Active</div>
+              <div
+                id="popupControlBarActive"
+                class="cb-dropzone cb-active-zone"
+              ></div>
+            </div>
+            <div class="cb-zone">
+              <div class="cb-zone-label">Available</div>
+              <div
+                id="popupControlBarAvailable"
+                class="cb-dropzone cb-available-zone"
+              ></div>
+            </div>
           </div>
         </section>
 
@@ -322,6 +418,54 @@
                   <label>Controller opacity:</label>
                   <input type="text" class="site-controllerOpacity" />
                 </div>
+                <div class="site-rule-option">
+                  <label>Show popup control bar:</label>
+                  <input type="checkbox" class="site-showPopupControlBar" />
+                </div>
+                <div class="site-rule-option">
+                  <label>Enable subtitle nudge:</label>
+                  <input type="checkbox" class="site-enableSubtitleNudge" />
+                </div>
+                <div class="site-rule-option">
+                  <label>Nudge interval (10&ndash;1000ms):</label>
+                  <input type="text" class="site-subtitleNudgeInterval" placeholder="50" />
+                </div>
+                <div class="site-rule-controlbar">
+                  <label>
+                    <input type="checkbox" class="override-controlbar" />
+                    Custom control bar for this site
+                  </label>
+                  <div class="site-controlbar-container" style="display: none">
+                    <div class="cb-editor">
+                      <div class="cb-zone">
+                        <div class="cb-zone-label">Active</div>
+                        <div class="cb-dropzone cb-active-zone site-cb-active"></div>
+                      </div>
+                      <div class="cb-zone">
+                        <div class="cb-zone-label">Available</div>
+                        <div class="cb-dropzone cb-available-zone site-cb-available"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="site-rule-controlbar">
+                  <label>
+                    <input type="checkbox" class="override-popup-controlbar" />
+                    Custom popup control bar for this site
+                  </label>
+                  <div class="site-popup-controlbar-container" style="display: none">
+                    <div class="cb-editor">
+                      <div class="cb-zone">
+                        <div class="cb-zone-label">Active</div>
+                        <div class="cb-dropzone cb-active-zone site-popup-cb-active"></div>
+                      </div>
+                      <div class="cb-zone">
+                        <div class="cb-zone-label">Available</div>
+                        <div class="cb-dropzone cb-available-zone site-popup-cb-available"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div class="site-rule-shortcuts">
                   <label>
                     <input type="checkbox" class="override-shortcuts" />
@@ -333,36 +477,6 @@
             </div>
           </div>
         </template>
-
-        <section id="nudgeSettings" class="settings-card">
-          <div class="section-heading">
-            <h3>Subtitle sync</h3>
-            <p class="section-intro">Use small speed nudges if subtitles drift.</p>
-          </div>
-          <div class="row">
-            <label for="enableSubtitleNudge"
-              >Enable subtitle nudge<br /><em
-                >Makes tiny playback changes to help keep subtitles aligned on
-                some sites, especially YouTube.</em
-              >
-            </label>
-            <input id="enableSubtitleNudge" type="checkbox" />
-          </div>
-          <div class="row">
-            <label for="subtitleNudgeInterval"
-              >Nudge interval (milliseconds)<br /><em
-                >How often to nudge: 10&ndash;1000. Smaller values are more frequent.
-                Default: 50.</em
-              >
-            </label>
-            <input
-              id="subtitleNudgeInterval"
-              type="text"
-              value=""
-              placeholder="50"
-            />
-          </div>
-        </section>
 
         <section class="settings-card action-card">
           <div class="section-heading">

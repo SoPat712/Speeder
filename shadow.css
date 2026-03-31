@@ -61,15 +61,13 @@
   vertical-align: middle;
   align-items: center;
   justify-content: center;
-  min-width: 1.35em;
-  height: 1.35em;
   margin-left: 0.3em;
-  padding: 0 0.25em;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-size: 14px;
+  line-height: 14px;
   font-weight: bold;
-  line-height: 1;
+  font-family: "Lucida Console", Monaco, monospace;
   box-sizing: border-box;
 }
 
@@ -83,49 +81,46 @@
 }
 
 #nudge-flash-indicator[data-enabled="true"] {
-  color: #bff3a2;
-  background: rgba(75, 145, 53, 0.28);
-  border-color: rgba(126, 199, 104, 0.7);
+  color: #fff;
+  background: #4b9135;
+  border: 1px solid #6ec754;
 }
 
 #nudge-flash-indicator[data-enabled="false"] {
-  color: #ffb8b8;
-  background: rgba(164, 73, 73, 0.24);
-  border-color: rgba(214, 118, 118, 0.65);
+  color: #fff;
+  background: #943e3e;
+  border: 1px solid #c06060;
 }
 
 #nudge-indicator {
   display: inline-flex;
-  vertical-align: middle;
   align-items: center;
   justify-content: center;
-  min-width: 1.35em;
-  height: 1.35em;
-  margin-left: 0.45em;
-  padding: 0 0.25em;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-size: 14px;
+  line-height: 14px;
   font-weight: bold;
-  line-height: 1;
+  font-family: "Lucida Console", Monaco, monospace;
   box-sizing: border-box;
   cursor: pointer;
+  margin-bottom: 2px;
 }
 
 #nudge-indicator[data-enabled="true"] {
-  color: #bff3a2;
-  background: rgba(75, 145, 53, 0.28);
-  border-color: rgba(126, 199, 104, 0.7);
+  color: #fff;
+  background: #4b9135;
+  border: 1px solid #6ec754;
 }
 
 #nudge-indicator[data-enabled="false"] {
-  color: #ffb8b8;
-  background: rgba(164, 73, 73, 0.24);
-  border-color: rgba(214, 118, 118, 0.65);
+  color: #fff;
+  background: #943e3e;
+  border: 1px solid #c06060;
 }
 
 #nudge-indicator[data-supported="false"] {
-  opacity: 0.75;
+  opacity: 0.6;
 }
 
 #controller.dragging {

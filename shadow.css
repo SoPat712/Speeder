@@ -54,6 +54,10 @@
   display: none;
 }
 
+#controls > * + * {
+  margin-left: 3px;
+}
+
 /* Standalone flash indicator next to speed text — hidden by default,
    briefly shown when nudge is toggled via N key or click */
 #nudge-flash-indicator {
@@ -76,8 +80,15 @@
 }
 
 /* Hide flash indicator when hovering — the one in #controls is visible instead */
-#controller:hover #nudge-flash-indicator {
-  display: none;
+#controller:hover #nudge-flash-indicator,
+:host(:hover) #nudge-flash-indicator {
+  display: none !important;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
 }
 
 #nudge-flash-indicator[data-enabled="true"] {

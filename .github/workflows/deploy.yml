@@ -53,10 +53,9 @@ jobs:
             Beta build — signed for self-hosted manual installation.
 
             ### Installation Instructions
-            1. Download the `.xpi` file
-            2. Open Firefox and go to `about:addons`
-            3. Click the gear icon and select "Install Add-on From File"
-            4. Select the downloaded `.xpi` file
+            1. Click the `.xpi` file below
+            2. Click "Continue to Installation"
+            3. Click "Add"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

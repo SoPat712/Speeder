@@ -2,7 +2,7 @@ name: Build & Release Firefox Addon
 
 on:
   push:
-    branches: [main, beta]  # dev is ignored
+    branches: [main, beta] # dev is ignored
 
 jobs:
   build:
@@ -17,7 +17,7 @@ jobs:
 
       # 2️⃣ Install dependencies
       - name: Install deps
-        run: npm install -g web-ext jq
+        run: npm install -g web-ext
 
       # 3️⃣ Auto version bump (numeric only)
       - name: Generate version

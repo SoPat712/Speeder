@@ -29,6 +29,11 @@
   z-index: 1;
   transition: top 160ms ease, left 160ms ease, transform 160ms ease,
     opacity 160ms ease;
+  /* Insets are baked into left/top; bar must not wrap when narrow. Hover controls
+     extend into the inset area (past “logical” margin). */
+  white-space: nowrap;
+  overflow: visible;
+  max-width: none;
 }
 
 #controller:hover {
@@ -39,20 +44,20 @@
   margin-right: 0.8em;
 }
 
-/* For center positions, override transform to expand from left edge instead of center.
-   Exclude manual mode so dragging can freely reposition the controller. */
-#controller[data-location="top-center"]:not([data-position-mode="manual"]),
-#controller[data-location="bottom-center"]:not([data-position-mode="manual"]) {
-  transform: translate(0, 0) !important;
-  left: calc(50% - 30px) !important;
+/* Center presets: midpoint between left- and right-preset inset lines; center bar on that X. */
+#controller[data-location="top-center"]:not([data-position-mode="manual"]) {
+  transform: translate(-50%, 0) !important;
 }
 
 #controller[data-location="bottom-center"]:not([data-position-mode="manual"]) {
-  transform: translate(0, -100%) !important;
+  transform: translate(-50%, -100%) !important;
 }
 
 #controls {
   display: none;
+  white-space: nowrap;
+  overflow: visible;
+  max-width: none;
 }
 
 #controls > * + * {

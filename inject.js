@@ -18,6 +18,10 @@ var tc = {
     hideWithControlsTimer: 2.0,
     controllerLocation: "top-left",
     controllerOpacity: 0.3,
+    controllerMarginTop: 0,
+    controllerMarginRight: 0,
+    controllerMarginBottom: 65,
+    controllerMarginLeft: 0,
     keyBindings: [],
     siteRules: [],
     controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
@@ -32,7 +36,8 @@ var tc = {
   pendingLastSpeedSave: null,
   pendingLastSpeedValue: null,
   persistedLastSpeed: 1.0,
-  activeSiteRule: null
+  activeSiteRule: null,
+  siteRuleBase: null
 };
 
 var MIN_SPEED = 0.0625;
@@ -80,17 +85,17 @@ var controllerLocationStyles = {
     transform: "translate(-100%, -50%)"
   },
   "bottom-right": {
-    top: "calc(100% - 65px)",
+    top: "calc(100% - 0px)",
     left: "calc(100% - 10px)",
     transform: "translate(-100%, -100%)"
   },
   "bottom-center": {
-    top: "calc(100% - 65px)",
+    top: "calc(100% - 0px)",
     left: "50%",
     transform: "translate(-50%, -100%)"
   },
   "bottom-left": {
-    top: "calc(100% - 65px)",
+    top: "calc(100% - 0px)",
     left: "15px",
     transform: "translate(0, -100%)"
   },
@@ -254,6 +259,52 @@ function normalizeControllerLocation(location) {
   return defaultControllerLocation;
 }
 
+var CONTROLLER_MARGIN_MAX_PX = 200;
+
+function normalizeControllerMarginPx(value, fallback) {
+  var n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(
+    CONTROLLER_MARGIN_MAX_PX,
+    Math.max(0, Math.round(n))
+  );
+}
+
+function applyControllerMargins(controller) {
+  if (!controller) return;
+  var d = tc.settings;
+  var loc = controller.dataset.location;
+  var manual = controller.dataset.positionMode === "manual";
+  var isTopAnchored =
+    !manual &&
+    (loc === "top-left" ||
+      loc === "top-center" ||
+      loc === "top-right");
+  var isBottomAnchored =
+    !manual &&
+    (loc === "bottom-right" ||
+      loc === "bottom-center" ||
+      loc === "bottom-left");
+  var isMiddleRow =
+    !manual && (loc === "middle-left" || loc === "middle-right");
+  var mt = normalizeControllerMarginPx(d.controllerMarginTop, 0);
+  var mb = normalizeControllerMarginPx(d.controllerMarginBottom, 65);
+  if (isTopAnchored || isBottomAnchored || isMiddleRow) {
+    mt = 0;
+    mb = 0;
+  }
+  controller.style.marginTop = mt + "px";
+  var ml = normalizeControllerMarginPx(d.controllerMarginLeft, 0);
+  var mr = normalizeControllerMarginPx(d.controllerMarginRight, 0);
+  if (!manual) {
+    ml = 0;
+    mr = 0;
+  }
+  controller.style.marginRight = mr + "px";
+  controller.style.marginBottom = mb + "px";
+  controller.style.marginLeft = ml + "px";
+}
+
 function getNextControllerLocation(location) {
   var normalizedLocation = normalizeControllerLocation(location);
   var currentIndex = controllerLocations.indexOf(normalizedLocation);
@@ -290,6 +341,28 @@ function applyControllerLocationToElement(controller, location) {
   controller.dataset.positionMode = "anchored";
 
   var top = styles.top;
+  if (
+    normalizedLocation === "top-left" ||
+    normalizedLocation === "top-center" ||
+    normalizedLocation === "top-right"
+  ) {
+    var insetTop = normalizeControllerMarginPx(
+      tc.settings.controllerMarginTop,
+      0
+    );
+    top = "calc(10px + " + insetTop + "px)";
+  }
+  if (
+    normalizedLocation === "bottom-right" ||
+    normalizedLocation === "bottom-center" ||
+    normalizedLocation === "bottom-left"
+  ) {
+    var lift = normalizeControllerMarginPx(
+      tc.settings.controllerMarginBottom,
+      65
+    );
+    top = "calc(100% - " + lift + "px)";
+  }
   // If in fullscreen, move the controller down to avoid overlapping video titles
   if (
     document.fullscreenElement ||
@@ -298,13 +371,39 @@ function applyControllerLocationToElement(controller, location) {
     document.msFullscreenElement
   ) {
     if (normalizedLocation.startsWith("top-")) {
-      top = "63px";
+      var insetTopFs = normalizeControllerMarginPx(
+        tc.settings.controllerMarginTop,
+        0
+      );
+      top = "calc(63px + " + insetTopFs + "px)";
     }
   }
 
   controller.style.top = top;
-  controller.style.left = styles.left;
+
+  var left = styles.left;
+  switch (normalizedLocation) {
+    case "top-left":
+    case "middle-left":
+    case "bottom-left":
+      left = "15px";
+      break;
+    case "top-right":
+    case "middle-right":
+    case "bottom-right":
+      left = "calc(100% - 10px)";
+      break;
+    case "top-center":
+    case "bottom-center":
+      left = "50%";
+      break;
+    default:
+      break;
+  }
+  controller.style.left = left;
   controller.style.transform = styles.transform;
+
+  applyControllerMargins(controller);
 
   return normalizedLocation;
 }
@@ -319,6 +418,56 @@ function applyControllerLocation(videoController, location) {
     controller,
     location
   );
+}
+
+function captureSiteRuleBase() {
+  tc.siteRuleBase = {
+    startHidden: tc.settings.startHidden,
+    hideWithControls: tc.settings.hideWithControls,
+    hideWithControlsTimer: tc.settings.hideWithControlsTimer,
+    controllerLocation: tc.settings.controllerLocation,
+    rememberSpeed: tc.settings.rememberSpeed,
+    forceLastSavedSpeed: tc.settings.forceLastSavedSpeed,
+    audioBoolean: tc.settings.audioBoolean,
+    controllerOpacity: tc.settings.controllerOpacity,
+    controllerMarginTop: tc.settings.controllerMarginTop,
+    controllerMarginBottom: tc.settings.controllerMarginBottom,
+    enableSubtitleNudge: tc.settings.enableSubtitleNudge,
+    subtitleNudgeInterval: tc.settings.subtitleNudgeInterval,
+    controllerButtons: Array.isArray(tc.settings.controllerButtons)
+      ? tc.settings.controllerButtons.slice()
+      : tc.settings.controllerButtons,
+    keyBindings: Array.isArray(tc.settings.keyBindings)
+      ? tc.settings.keyBindings.map(function (binding) {
+        return Object.assign({}, binding);
+      })
+      : tc.settings.keyBindings
+  };
+}
+
+function resetSettingsFromSiteRuleBase() {
+  if (!tc.siteRuleBase) return;
+  var base = tc.siteRuleBase;
+  tc.settings.startHidden = base.startHidden;
+  tc.settings.hideWithControls = base.hideWithControls;
+  tc.settings.hideWithControlsTimer = base.hideWithControlsTimer;
+  tc.settings.controllerLocation = base.controllerLocation;
+  tc.settings.rememberSpeed = base.rememberSpeed;
+  tc.settings.forceLastSavedSpeed = base.forceLastSavedSpeed;
+  tc.settings.audioBoolean = base.audioBoolean;
+  tc.settings.controllerOpacity = base.controllerOpacity;
+  tc.settings.controllerMarginTop = base.controllerMarginTop;
+  tc.settings.controllerMarginBottom = base.controllerMarginBottom;
+  tc.settings.enableSubtitleNudge = base.enableSubtitleNudge;
+  tc.settings.subtitleNudgeInterval = base.subtitleNudgeInterval;
+  tc.settings.controllerButtons = Array.isArray(base.controllerButtons)
+    ? base.controllerButtons.slice()
+    : base.controllerButtons;
+  tc.settings.keyBindings = Array.isArray(base.keyBindings)
+    ? base.keyBindings.map(function (binding) {
+      return Object.assign({}, binding);
+    })
+    : base.keyBindings;
 }
 
 function clearManualControllerPosition(videoController) {
@@ -483,10 +632,36 @@ function getVideoSourceKey(video) {
 
 function getControllerTargetSpeed(video) {
   if (!video || !video.vsc) return null;
-  return isValidSpeed(video.vsc.targetSpeed) ? video.vsc.targetSpeed : null;
+  if (!isValidSpeed(video.vsc.targetSpeed)) return null;
+
+  var currentSourceKey = getVideoSourceKey(video);
+  var targetSourceKey = video.vsc.targetSpeedSourceKey;
+
+  // SPA sites (e.g. YouTube) can reuse the same <video> element.
+  // Don't carry controller target speed across a source swap.
+  if (
+    targetSourceKey &&
+    currentSourceKey === "unknown_src" &&
+    targetSourceKey !== "unknown_src"
+  ) {
+    return null;
+  }
+  if (
+    targetSourceKey &&
+    currentSourceKey !== "unknown_src" &&
+    targetSourceKey !== currentSourceKey
+  ) {
+    return null;
+  }
+
+  return video.vsc.targetSpeed;
 }
 
 function getRememberedSpeed(video) {
+  if (!tc.settings.rememberSpeed && !tc.settings.forceLastSavedSpeed) {
+    return null;
+  }
+
   var sourceKey = getVideoSourceKey(video);
   if (sourceKey !== "unknown_src") {
     var videoSpeed = tc.settings.speeds[sourceKey];
@@ -987,6 +1162,22 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     storage.controllerLocation
   );
   tc.settings.controllerOpacity = Number(storage.controllerOpacity);
+  tc.settings.controllerMarginTop = normalizeControllerMarginPx(
+    storage.controllerMarginTop,
+    0
+  );
+  tc.settings.controllerMarginRight = normalizeControllerMarginPx(
+    0,
+    0
+  );
+  tc.settings.controllerMarginBottom = normalizeControllerMarginPx(
+    storage.controllerMarginBottom,
+    typeof storage.controllerMarginBottom !== "undefined" ? 0 : 65
+  );
+  tc.settings.controllerMarginLeft = normalizeControllerMarginPx(
+    0,
+    0
+  );
   tc.settings.siteRules = Array.isArray(storage.siteRules)
     ? storage.siteRules
     : [];
@@ -1041,6 +1232,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   if (addedDefaultBinding) {
     chrome.storage.sync.set({ keyBindings: tc.settings.keyBindings });
   }
+  captureSiteRuleBase();
   patchAttachShadow();
   // Add a listener for messages from the popup.
   // We use a global flag to ensure the listener is only attached once.
@@ -1135,6 +1327,7 @@ function defineVideoController() {
 
     let storedSpeed = sanitizeSpeed(resolveTargetSpeed(target), 1.0);
     this.targetSpeed = storedSpeed;
+    this.targetSpeedSourceKey = getVideoSourceKey(target);
     if (!tc.settings.rememberSpeed && !tc.settings.forceLastSavedSpeed) {
       setKeyBindings("reset", getKeyBindings("fast"));
     }
@@ -1725,6 +1918,8 @@ function escapeStringRegExp(str) {
   return str.replace(m, "\\$&");
 }
 function applySiteRuleOverrides() {
+  resetSettingsFromSiteRuleBase();
+
   if (!Array.isArray(tc.settings.siteRules) || tc.settings.siteRules.length === 0) {
     return false;
   }
@@ -1784,6 +1979,8 @@ function applySiteRuleOverrides() {
     "forceLastSavedSpeed",
     "audioBoolean",
     "controllerOpacity",
+    "controllerMarginTop",
+    "controllerMarginBottom",
     "enableSubtitleNudge",
     "subtitleNudgeInterval"
   ];
@@ -1793,6 +1990,13 @@ function applySiteRuleOverrides() {
       log(`Overriding ${key} for site: ${matchedRule[key]}`, 4);
       tc.settings[key] = matchedRule[key];
     }
+  });
+
+  [
+    "controllerMarginTop",
+    "controllerMarginBottom"
+  ].forEach(function (key) {
+    tc.settings[key] = normalizeControllerMarginPx(tc.settings[key], 0);
   });
 
   if (Array.isArray(matchedRule.controllerButtons)) {
@@ -1842,6 +2046,7 @@ function setupListener(root) {
     var speed = video.playbackRate; // Preserve full precision (e.g. 0.0625)
     video.vsc.speedIndicator.textContent = speed.toFixed(2);
     video.vsc.targetSpeed = speed;
+    video.vsc.targetSpeedSourceKey = getVideoSourceKey(video);
     var sourceKey = getVideoSourceKey(video);
     if (sourceKey !== "unknown_src") {
       tc.settings.speeds[sourceKey] = speed;
@@ -2161,6 +2366,14 @@ function initializeNow(doc, forceReinit = false) {
 
   if (forceReinit) {
     log("Force re-initialization requested", 4);
+    tc.mediaElements.forEach(function (video) {
+      if (!video || !video.vsc) return;
+      applyControllerLocation(video.vsc, tc.settings.controllerLocation);
+      var controllerEl = getControllerElement(video.vsc);
+      if (controllerEl) {
+        controllerEl.style.opacity = String(tc.settings.controllerOpacity);
+      }
+    });
   }
 
   vscInitializedDocuments.add(doc);
@@ -2188,6 +2401,7 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
 
   // Update the target speed for nudge so it knows what to revert to
   video.vsc.targetSpeed = numericSpeed;
+  video.vsc.targetSpeedSourceKey = getVideoSourceKey(video);
 
   if (isUserKeyPress && !isInitialCall && video.vsc && video.vsc.div) {
     runAction("blink", 1000, null, video); // Pass video to blink

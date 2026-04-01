@@ -304,6 +304,78 @@ label em {
   border-top: 0;
 }
 
+.row.row-controller-margin {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+}
+
+.controller-margin-inputs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.margin-pad-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.margin-pad-mini {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.controller-margin-inputs input[type="text"] {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.site-rule-option.site-rule-margin-option {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+}
+
+.site-rule-override-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.site-rule-content > .site-rule-override-section:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.site-override-lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  cursor: pointer;
+  width: auto;
+}
+
+.site-override-lead input {
+  margin-top: 3px;
+}
+
+.site-rule-override-section .site-override-fields,
+.site-rule-override-section .site-placement-container,
+.site-rule-override-section .site-visibility-container,
+.site-rule-override-section .site-autohide-container,
+.site-rule-override-section .site-playback-container,
+.site-rule-override-section .site-opacity-container,
+.site-rule-override-section .site-subtitleNudge-container {
+  padding-left: 4px;
+}
+
 .cb-editor {
   display: flex;
   flex-direction: column;

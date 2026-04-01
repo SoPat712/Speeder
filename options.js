@@ -173,6 +173,10 @@ var tcDefaults = {
   forceLastSavedSpeed: false,
   enabled: true,
   controllerOpacity: 0.3,
+  controllerMarginTop: 0,
+  controllerMarginRight: 0,
+  controllerMarginBottom: 65,
+  controllerMarginLeft: 0,
   keyBindings: [
     createDefaultBinding("display", "V", 86, 0),
     createDefaultBinding("move", "P", 80, 0),
@@ -185,10 +189,18 @@ var tcDefaults = {
     createDefaultBinding("toggleSubtitleNudge", "N", 78, 0)
   ],
   siteRules: [
-    { pattern: "youtube.com", enabled: true, enableSubtitleNudge: true },
-    { pattern: "example1.com", enabled: false },
-    { pattern: "/example2\\.com/i", enabled: false },
-    { pattern: "/(example3|sample3)\\.com/gi", enabled: false }
+    {
+      pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/(?!shorts\\/).*/",
+      enabled: true,
+      enableSubtitleNudge: true,
+      subtitleNudgeInterval: 50
+    },
+    {
+      pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/shorts\\/.*/",
+      enabled: true,
+      controllerMarginTop: 60,
+      controllerMarginBottom: 85
+    }
   ],
   controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
   showPopupControlBar: true,
@@ -273,6 +285,28 @@ function ensureDefaultBinding(storage, action, key, keyCode, value) {
 function normalizeControllerLocation(location) {
   if (controllerLocations.includes(location)) return location;
   return tcDefaults.controllerLocation;
+}
+
+function clampMarginPxInput(el, fallback) {
+  var n = parseInt(el && el.value, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(200, Math.max(0, n));
+}
+
+function syncSiteRuleField(ruleEl, rule, key, isCheckbox) {
+  var input = ruleEl.querySelector(".site-" + key);
+  if (!input) return;
+  var globalEl = document.getElementById(key);
+  var value;
+  if (rule && rule[key] !== undefined) {
+    value = rule[key];
+  } else if (globalEl) {
+    value = isCheckbox ? globalEl.checked : globalEl.value;
+  } else {
+    return;
+  }
+  if (isCheckbox) input.checked = Boolean(value);
+  else input.value = value;
 }
 
 function normalizeBindingKey(key) {
@@ -614,6 +648,16 @@ function save_options() {
   settings.controllerOpacity =
     parseFloat(document.getElementById("controllerOpacity").value) ||
     tcDefaults.controllerOpacity;
+
+  settings.controllerMarginTop = clampMarginPxInput(
+    document.getElementById("controllerMarginTop"),
+    tcDefaults.controllerMarginTop
+  );
+  settings.controllerMarginBottom = clampMarginPxInput(
+    document.getElementById("controllerMarginBottom"),
+    tcDefaults.controllerMarginBottom
+  );
+
   settings.keyBindings = keyBindings;
   settings.enableSubtitleNudge =
     document.getElementById("enableSubtitleNudge").checked;
@@ -647,40 +691,69 @@ function save_options() {
     // Handle Enable toggle
     rule.enabled = ruleEl.querySelector(".site-enabled").checked;
 
-    // Handle other site settings
-    const siteSettings = [
-      { key: "startHidden", type: "checkbox" },
-      { key: "hideWithControls", type: "checkbox" },
-      { key: "hideWithControlsTimer", type: "text" },
-      { key: "controllerLocation", type: "select" },
-      { key: "rememberSpeed", type: "checkbox" },
-      { key: "forceLastSavedSpeed", type: "checkbox" },
-      { key: "audioBoolean", type: "checkbox" },
-      { key: "controllerOpacity", type: "text" },
-      { key: "showPopupControlBar", type: "checkbox" },
-      { key: "enableSubtitleNudge", type: "checkbox" },
-      { key: "subtitleNudgeInterval", type: "text" }
-    ];
+    if (ruleEl.querySelector(".override-placement").checked) {
+      rule.controllerLocation = normalizeControllerLocation(
+        ruleEl.querySelector(".site-controllerLocation").value
+      );
+      rule.controllerMarginTop = clampMarginPxInput(
+        ruleEl.querySelector(".site-controllerMarginTop"),
+        clampMarginPxInput(
+          document.getElementById("controllerMarginTop"),
+          tcDefaults.controllerMarginTop
+        )
+      );
+      rule.controllerMarginBottom = clampMarginPxInput(
+        ruleEl.querySelector(".site-controllerMarginBottom"),
+        clampMarginPxInput(
+          document.getElementById("controllerMarginBottom"),
+          tcDefaults.controllerMarginBottom
+        )
+      );
+    }
 
-    siteSettings.forEach((s) => {
-      var input = ruleEl.querySelector(`.site-${s.key}`);
-      if (!input) return;
-      var siteValue;
-      if (s.type === "checkbox") {
-        siteValue = input.checked;
-      } else {
-        siteValue = input.value;
-      }
-      var globalInput = document.getElementById(s.key);
-      if (globalInput) {
-        var globalValue = s.type === "checkbox" ? globalInput.checked : globalInput.value;
-        if (String(siteValue) !== String(globalValue)) {
-          rule[s.key] = siteValue;
-        }
-      } else {
-        rule[s.key] = siteValue;
-      }
-    });
+    if (ruleEl.querySelector(".override-visibility").checked) {
+      rule.startHidden = ruleEl.querySelector(".site-startHidden").checked;
+    }
+
+    if (ruleEl.querySelector(".override-autohide").checked) {
+      rule.hideWithControls = ruleEl.querySelector(".site-hideWithControls").checked;
+      var st = parseFloat(
+        ruleEl.querySelector(".site-hideWithControlsTimer").value
+      );
+      rule.hideWithControlsTimer = Math.min(
+        15,
+        Math.max(0.1, Number.isFinite(st) ? st : settings.hideWithControlsTimer)
+      );
+    }
+
+    if (ruleEl.querySelector(".override-playback").checked) {
+      rule.rememberSpeed = ruleEl.querySelector(".site-rememberSpeed").checked;
+      rule.forceLastSavedSpeed =
+        ruleEl.querySelector(".site-forceLastSavedSpeed").checked;
+      rule.audioBoolean = ruleEl.querySelector(".site-audioBoolean").checked;
+    }
+
+    if (ruleEl.querySelector(".override-opacity").checked) {
+      rule.controllerOpacity =
+        parseFloat(ruleEl.querySelector(".site-controllerOpacity").value) ||
+        settings.controllerOpacity;
+    }
+
+    if (ruleEl.querySelector(".override-subtitleNudge").checked) {
+      rule.enableSubtitleNudge =
+        ruleEl.querySelector(".site-enableSubtitleNudge").checked;
+      var nudgeIv = parseInt(
+        ruleEl.querySelector(".site-subtitleNudgeInterval").value,
+        10
+      );
+      rule.subtitleNudgeInterval = Math.min(
+        1000,
+        Math.max(
+          10,
+          Number.isFinite(nudgeIv) ? nudgeIv : settings.subtitleNudgeInterval
+        )
+      );
+    }
 
     if (ruleEl.querySelector(".override-controlbar").checked) {
       var activeZone = ruleEl.querySelector(".site-cb-active");
@@ -690,6 +763,8 @@ function save_options() {
     }
 
     if (ruleEl.querySelector(".override-popup-controlbar").checked) {
+      rule.showPopupControlBar =
+        ruleEl.querySelector(".site-showPopupControlBar").checked;
       var popupActiveZone = ruleEl.querySelector(".site-popup-cb-active");
       if (popupActiveZone) {
         rule.popupControllerButtons = readControlBarOrder(popupActiveZone);
@@ -892,45 +967,68 @@ function createSiteRule(rule) {
   }
   updateDisabledState();
 
-  const settings = [
-    { key: "startHidden", type: "checkbox" },
-    { key: "hideWithControls", type: "checkbox" },
-    { key: "hideWithControlsTimer", type: "text" },
-    { key: "controllerLocation", type: "select" },
-    { key: "rememberSpeed", type: "checkbox" },
-    { key: "forceLastSavedSpeed", type: "checkbox" },
-    { key: "audioBoolean", type: "checkbox" },
-    { key: "controllerOpacity", type: "text" },
-    { key: "showPopupControlBar", type: "checkbox" },
-    { key: "enableSubtitleNudge", type: "checkbox" },
-    { key: "subtitleNudgeInterval", type: "text" }
+  var placementKeys = [
+    "controllerLocation",
+    "controllerMarginTop",
+    "controllerMarginBottom"
   ];
+  var hasPlacementOverride =
+    rule && placementKeys.some(function (k) { return rule[k] !== undefined; });
+  if (hasPlacementOverride) {
+    ruleEl.querySelector(".override-placement").checked = true;
+    ruleEl.querySelector(".site-placement-container").style.display = "block";
+  }
+  syncSiteRuleField(ruleEl, rule, "controllerLocation", false);
+  syncSiteRuleField(ruleEl, rule, "controllerMarginTop", false);
+  syncSiteRuleField(ruleEl, rule, "controllerMarginBottom", false);
 
-  settings.forEach((s) => {
-    var input = ruleEl.querySelector(`.site-${s.key}`);
-    if (!input) return;
+  if (rule && rule.startHidden !== undefined) {
+    ruleEl.querySelector(".override-visibility").checked = true;
+    ruleEl.querySelector(".site-visibility-container").style.display = "block";
+  }
+  syncSiteRuleField(ruleEl, rule, "startHidden", true);
 
-    var value;
-    if (rule && rule[s.key] !== undefined) {
-      value = rule[s.key];
-    } else {
-      // Initialize with current global value
-      var globalInput = document.getElementById(s.key);
-      if (globalInput) {
-        if (s.type === "checkbox") {
-          value = globalInput.checked;
-        } else {
-          value = globalInput.value;
-        }
-      }
-    }
+  if (
+    rule &&
+    (rule.hideWithControls !== undefined ||
+      rule.hideWithControlsTimer !== undefined)
+  ) {
+    ruleEl.querySelector(".override-autohide").checked = true;
+    ruleEl.querySelector(".site-autohide-container").style.display = "block";
+  }
+  syncSiteRuleField(ruleEl, rule, "hideWithControls", true);
+  syncSiteRuleField(ruleEl, rule, "hideWithControlsTimer", false);
 
-    if (s.type === "checkbox") {
-      input.checked = value;
-    } else {
-      input.value = value;
-    }
-  });
+  if (
+    rule &&
+    (rule.rememberSpeed !== undefined ||
+      rule.forceLastSavedSpeed !== undefined ||
+      rule.audioBoolean !== undefined)
+  ) {
+    ruleEl.querySelector(".override-playback").checked = true;
+    ruleEl.querySelector(".site-playback-container").style.display = "block";
+  }
+  syncSiteRuleField(ruleEl, rule, "rememberSpeed", true);
+  syncSiteRuleField(ruleEl, rule, "forceLastSavedSpeed", true);
+  syncSiteRuleField(ruleEl, rule, "audioBoolean", true);
+
+  if (rule && rule.controllerOpacity !== undefined) {
+    ruleEl.querySelector(".override-opacity").checked = true;
+    ruleEl.querySelector(".site-opacity-container").style.display = "block";
+  }
+  syncSiteRuleField(ruleEl, rule, "controllerOpacity", false);
+
+  if (
+    rule &&
+    (rule.enableSubtitleNudge !== undefined ||
+      rule.subtitleNudgeInterval !== undefined)
+  ) {
+    ruleEl.querySelector(".override-subtitleNudge").checked = true;
+    ruleEl.querySelector(".site-subtitleNudge-container").style.display =
+      "block";
+  }
+  syncSiteRuleField(ruleEl, rule, "enableSubtitleNudge", true);
+  syncSiteRuleField(ruleEl, rule, "subtitleNudgeInterval", false);
 
   if (rule && Array.isArray(rule.controllerButtons)) {
     ruleEl.querySelector(".override-controlbar").checked = true;
@@ -943,16 +1041,35 @@ function createSiteRule(rule) {
     );
   }
 
-  if (rule && Array.isArray(rule.popupControllerButtons)) {
+  if (
+    rule &&
+    (rule.showPopupControlBar !== undefined ||
+      Array.isArray(rule.popupControllerButtons))
+  ) {
     ruleEl.querySelector(".override-popup-controlbar").checked = true;
     var popupCbContainer = ruleEl.querySelector(".site-popup-controlbar-container");
     popupCbContainer.style.display = "block";
-    populateControlBarZones(
-      ruleEl.querySelector(".site-popup-cb-active"),
-      ruleEl.querySelector(".site-popup-cb-available"),
-      rule.popupControllerButtons
-    );
+    var sitePopupActive = ruleEl.querySelector(".site-popup-cb-active");
+    var sitePopupAvailable = ruleEl.querySelector(".site-popup-cb-available");
+    if (Array.isArray(rule.popupControllerButtons)) {
+      populateControlBarZones(
+        sitePopupActive,
+        sitePopupAvailable,
+        rule.popupControllerButtons
+      );
+    } else if (
+      sitePopupActive &&
+      sitePopupAvailable &&
+      sitePopupActive.children.length === 0
+    ) {
+      populateControlBarZones(
+        sitePopupActive,
+        sitePopupAvailable,
+        getPopupControlBarOrder()
+      );
+    }
   }
+  syncSiteRuleField(ruleEl, rule, "showPopupControlBar", true);
 
   if (rule && Array.isArray(rule.shortcuts) && rule.shortcuts.length > 0) {
     ruleEl.querySelector(".override-shortcuts").checked = true;
@@ -1170,6 +1287,10 @@ function restore_options() {
       normalizeControllerLocation(storage.controllerLocation);
     document.getElementById("controllerOpacity").value =
       storage.controllerOpacity;
+    document.getElementById("controllerMarginTop").value =
+      storage.controllerMarginTop ?? tcDefaults.controllerMarginTop;
+    document.getElementById("controllerMarginBottom").value =
+      storage.controllerMarginBottom ?? tcDefaults.controllerMarginBottom;
     document.getElementById("showPopupControlBar").checked =
       storage.showPopupControlBar !== false;
     document.getElementById("enableSubtitleNudge").checked =
@@ -1350,6 +1471,28 @@ document.addEventListener("DOMContentLoaded", function () {
         valueInput.value = 0;
       } else {
         valueInput.disabled = false;
+      }
+    }
+
+    // Site rule: show/hide optional override sections
+    var siteOverrideContainers = {
+      "override-placement": "site-placement-container",
+      "override-visibility": "site-visibility-container",
+      "override-autohide": "site-autohide-container",
+      "override-playback": "site-playback-container",
+      "override-opacity": "site-opacity-container",
+      "override-subtitleNudge": "site-subtitleNudge-container"
+    };
+    for (var ocb in siteOverrideContainers) {
+      if (event.target.classList.contains(ocb)) {
+        var siteRuleRoot = event.target.closest(".site-rule");
+        var targetBox = siteRuleRoot.querySelector(
+          "." + siteOverrideContainers[ocb]
+        );
+        if (targetBox) {
+          targetBox.style.display = event.target.checked ? "block" : "none";
+        }
+        return;
       }
     }
 

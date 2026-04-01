@@ -8,6 +8,7 @@
   pointer-events: none !important;
   z-index: 2147483646 !important;
   white-space: normal;
+  overflow: visible !important;
 }
 
 /* Use minimal z-index for non-YouTube sites to avoid overlapping modals */

@@ -627,26 +627,7 @@ function sanitizeSpeed(speed, fallback) {
 }
 
 function getVideoSourceKey(video) {
-  if (!video) return "unknown_src";
-
-  var docLocation =
-    video.ownerDocument &&
-    video.ownerDocument.location &&
-    video.ownerDocument.location.href
-      ? video.ownerDocument.location
-      : location;
-
-  var hostname = (docLocation && docLocation.hostname) || "";
-  if (
-    hostname.includes("youtube.com") ||
-    hostname.includes("youtube-nocookie.com")
-  ) {
-    // YouTube frequently reuses the same <video> element and may expose
-    // transient blob/currentSrc values. URL keying makes navigation distinct.
-    return "yt:" + docLocation.pathname + docLocation.search;
-  }
-
-  return (video.currentSrc || video.src) || "unknown_src";
+  return (video && (video.currentSrc || video.src)) || "unknown_src";
 }
 
 function getControllerTargetSpeed(video) {
@@ -861,12 +842,28 @@ function resolveTargetSpeed(video) {
   return getDesiredSpeed(video);
 }
 
-function clearControllerTargetSpeedsOnNavigation() {
-  tc.mediaElements.forEach(function (video) {
-    if (!video || !video.vsc) return;
-    video.vsc.targetSpeed = null;
-    video.vsc.targetSpeedSourceKey = null;
-  });
+function applySourceTransitionPolicy(video, forceUpdate) {
+  if (!video || !video.vsc) return;
+
+  var sourceKey = getVideoSourceKey(video);
+  if (!forceUpdate && video.vsc.mediaSourceKey === sourceKey) return;
+
+  video.vsc.mediaSourceKey = sourceKey;
+
+  var desiredSpeed =
+    tc.settings.rememberSpeed || tc.settings.forceLastSavedSpeed
+      ? sanitizeSpeed(tc.settings.lastSpeed, 1.0)
+      : 1.0;
+
+  video.vsc.targetSpeed = desiredSpeed;
+  video.vsc.targetSpeedSourceKey = sourceKey;
+  if (video.vsc.speedIndicator) {
+    video.vsc.speedIndicator.textContent = desiredSpeed.toFixed(2);
+  }
+
+  if (Math.abs(video.playbackRate - desiredSpeed) > 0.01) {
+    setSpeed(video, desiredSpeed, false, false);
+  }
 }
 
 function extendSpeedRestoreWindow(video, duration) {
@@ -1355,6 +1352,7 @@ function defineVideoController() {
     let storedSpeed = sanitizeSpeed(resolveTargetSpeed(target), 1.0);
     this.targetSpeed = storedSpeed;
     this.targetSpeedSourceKey = getVideoSourceKey(target);
+    this.mediaSourceKey = getVideoSourceKey(target);
     if (!tc.settings.rememberSpeed && !tc.settings.forceLastSavedSpeed) {
       setKeyBindings("reset", getKeyBindings("fast"));
     }
@@ -1372,7 +1370,16 @@ function defineVideoController() {
     log(`Controller created and attached to DOM. Hidden: ${this.div.classList.contains('vsc-hidden')}`, 4);
 
     var mediaEventAction = function (event) {
+      if (
+        event.type === "loadedmetadata" ||
+        event.type === "loadeddata" ||
+        event.type === "canplay"
+      ) {
+        applySourceTransitionPolicy(event.target, false);
+      }
+
       if (event.type === "play") {
+        applySourceTransitionPolicy(event.target, false);
         extendSpeedRestoreWindow(event.target);
 
         if (!tc.settings.rememberSpeed && !tc.settings.forceLastSavedSpeed) {
@@ -1420,6 +1427,18 @@ function defineVideoController() {
     };
 
     target.addEventListener(
+      "loadedmetadata",
+      (this.handleLoadedMetadata = mediaEventAction.bind(this))
+    );
+    target.addEventListener(
+      "loadeddata",
+      (this.handleLoadedData = mediaEventAction.bind(this))
+    );
+    target.addEventListener(
+      "canplay",
+      (this.handleCanPlay = mediaEventAction.bind(this))
+    );
+    target.addEventListener(
       "play",
       (this.handlePlay = mediaEventAction.bind(this))
     );
@@ -1454,6 +1473,7 @@ function defineVideoController() {
               this.div.classList.add("vsc-nosource");
             } else {
               this.div.classList.remove("vsc-nosource");
+              applySourceTransitionPolicy(this.video, true);
               if (!mutation.target.paused) this.startSubtitleNudge();
             }
             updateSubtitleNudgeIndicator(this.video);
@@ -1484,6 +1504,9 @@ function defineVideoController() {
     if (this.div) this.div.remove();
     if (this.restoreSpeedTimer) clearTimeout(this.restoreSpeedTimer);
     if (this.video) {
+      this.video.removeEventListener("loadedmetadata", this.handleLoadedMetadata);
+      this.video.removeEventListener("loadeddata", this.handleLoadedData);
+      this.video.removeEventListener("canplay", this.handleCanPlay);
       this.video.removeEventListener("play", this.handlePlay);
       this.video.removeEventListener("pause", this.handlePause);
       this.video.removeEventListener("seeking", this.handleSeeking);
@@ -2356,7 +2379,6 @@ function attachNavigationListeners() {
   if (window.vscNavigationListenersAttached) return;
 
   var scheduleRescan = function () {
-    clearControllerTargetSpeedsOnNavigation();
     clearTimeout(window.vscNavigationRescanTimer);
     window.vscNavigationRescanTimer = setTimeout(function () {
       initializeWhenReady(document, true);
@@ -2375,9 +2397,6 @@ function attachNavigationListeners() {
 
   window.addEventListener("popstate", scheduleRescan);
   window.addEventListener("hashchange", scheduleRescan);
-  // YouTube SPA navigation often emits these before/after URL/view swaps.
-  window.addEventListener("yt-navigate-start", scheduleRescan);
-  window.addEventListener("yt-navigate-finish", scheduleRescan);
   window.vscNavigationListenersAttached = true;
 }
 

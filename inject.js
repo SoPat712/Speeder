@@ -627,7 +627,26 @@ function sanitizeSpeed(speed, fallback) {
 }
 
 function getVideoSourceKey(video) {
-  return (video && (video.currentSrc || video.src)) || "unknown_src";
+  if (!video) return "unknown_src";
+
+  var docLocation =
+    video.ownerDocument &&
+    video.ownerDocument.location &&
+    video.ownerDocument.location.href
+      ? video.ownerDocument.location
+      : location;
+
+  var hostname = (docLocation && docLocation.hostname) || "";
+  if (
+    hostname.includes("youtube.com") ||
+    hostname.includes("youtube-nocookie.com")
+  ) {
+    // YouTube frequently reuses the same <video> element and may expose
+    // transient blob/currentSrc values. URL keying makes navigation distinct.
+    return "yt:" + docLocation.pathname + docLocation.search;
+  }
+
+  return (video.currentSrc || video.src) || "unknown_src";
 }
 
 function getControllerTargetSpeed(video) {
@@ -840,6 +859,14 @@ function shouldIgnoreSuppressedRateChange(video) {
 
 function resolveTargetSpeed(video) {
   return getDesiredSpeed(video);
+}
+
+function clearControllerTargetSpeedsOnNavigation() {
+  tc.mediaElements.forEach(function (video) {
+    if (!video || !video.vsc) return;
+    video.vsc.targetSpeed = null;
+    video.vsc.targetSpeedSourceKey = null;
+  });
 }
 
 function extendSpeedRestoreWindow(video, duration) {
@@ -2329,6 +2356,7 @@ function attachNavigationListeners() {
   if (window.vscNavigationListenersAttached) return;
 
   var scheduleRescan = function () {
+    clearControllerTargetSpeedsOnNavigation();
     clearTimeout(window.vscNavigationRescanTimer);
     window.vscNavigationRescanTimer = setTimeout(function () {
       initializeWhenReady(document, true);
@@ -2347,6 +2375,9 @@ function attachNavigationListeners() {
 
   window.addEventListener("popstate", scheduleRescan);
   window.addEventListener("hashchange", scheduleRescan);
+  // YouTube SPA navigation often emits these before/after URL/view swaps.
+  window.addEventListener("yt-navigate-start", scheduleRescan);
+  window.addEventListener("yt-navigate-finish", scheduleRescan);
   window.vscNavigationListenersAttached = true;
 }
 

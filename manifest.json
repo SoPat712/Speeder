@@ -1,7 +1,7 @@
 {
   "name": "Speeder",
   "short_name": "Speeder",
-  "version": "5.0.3",
+  "version": "5.0.4",
   "manifest_version": 2,
   "description": "Speed up, slow down, advance and rewind HTML5 audio/video with shortcuts (New and improved version of \"Video Speed Controller\")",
   "homepage_url": "https://github.com/SoPat712/speeder",
@@ -9,7 +9,9 @@
     "gecko": {
       "id": "{ed860648-f54f-4dc9-9a0d-501aec4313f5}",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
@@ -19,9 +21,13 @@
     "128": "icons/icon128.png"
   },
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js"
+    ]
   },
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "options_ui": {
     "page": "options.html",
     "open_in_tab": false
@@ -37,16 +43,27 @@
   "content_scripts": [
     {
       "all_frames": true,
-      "matches": ["http://*/*", "https://*/*", "file:///*"],
+      "matches": [
+        "http://*/*",
+        "https://*/*",
+        "file:///*"
+      ],
       "match_about_blank": true,
       "exclude_matches": [
         "https://plus.google.com/hangouts/*",
         "https://hangouts.google.com/*",
         "https://meet.google.com/*"
       ],
-      "css": ["inject.css"],
-      "js": ["inject.js"]
+      "css": [
+        "inject.css"
+      ],
+      "js": [
+        "inject.js"
+      ]
     }
   ],
-  "web_accessible_resources": ["inject.css", "shadow.css"]
+  "web_accessible_resources": [
+    "inject.css",
+    "shadow.css"
+  ]
 }

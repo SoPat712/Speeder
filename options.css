@@ -299,6 +299,19 @@ label em {
   border-top: 1px solid var(--border);
 }
 
+.row input[type="text"],
+.row select {
+  justify-self: end;
+}
+
+.row.row-checkbox {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+
+.row.row-checkbox input[type="checkbox"] {
+  justify-self: end;
+}
+
 .settings-card .row:first-of-type {
   padding-top: 0;
   border-top: 0;
@@ -310,16 +323,17 @@ label em {
 
 .controller-margin-inputs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 116px));
   gap: 8px;
-  width: 100%;
+  width: max-content;
+  justify-self: end;
 }
 
 .margin-pad-cell {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 0;
+  min-width: 116px;
 }
 
 .margin-pad-mini {
@@ -332,12 +346,13 @@ label em {
 
 .controller-margin-inputs input[type="text"] {
   width: 100%;
-  min-width: 0;
+  min-width: 116px;
   box-sizing: border-box;
+  text-align: right;
 }
 
 .site-rule-option.site-rule-margin-option {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
 }
 
 .site-rule-override-section {
@@ -353,17 +368,23 @@ label em {
 }
 
 .site-override-lead {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 16px;
   align-items: flex-start;
-  gap: 10px;
   font-weight: 600;
   margin-bottom: 8px;
   cursor: pointer;
-  width: auto;
+  width: 100%;
 }
 
-.site-override-lead input {
+.site-override-lead input[type="checkbox"] {
+  justify-self: end;
   margin-top: 3px;
+}
+
+.site-override-lead span {
+  margin: 0;
 }
 
 .site-rule-override-section .site-override-fields,
@@ -525,11 +546,29 @@ label em {
 
 .site-rule-option {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
+  grid-template-columns: minmax(0, 1fr) 160px;
   gap: 16px;
   align-items: start;
   padding: 8px 0;
   border-top: 1px solid var(--border);
+}
+
+.site-rule-option-checkbox {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+
+.site-rule-option-checkbox > input[type="checkbox"] {
+  justify-self: end;
+}
+
+.site-rule-option > input[type="text"],
+.site-rule-option > select {
+  justify-self: end;
+  text-align: right;
+}
+
+.site-rule-option.site-rule-margin-option .controller-margin-inputs {
+  justify-self: end;
 }
 
 .site-rule-body > .site-rule-option:first-child,
@@ -538,11 +577,30 @@ label em {
   border-top: 0;
 }
 
-.site-rule-option label {
-  display: flex;
+.site-rule-option > label:not(.site-rule-split-label) {
+  display: block;
+  margin: 0;
+}
+
+.site-rule-split-label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 16px;
   align-items: flex-start;
-  gap: 10px;
-  width: auto;
+  width: 100%;
+  margin: 0;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.site-rule-split-label input[type="checkbox"] {
+  justify-self: end;
+  margin-top: 3px;
+}
+
+.site-rule-option-checkbox > .site-rule-split-label {
+  grid-column: 1 / -1;
 }
 
 .site-rule-controlbar,
@@ -552,12 +610,8 @@ label em {
   border-top: 1px solid var(--border);
 }
 
-.site-rule-controlbar > label,
-.site-rule-shortcuts > label {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: auto;
+.site-rule-controlbar > label.site-override-lead,
+.site-rule-shortcuts > label.site-override-lead {
   margin: 0;
 }
 
@@ -639,9 +693,24 @@ label em {
   .shortcut-row,
   .shortcut-row.customs,
   .row,
+  .row.row-checkbox,
   .site-rule-option,
   .site-shortcuts-container .shortcut-row {
     grid-template-columns: 1fr;
+  }
+
+  .row input[type="text"],
+  .row select {
+    justify-self: stretch;
+  }
+
+  .site-rule-option > input[type="text"],
+  .site-rule-option > select {
+    justify-self: stretch;
+  }
+
+  .site-override-lead {
+    grid-template-columns: minmax(0, 1fr) 24px;
   }
 
   .action-row button,

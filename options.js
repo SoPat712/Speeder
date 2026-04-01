@@ -138,7 +138,7 @@ var controllerButtonDefs = {
   faster:   { icon: "+",      name: "Increase speed" },
   advance:  { icon: "\u00BB", name: "Advance" },
   display:  { icon: "\u00D7", name: "Close controller" },
-  reset:    { icon: "\u21BA", name: "Reset speed" },
+  reset:    { icon: "1.00x", name: "Reset speed" },
   fast:     { icon: "\u2605", name: "Preferred speed" },
   nudge:    { icon: "\u2713", name: "Subtitle nudge" },
   settings: { icon: "\u2699", name: "Settings" },
@@ -226,6 +226,19 @@ const actionLabels = {
   jump: "Jump to marker",
   toggleSubtitleNudge: "Toggle subtitle nudge"
 };
+
+const speedBindingActions = ["slower", "faster", "fast"];
+
+function formatSpeedBindingDisplay(action, value) {
+  if (!speedBindingActions.includes(action)) {
+    return value;
+  }
+  var n = Number(value);
+  if (!isFinite(n)) {
+    return value;
+  }
+  return n.toFixed(2);
+}
 
 const customActionsNoValues = [
   "reset",
@@ -526,7 +539,7 @@ function add_shortcut(action, value) {
     valueInput.value = "N/A";
     valueInput.disabled = true;
   } else {
-    valueInput.value = value || 0;
+    valueInput.value = formatSpeedBindingDisplay(action, value || 0);
   }
 
   var removeButton = document.createElement("button");
@@ -899,9 +912,11 @@ function addSiteRuleShortcut(container, action, binding, value, force) {
   valueInput.className = "customValue";
   valueInput.type = "text";
   valueInput.placeholder = "value (0.10)";
-  valueInput.value = value || 0;
   if (customActionsNoValues.includes(action)) {
+    valueInput.value = "N/A";
     valueInput.disabled = true;
+  } else {
+    valueInput.value = formatSpeedBindingDisplay(action, value || 0);
   }
 
   var forceLabel = document.createElement("label");
@@ -1329,7 +1344,7 @@ function restore_options() {
           valueInput.disabled = true;
         }
       } else if (valueInput) {
-        valueInput.value = item.value;
+        valueInput.value = formatSpeedBindingDisplay(item.action, item.value);
       }
     });
 

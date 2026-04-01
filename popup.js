@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", function () {
     faster:   { label: "+",      className: "" },
     advance:  { label: "\u00BB", className: "rw" },
     display:  { label: "\u00D7", className: "hideButton" },
-    reset:    { label: "\u21BA", className: "" },
+    reset:    { label: "1.00x", className: "" },
     fast:     { label: "\u2605", className: "" },
     settings: { label: "\u2699", className: "" },
     pause:    { label: "\u23EF", className: "" },
@@ -171,11 +171,76 @@ document.addEventListener("DOMContentLoaded", function () {
     if (el) el.textContent = (speed != null ? Number(speed) : 1).toFixed(2);
   }
 
-  function querySpeed() {
-    sendToActiveTab({ action: "get_speed" }, function (response) {
-      if (response && response.speed != null) {
-        updateSpeedDisplay(response.speed);
+  function updatePopupResetLabel(resetLabel) {
+    var bar = document.getElementById("popupControlBar");
+    if (!bar || typeof resetLabel !== "string") return;
+    var btn = bar.querySelector('button[data-action="reset"]');
+    if (btn) btn.textContent = resetLabel;
+  }
+
+  function applySpeedAndResetFromResponse(response) {
+    if (response && response.speed != null) {
+      updateSpeedDisplay(response.speed);
+    }
+    if (response && response.resetLabel != null) {
+      updatePopupResetLabel(response.resetLabel);
+    }
+  }
+
+  function pickBestFrameSpeedResult(results) {
+    if (!results || !results.length) return null;
+    var i;
+    var r;
+    var fallback = null;
+    for (i = 0; i < results.length; i++) {
+      r = results[i];
+      if (
+        !r ||
+        typeof r.speed !== "number" ||
+        typeof r.resetLabel !== "string"
+      ) {
+        continue;
       }
+      if (r.preferred) {
+        return { speed: r.speed, resetLabel: r.resetLabel };
+      }
+      if (!fallback) {
+        fallback = { speed: r.speed, resetLabel: r.resetLabel };
+      }
+    }
+    return fallback;
+  }
+
+  function querySpeed() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (!tabs[0] || tabs[0].id == null) {
+        return;
+      }
+      var tabId = tabs[0].id;
+      chrome.tabs.executeScript(
+        tabId,
+        { allFrames: true, file: "frameSpeedSnapshot.js" },
+        function (results) {
+          if (chrome.runtime.lastError) {
+            sendToActiveTab({ action: "get_speed" }, function (response) {
+              applySpeedAndResetFromResponse(
+                response || { speed: 1, resetLabel: "1.00x" }
+              );
+            });
+            return;
+          }
+          var best = pickBestFrameSpeedResult(results);
+          if (best) {
+            applySpeedAndResetFromResponse(best);
+          } else {
+            sendToActiveTab({ action: "get_speed" }, function (response) {
+              applySpeedAndResetFromResponse(
+                response || { speed: 1, resetLabel: "1.00x" }
+              );
+            });
+          }
+        }
+      );
     });
   }
 
@@ -204,10 +269,8 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         sendToActiveTab(
           { action: "run_action", actionName: btnId },
-          function (response) {
-            if (response && response.speed != null) {
-              updateSpeedDisplay(response.speed);
-            }
+          function () {
+            querySpeed();
           }
         );
       });
@@ -297,12 +360,14 @@ document.addEventListener("DOMContentLoaded", function () {
         if (blacklisted) {
           setStatusMessage("Site is blacklisted.");
           updateSpeedDisplay(1);
+          updatePopupResetLabel("1.00x");
           return;
         }
 
         if (siteDisabled) {
           setStatusMessage("Speeder is disabled for this site.");
           updateSpeedDisplay(1);
+          updatePopupResetLabel("1.00x");
           return;
         }
 
@@ -311,6 +376,7 @@ document.addEventListener("DOMContentLoaded", function () {
           querySpeed();
         } else {
           updateSpeedDisplay(1);
+          updatePopupResetLabel("1.00x");
         }
       });
     });

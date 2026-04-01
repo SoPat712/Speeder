@@ -180,11 +180,11 @@
 
           <h4 class="defaults-sub-heading">General</h4>
 
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="enabled">Enable</label>
             <input id="enabled" type="checkbox" />
           </div>
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="audioBoolean">Work on audio</label>
             <input id="audioBoolean" type="checkbox" />
           </div>
@@ -192,11 +192,11 @@
           <div class="defaults-divider"></div>
           <h4 class="defaults-sub-heading">Playback</h4>
 
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="rememberSpeed">Remember playback speed</label>
             <input id="rememberSpeed" type="checkbox" />
           </div>
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="forceLastSavedSpeed"
               >Force last saved speed<br />
               <em
@@ -210,7 +210,7 @@
           <div class="defaults-divider"></div>
           <h4 class="defaults-sub-heading">Controller</h4>
 
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="startHidden">Hide controller by default</label>
             <input id="startHidden" type="checkbox" />
           </div>
@@ -250,7 +250,7 @@
               </div>
             </div>
           </div>
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="hideWithControls"
               >Hide with controls<br />
               <em
@@ -270,7 +270,7 @@
             </label>
             <input id="hideWithControlsTimer" type="text" placeholder="2" />
           </div>
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="showPopupControlBar">Show popup control bar</label>
             <input id="showPopupControlBar" type="checkbox" />
           </div>
@@ -278,7 +278,7 @@
           <div class="defaults-divider"></div>
           <h4 class="defaults-sub-heading">Subtitle sync</h4>
 
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="enableSubtitleNudge"
               >Enable subtitle nudge<br /><em
                 >Makes tiny playback changes to help keep subtitles aligned.</em
@@ -389,20 +389,20 @@
               <button type="button" class="remove-site-rule">Remove</button>
             </div>
             <div class="site-rule-body">
-              <div class="site-rule-option">
-                <label>
+              <div class="site-rule-option site-rule-option-checkbox">
+                <label class="site-rule-split-label">
+                  <span>Enable Speeder on this site</span>
                   <input type="checkbox" class="site-enabled" />
-                  Enable Speeder on this site
                 </label>
               </div>
               <div class="site-rule-content">
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override placement for this site</span>
                     <input type="checkbox" class="override-placement" />
-                    Override placement for this site
                   </label>
                   <div class="site-placement-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-field">
                       <label>Default controller location:</label>
                       <select class="site-controllerLocation">
                         <option value="top-left">Top left</option>
@@ -436,11 +436,11 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override hide-by-default for this site</span>
                     <input type="checkbox" class="override-visibility" />
-                    Override hide-by-default for this site
                   </label>
                   <div class="site-visibility-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Hide controller by default:</label>
                       <input type="checkbox" class="site-startHidden" />
                     </div>
@@ -448,17 +448,17 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override auto-hide for this site</span>
                     <input type="checkbox" class="override-autohide" />
-                    Override auto-hide for this site
                   </label>
                   <div class="site-autohide-container" style="display: none">
-                    <div class="site-rule-option">
-                      <label>
+                    <div class="site-rule-option site-rule-option-checkbox">
+                      <label class="site-rule-split-label">
+                        <span>Hide with controls (idle-based)</span>
                         <input type="checkbox" class="site-hideWithControls" />
-                        Hide with controls (idle-based)
                       </label>
                     </div>
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-field">
                       <label>Auto-hide timer (0.1&ndash;15s):</label>
                       <input type="text" class="site-hideWithControlsTimer" />
                     </div>
@@ -466,19 +466,19 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override playback for this site</span>
                     <input type="checkbox" class="override-playback" />
-                    Override playback for this site
                   </label>
                   <div class="site-playback-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Remember playback speed:</label>
                       <input type="checkbox" class="site-rememberSpeed" />
                     </div>
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Force last saved speed:</label>
                       <input type="checkbox" class="site-forceLastSavedSpeed" />
                     </div>
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Work on audio:</label>
                       <input type="checkbox" class="site-audioBoolean" />
                     </div>
@@ -486,11 +486,11 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override opacity for this site</span>
                     <input type="checkbox" class="override-opacity" />
-                    Override opacity for this site
                   </label>
                   <div class="site-opacity-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-field">
                       <label>Controller opacity:</label>
                       <input type="text" class="site-controllerOpacity" />
                     </div>
@@ -498,15 +498,15 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override subtitle nudge for this site</span>
                     <input type="checkbox" class="override-subtitleNudge" />
-                    Override subtitle nudge for this site
                   </label>
                   <div class="site-subtitleNudge-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Enable subtitle nudge:</label>
                       <input type="checkbox" class="site-enableSubtitleNudge" />
                     </div>
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-field">
                       <label>Nudge interval (10&ndash;1000ms):</label>
                       <input type="text" class="site-subtitleNudgeInterval" placeholder="50" />
                     </div>
@@ -514,8 +514,8 @@
                 </div>
                 <div class="site-rule-controlbar">
                   <label class="site-override-lead">
+                    <span>Override in-player control bar for this site</span>
                     <input type="checkbox" class="override-controlbar" />
-                    Override in-player control bar for this site
                   </label>
                   <div class="site-controlbar-container" style="display: none">
                     <div class="cb-editor">
@@ -532,11 +532,11 @@
                 </div>
                 <div class="site-rule-controlbar">
                   <label class="site-override-lead">
+                    <span>Override extension popup for this site</span>
                     <input type="checkbox" class="override-popup-controlbar" />
-                    Override extension popup for this site
                   </label>
                   <div class="site-popup-controlbar-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Show popup control bar</label>
                       <input type="checkbox" class="site-showPopupControlBar" />
                     </div>
@@ -554,8 +554,8 @@
                 </div>
                 <div class="site-rule-shortcuts">
                   <label class="site-override-lead">
+                    <span>Override shortcuts for this site</span>
                     <input type="checkbox" class="override-shortcuts" />
-                    Override shortcuts for this site
                   </label>
                   <div class="site-shortcuts-container" style="display: none"></div>
                 </div>

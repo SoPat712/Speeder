@@ -3,6 +3,15 @@ var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
 var isUserSeek = false; // Track if seek was user-initiated
 var lastToggleSpeed = {}; // Store last toggle speeds per video
 
+function getPrimaryVideoElement() {
+  if (!tc.mediaElements || tc.mediaElements.length === 0) return null;
+  for (var i = 0; i < tc.mediaElements.length; i++) {
+    var el = tc.mediaElements[i];
+    if (el && !el.paused) return el;
+  }
+  return tc.mediaElements[0];
+}
+
 var tc = {
   settings: {
     lastSpeed: 1.0,
@@ -112,7 +121,7 @@ var controllerButtonDefs = {
   faster:   { label: "+",      className: "" },
   advance:  { label: "\u00BB", className: "rw" },
   display:  { label: "\u00D7", className: "hideButton" },
-  reset:    { label: "\u21BA", className: "" },
+  reset:    { label: "1.00x", className: "" },
   fast:     { label: "\u2605", className: "" },
   settings: { label: "\u2699", className: "" },
   pause:    { label: "\u23EF", className: "" },
@@ -1267,36 +1276,38 @@ chrome.storage.sync.get(tc.settings, function (storage) {
           log("Re-scan command received from popup.", 4);
           initializeWhenReady(document, true);
           sendResponse({ status: "complete" });
-        } else if (request.action === "get_speed") {
-          var speed = 1.0;
-          if (tc.mediaElements && tc.mediaElements.length > 0) {
-            for (var i = 0; i < tc.mediaElements.length; i++) {
-              if (tc.mediaElements[i] && !tc.mediaElements[i].paused) {
-                speed = tc.mediaElements[i].playbackRate;
-                break;
-              }
-            }
-            if (speed === 1.0 && tc.mediaElements[0]) {
-              speed = tc.mediaElements[0].playbackRate;
-            }
-          }
-          sendResponse({ speed: speed });
-        } else if (request.action === "get_page_context") {
+          return false;
+        }
+        if (request.action === "get_speed") {
+          // Do not sendResponse in frames with no media — only one response is
+          // accepted tab-wide, and the top frame often wins before an iframe.
+          var videoGs = getPrimaryVideoElement();
+          if (!videoGs) return false;
+          sendResponse({
+            speed: videoGs.playbackRate,
+            resetLabel: computeResetButtonLabelForVideo(videoGs)
+          });
+          return false;
+        }
+        if (request.action === "get_page_context") {
           sendResponse({ url: location.href });
-        } else if (request.action === "run_action") {
+          return false;
+        }
+        if (request.action === "run_action") {
           var value = request.value;
           if (value === undefined || value === null) {
             value = getKeyBindings(request.actionName, "value");
           }
           runAction(request.actionName, value);
-          var newSpeed = 1.0;
-          if (tc.mediaElements && tc.mediaElements.length > 0) {
-            newSpeed = tc.mediaElements[0].playbackRate;
-          }
-          sendResponse({ speed: newSpeed });
+          var videoAfter = getPrimaryVideoElement();
+          if (!videoAfter) return false;
+          sendResponse({
+            speed: videoAfter.playbackRate,
+            resetLabel: computeResetButtonLabelForVideo(videoAfter)
+          });
+          return false;
         }
-
-        return true;
+        return false;
       }
     );
 
@@ -1343,6 +1354,8 @@ function defineVideoController() {
     this.suppressedRateChangeCount = 0;
     this.suppressedRateChangeUntil = 0;
     this.visibilityResumeHandler = null;
+    this.resetToggleArmed = false;
+    this.resetButtonEl = null;
     this.controllerLocation = normalizeControllerLocation(
       tc.settings.controllerLocation
     );
@@ -1843,6 +1856,10 @@ function defineVideoController() {
     this.speedIndicator = dragHandle;
     this.subtitleNudgeIndicator = subtitleNudgeIndicator;
     this.nudgeFlashIndicator = nudgeFlashIndicator;
+    this.resetButtonEl =
+      shadow.querySelector('button[data-action="reset"]') || null;
+    this.resetToggleArmed = false;
+    updateResetButtonLabel(this.video);
     if (subtitleNudgeIndicator) {
       updateSubtitleNudgeIndicator(this.video);
     }
@@ -2091,8 +2108,11 @@ function shouldPreserveDesiredSpeed(video, speed) {
 function setupListener(root) {
   root = root || document;
   if (root.vscRateListenerAttached) return;
-  function updateSpeedFromEvent(video) {
+  function updateSpeedFromEvent(video, skipResetDisarm) {
     if (!video.vsc || !video.vsc.speedIndicator) return;
+    if (!skipResetDisarm) {
+      video.vsc.resetToggleArmed = false;
+    }
     var speed = video.playbackRate; // Preserve full precision (e.g. 0.0625)
     video.vsc.speedIndicator.textContent = speed.toFixed(2);
     video.vsc.targetSpeed = speed;
@@ -2107,6 +2127,7 @@ function setupListener(root) {
       if (speed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
       else video.vsc.startSubtitleNudge();
     }
+    updateResetButtonLabel(video);
   }
   root.addEventListener(
     "ratechange",
@@ -2119,7 +2140,7 @@ function setupListener(root) {
       if (tc.settings.forceLastSavedSpeed) {
         if (event.detail && event.detail.origin === "videoSpeed") {
           video.playbackRate = event.detail.speed;
-          updateSpeedFromEvent(video);
+          updateSpeedFromEvent(video, true);
         } else {
           video.playbackRate = sanitizeSpeed(tc.settings.lastSpeed, 1.0);
         }
@@ -2130,7 +2151,7 @@ function setupListener(root) {
         var pendingRateChange = takePendingRateChange(video, currentSpeed);
 
         if (pendingRateChange) {
-          updateSpeedFromEvent(video);
+          updateSpeedFromEvent(video, true);
           return;
         }
 
@@ -2139,8 +2160,10 @@ function setupListener(root) {
             `Ignoring external rate change to ${currentSpeed.toFixed(4)} while preserving ${desiredSpeed.toFixed(4)}`,
             4
           );
+          video.vsc.resetToggleArmed = false;
           video.vsc.speedIndicator.textContent = desiredSpeed.toFixed(2);
           scheduleSpeedRestore(video, desiredSpeed, "pause/play or seek");
+          updateResetButtonLabel(video);
           return;
         }
 
@@ -2429,7 +2452,47 @@ function initializeNow(doc, forceReinit = false) {
   vscInitializedDocuments.add(doc);
 }
 
-function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
+function formatSpeedWithX(speed) {
+  var n = Number(speed);
+  if (!isFinite(n)) return "?x";
+  return n.toFixed(2) + "x";
+}
+
+function computeResetButtonLabelForVideo(video) {
+  if (!video) return "1.00x";
+  var rate = video.playbackRate;
+  var atOne = Math.abs(rate - 1.0) < 0.01;
+  var armed = video.vsc && video.vsc.resetToggleArmed === true;
+
+  if (atOne) {
+    if (armed) {
+      var videoId = getVideoSourceKey(video);
+      var lastToggle = lastToggleSpeed[videoId];
+      var pref = getKeyBindings("fast") || 1.8;
+      var speedToRestore =
+        lastToggle == null || Math.abs(lastToggle - 1.0) < 0.01
+          ? pref
+          : lastToggle;
+      return formatSpeedWithX(speedToRestore);
+    }
+    return "1.00x";
+  }
+  return formatSpeedWithX(1.0);
+}
+
+function updateResetButtonLabel(video) {
+  if (!video || !video.vsc || !video.vsc.resetButtonEl) return;
+  video.vsc.resetButtonEl.textContent =
+    computeResetButtonLabelForVideo(video);
+}
+
+function setSpeed(
+  video,
+  speed,
+  isInitialCall = false,
+  isUserKeyPress = false,
+  fromResetSpeedToggle = false
+) {
   const numericSpeed = Number(speed);
 
   if (!isValidSpeed(numericSpeed)) {
@@ -2441,6 +2504,10 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   }
 
   if (!video || !video.vsc || !video.vsc.speedIndicator) return;
+
+  if (isUserKeyPress && !fromResetSpeedToggle) {
+    video.vsc.resetToggleArmed = false;
+  }
 
   log(
     `setSpeed: Target ${numericSpeed.toFixed(2)}. Initial: ${isInitialCall}. UserKeyPress: ${isUserKeyPress}`,
@@ -2489,6 +2556,7 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
       video.vsc.startSubtitleNudge();
     }
   }
+  updateResetButtonLabel(video);
 }
 
 function runAction(action, value, e) {
@@ -2697,11 +2765,12 @@ function resetSpeed(v, target, isFastKey = false) {
         Math.abs(lastToggle - 1.0) < 0.01
           ? getKeyBindings("fast") || 1.8
           : lastToggle;
-      setSpeed(v, speedToRestore, false, true);
+      setSpeed(v, speedToRestore, false, true, true);
     } else {
       // Not at 1.0, save current as toggle speed and go to 1.0
       lastToggleSpeed[videoId] = currentSpeed;
-      setSpeed(v, resetSpeedValue, false, true);
+      v.vsc.resetToggleArmed = true;
+      setSpeed(v, resetSpeedValue, false, true, true);
     }
   }
 }

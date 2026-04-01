@@ -46,7 +46,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Beta ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: ${{ steps.xpi.outputs.file }}
           prerelease: true
           body: |
@@ -61,7 +61,9 @@ jobs:
 
       # Stable tag (v* without -beta) → Sign & submit to public AMO listing
       - name: Sign & Submit to AMO (stable)
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-beta')
+        if:
+          startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name,
+          '-beta')
         run: |
           web-ext sign \
             --api-key ${{ secrets.FIREFOX_API_KEY }} \

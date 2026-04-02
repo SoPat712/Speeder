@@ -27,7 +27,12 @@ var vscUiIconPaths = {
   mark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
   jump:
     '<polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/>',
-  nudge: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
+  nudge: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  /** Lucide check — subtitle nudge on */
+  subtitleNudgeOn: '<path d="M20 6 9 17l-5-5"/>',
+  /** Lucide x — subtitle nudge off */
+  subtitleNudgeOff:
+    '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
 };
 
 /**

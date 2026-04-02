@@ -776,16 +776,30 @@ function setSubtitleNudgeEnabledForVideo(video, enabled) {
   return normalizedEnabled;
 }
 
+function subtitleNudgeIconMarkup(isEnabled) {
+  var action = isEnabled ? "subtitleNudgeOn" : "subtitleNudgeOff";
+  if (typeof vscIconSvgString !== "function") {
+    return isEnabled ? "✓" : "×";
+  }
+  var svg = vscIconSvgString(action, 14);
+  if (!svg) {
+    return isEnabled ? "✓" : "×";
+  }
+  return (
+    '<span class="vsc-btn-icon" aria-hidden="true">' + svg + "</span>"
+  );
+}
+
 function updateSubtitleNudgeIndicator(video) {
   if (!video || !video.vsc) return;
 
   var isEnabled = isSubtitleNudgeEnabledForVideo(video);
-  var label = isEnabled ? "✓" : "×";
   var title = isEnabled ? "Subtitle nudge enabled" : "Subtitle nudge disabled";
+  var mark = subtitleNudgeIconMarkup(isEnabled);
 
   var indicator = video.vsc.subtitleNudgeIndicator;
   if (indicator) {
-    indicator.textContent = label;
+    indicator.innerHTML = mark;
     indicator.dataset.enabled = isEnabled ? "true" : "false";
     indicator.dataset.supported = "true";
     indicator.title = title;
@@ -794,9 +808,10 @@ function updateSubtitleNudgeIndicator(video) {
 
   var flashEl = video.vsc.nudgeFlashIndicator;
   if (flashEl) {
-    flashEl.textContent = label;
+    flashEl.innerHTML = mark;
     flashEl.dataset.enabled = isEnabled ? "true" : "false";
     flashEl.dataset.supported = "true";
+    flashEl.setAttribute("aria-label", title);
   }
 }
 
@@ -1898,8 +1913,9 @@ function defineVideoController() {
     nudgeFlashIndicator.setAttribute("aria-hidden", "true");
 
     controller.appendChild(dragHandle);
-    controller.appendChild(nudgeFlashIndicator);
     controller.appendChild(controls);
+    /* Flash sits after #controls so it never inserts space between speed and buttons. */
+    controller.appendChild(nudgeFlashIndicator);
     shadow.appendChild(controller);
 
     this.speedIndicator = dragHandle;

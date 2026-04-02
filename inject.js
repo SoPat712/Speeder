@@ -1,5 +1,3 @@
-var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
-
 var isUserSeek = false; // Track if seek was user-initiated
 var lastToggleSpeed = {}; // Store last toggle speeds per video
 
@@ -38,7 +36,8 @@ var tc = {
     logLevel: 3,
     enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
     subtitleNudgeInterval: 50, // Default 50ms balances subtitle tracking with CPU cost
-    subtitleNudgeAmount: 0.001
+    subtitleNudgeAmount: 0.001,
+    customButtonIcons: {}
   },
   mediaElements: [],
   isNudging: false,
@@ -115,19 +114,20 @@ var controllerLocationStyles = {
   }
 };
 
+/* `label` fallback only when ui-icons has no path for the action. */
 var controllerButtonDefs = {
-  rewind:   { label: "\u00AB", className: "rw" },
-  slower:   { label: "\u2212", className: "" },
-  faster:   { label: "+",      className: "" },
-  advance:  { label: "\u00BB", className: "rw" },
-  display:  { label: "\u00D7", className: "hideButton" },
-  reset:    { label: "1.00x", className: "" },
-  fast:     { label: "\u2605", className: "" },
-  settings: { label: "\u2699", className: "" },
-  pause:    { label: "\u23EF", className: "" },
-  muted:    { label: "M",      className: "" },
-  mark:     { label: "\u2691", className: "" },
-  jump:     { label: "\u21E5", className: "" }
+  rewind:   { label: "", className: "rw" },
+  slower:   { label: "", className: "" },
+  faster:   { label: "", className: "" },
+  advance:  { label: "", className: "rw" },
+  display:  { label: "", className: "hideButton" },
+  reset:    { label: "", className: "" },
+  fast:     { label: "", className: "" },
+  settings: { label: "", className: "" },
+  pause:    { label: "", className: "" },
+  muted:    { label: "", className: "" },
+  mark:     { label: "", className: "" },
+  jump:     { label: "", className: "" }
 };
 
 var keyCodeToEventKey = {
@@ -1219,25 +1219,6 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     ? storage.controllerButtons
     : tc.settings.controllerButtons;
 
-  // Migrate legacy blacklist if present
-  if (storage.blacklist && typeof storage.blacklist === "string" && tc.settings.siteRules.length === 0) {
-    var lines = storage.blacklist.split("\n");
-    lines.forEach((line) => {
-      var pattern = line.replace(regStrip, "");
-      if (pattern.length > 0) {
-        tc.settings.siteRules.push({
-          pattern: pattern,
-          disableExtension: true
-        });
-      }
-    });
-    if (tc.settings.siteRules.length > 0) {
-      chrome.storage.sync.set({ siteRules: tc.settings.siteRules });
-      chrome.storage.sync.remove(["blacklist"]);
-      log("Migrated legacy blacklist to site rules", 4);
-    }
-  }
-
   tc.settings.enableSubtitleNudge =
     typeof storage.enableSubtitleNudge !== "undefined"
       ? Boolean(storage.enableSubtitleNudge)
@@ -1284,8 +1265,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
           var videoGs = getPrimaryVideoElement();
           if (!videoGs) return false;
           sendResponse({
-            speed: videoGs.playbackRate,
-            resetLabel: computeResetButtonLabelForVideo(videoGs)
+            speed: videoGs.playbackRate
           });
           return false;
         }
@@ -1302,8 +1282,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
           var videoAfter = getPrimaryVideoElement();
           if (!videoAfter) return false;
           sendResponse({
-            speed: videoAfter.playbackRate,
-            resetLabel: computeResetButtonLabelForVideo(videoAfter)
+            speed: videoAfter.playbackRate
           });
           return false;
         }
@@ -1314,7 +1293,59 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     // Set the flag to prevent adding the listener again.
     window.vscMessageListener = true;
   }
-  initializeWhenReady(document);
+  chrome.storage.local.get(["customButtonIcons"], function (loc) {
+    tc.settings.customButtonIcons =
+      loc &&
+      loc.customButtonIcons &&
+      typeof loc.customButtonIcons === "object"
+        ? loc.customButtonIcons
+        : {};
+
+    if (!window.vscCustomIconListener) {
+      window.vscCustomIconListener = true;
+      chrome.storage.onChanged.addListener(function (changes, area) {
+        if (area !== "local" || !changes.customButtonIcons) return;
+        var nv = changes.customButtonIcons.newValue;
+        tc.settings.customButtonIcons =
+          nv && typeof nv === "object" ? nv : {};
+        if (tc.mediaElements && tc.mediaElements.length) {
+          tc.mediaElements.forEach(function (video) {
+            if (!video.vsc || !video.vsc.div) return;
+            var doc = video.ownerDocument;
+            var shadow = video.vsc.div.shadowRoot;
+            if (!shadow) return;
+            shadow.querySelectorAll("button[data-action]").forEach(function (btn) {
+              var act = btn.dataset.action;
+              if (!act) return;
+              var svg =
+                tc.settings.customButtonIcons &&
+                tc.settings.customButtonIcons[act] &&
+                tc.settings.customButtonIcons[act].svg;
+              btn.innerHTML = "";
+              if (svg) {
+                var cw = doc.createElement("span");
+                cw.className = "vsc-btn-icon";
+                cw.innerHTML = svg;
+                btn.appendChild(cw);
+              } else if (typeof vscIconWrap === "function") {
+                var wrap = vscIconWrap(doc, act, 14);
+                if (wrap) {
+                  btn.appendChild(wrap);
+                } else {
+                  var cdf = controllerButtonDefs[act];
+                  btn.textContent = (cdf && cdf.label) || "?";
+                }
+              } else {
+                var cdf2 = controllerButtonDefs[act];
+                btn.textContent = (cdf2 && cdf2.label) || "?";
+              }
+            });
+          });
+        }
+      });
+    }
+    initializeWhenReady(document);
+  });
 });
 
 function getKeyBindings(action, what = "value") {
@@ -1332,7 +1363,25 @@ function setKeyBindings(action, value) {
 function createControllerButton(doc, action, label, className) {
   var button = doc.createElement("button");
   button.dataset.action = action;
-  button.textContent = label;
+  var custom =
+    tc.settings.customButtonIcons &&
+    tc.settings.customButtonIcons[action] &&
+    tc.settings.customButtonIcons[action].svg;
+  if (custom) {
+    var customWrap = doc.createElement("span");
+    customWrap.className = "vsc-btn-icon";
+    customWrap.innerHTML = custom;
+    button.appendChild(customWrap);
+  } else if (typeof vscIconWrap === "function") {
+    var wrap = vscIconWrap(doc, action, 14);
+    if (wrap) {
+      button.appendChild(wrap);
+    } else {
+      button.textContent = label || "?";
+    }
+  } else {
+    button.textContent = label || "?";
+  }
   if (className) {
     button.className = className;
   }
@@ -1859,7 +1908,6 @@ function defineVideoController() {
     this.resetButtonEl =
       shadow.querySelector('button[data-action="reset"]') || null;
     this.resetToggleArmed = false;
-    updateResetButtonLabel(this.video);
     if (subtitleNudgeIndicator) {
       updateSubtitleNudgeIndicator(this.video);
     }
@@ -2127,7 +2175,6 @@ function setupListener(root) {
       if (speed === 1.0 || video.paused) video.vsc.stopSubtitleNudge();
       else video.vsc.startSubtitleNudge();
     }
-    updateResetButtonLabel(video);
   }
   root.addEventListener(
     "ratechange",
@@ -2163,7 +2210,6 @@ function setupListener(root) {
           video.vsc.resetToggleArmed = false;
           video.vsc.speedIndicator.textContent = desiredSpeed.toFixed(2);
           scheduleSpeedRestore(video, desiredSpeed, "pause/play or seek");
-          updateResetButtonLabel(video);
           return;
         }
 
@@ -2452,40 +2498,6 @@ function initializeNow(doc, forceReinit = false) {
   vscInitializedDocuments.add(doc);
 }
 
-function formatSpeedWithX(speed) {
-  var n = Number(speed);
-  if (!isFinite(n)) return "?x";
-  return n.toFixed(2) + "x";
-}
-
-function computeResetButtonLabelForVideo(video) {
-  if (!video) return "1.00x";
-  var rate = video.playbackRate;
-  var atOne = Math.abs(rate - 1.0) < 0.01;
-  var armed = video.vsc && video.vsc.resetToggleArmed === true;
-
-  if (atOne) {
-    if (armed) {
-      var videoId = getVideoSourceKey(video);
-      var lastToggle = lastToggleSpeed[videoId];
-      var pref = getKeyBindings("fast") || 1.8;
-      var speedToRestore =
-        lastToggle == null || Math.abs(lastToggle - 1.0) < 0.01
-          ? pref
-          : lastToggle;
-      return formatSpeedWithX(speedToRestore);
-    }
-    return "1.00x";
-  }
-  return formatSpeedWithX(1.0);
-}
-
-function updateResetButtonLabel(video) {
-  if (!video || !video.vsc || !video.vsc.resetButtonEl) return;
-  video.vsc.resetButtonEl.textContent =
-    computeResetButtonLabelForVideo(video);
-}
-
 function setSpeed(
   video,
   speed,
@@ -2556,7 +2568,6 @@ function setSpeed(
       video.vsc.startSubtitleNudge();
     }
   }
-  updateResetButtonLabel(video);
 }
 
 function runAction(action, value, e) {

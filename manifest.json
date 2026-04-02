@@ -26,7 +26,8 @@
     ]
   },
   "permissions": [
-    "storage"
+    "storage",
+    "https://cdn.jsdelivr.net/*"
   ],
   "options_ui": {
     "page": "options.html",
@@ -58,6 +59,7 @@
         "inject.css"
       ],
       "js": [
+        "ui-icons.js",
         "inject.js"
       ]
     }

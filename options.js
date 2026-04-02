@@ -138,7 +138,7 @@ var controllerButtonDefs = {
   faster:   { icon: "+",      name: "Increase speed" },
   advance:  { icon: "\u00BB", name: "Advance" },
   display:  { icon: "\u00D7", name: "Close controller" },
-  reset:    { icon: "", name: "Reset speed" },
+  reset:    { icon: "\u21BB", name: "Reset speed" },
   fast:     { icon: "\u2605", name: "Preferred speed" },
   nudge:    { icon: "\u2713", name: "Subtitle nudge" },
   settings: { icon: "\u2699", name: "Settings" },
@@ -148,6 +148,12 @@ var controllerButtonDefs = {
   jump:     { icon: "\u21E5", name: "Jump to marker" }
 };
 var popupExcludedButtonIds = new Set(["settings"]);
+
+/** Lucide picker only — not control-bar blocks (chip uses subtitleNudgeOn/Off). */
+var lucideSubtitleNudgeActionLabels = {
+  subtitleNudgeOn: "Subtitle nudge — enabled",
+  subtitleNudgeOff: "Subtitle nudge — disabled"
+};
 
 function sanitizePopupButtonOrder(buttonIds) {
   if (!Array.isArray(buttonIds)) return [];
@@ -166,6 +172,39 @@ var customButtonIconsLive = {};
 
 function fillControlBarIconElement(icon, buttonId) {
   if (!icon || !buttonId) return;
+  if (buttonId === "nudge") {
+    icon.innerHTML = "";
+    icon.className = "cb-icon cb-icon-nudge-pair";
+    function nudgeChipMarkup(action) {
+      var c = customButtonIconsLive[action];
+      if (c && c.svg) return c.svg;
+      if (typeof vscIconSvgString === "function") {
+        return vscIconSvgString(action, 14) || "";
+      }
+      return "";
+    }
+    function appendChip(action, stateKey) {
+      var sp = document.createElement("span");
+      sp.className = "cb-nudge-chip";
+      sp.setAttribute("data-nudge-state", stateKey);
+      var inner = nudgeChipMarkup(action);
+      if (inner) {
+        var wrap = document.createElement("span");
+        wrap.className = "vsc-btn-icon";
+        wrap.innerHTML = inner;
+        sp.appendChild(wrap);
+      }
+      icon.appendChild(sp);
+    }
+    appendChip("subtitleNudgeOn", "on");
+    var sep = document.createElement("span");
+    sep.className = "cb-nudge-sep";
+    sep.textContent = "/";
+    icon.appendChild(sep);
+    appendChip("subtitleNudgeOff", "off");
+    return;
+  }
+  icon.className = "cb-icon";
   var custom = customButtonIconsLive[buttonId];
   if (custom && custom.svg) {
     icon.innerHTML = custom.svg;
@@ -1357,7 +1396,16 @@ function initLucideButtonIconsUI() {
     actionSel.dataset.lucideInit = "1";
     actionSel.innerHTML = "";
     Object.keys(controllerButtonDefs).forEach(function (aid) {
-      if (aid === "reset") return;
+      if (aid === "nudge") {
+        Object.keys(lucideSubtitleNudgeActionLabels).forEach(function (subId) {
+          var o2 = document.createElement("option");
+          o2.value = subId;
+          o2.textContent =
+            lucideSubtitleNudgeActionLabels[subId] + " (" + subId + ")";
+          actionSel.appendChild(o2);
+        });
+        return;
+      }
       var o = document.createElement("option");
       o.value = aid;
       o.textContent =

@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", function () {
     faster:   { label: "", className: "" },
     advance:  { label: "", className: "rw" },
     display:  { label: "", className: "hideButton" },
-    reset:    { label: "", className: "" },
+    reset:    { label: "\u21BB", className: "" },
     fast:     { label: "", className: "" },
     nudge:    { label: "", className: "" },
     settings: { label: "", className: "" },

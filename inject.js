@@ -776,27 +776,40 @@ function setSubtitleNudgeEnabledForVideo(video, enabled) {
   return normalizedEnabled;
 }
 
-function subtitleNudgeIconMarkup(isEnabled) {
+function renderSubtitleNudgeIndicatorContent(target, isEnabled) {
+  if (!target) return;
   var action = isEnabled ? "subtitleNudgeOn" : "subtitleNudgeOff";
   var custom =
     tc.settings.customButtonIcons &&
     tc.settings.customButtonIcons[action] &&
     tc.settings.customButtonIcons[action].svg;
+  vscClearElement(target);
   if (custom) {
-    return (
-      '<span class="vsc-btn-icon" aria-hidden="true">' + custom + "</span>"
+    var customWrap = vscCreateSvgWrap(
+      target.ownerDocument || document,
+      custom,
+      "vsc-btn-icon"
     );
+    if (customWrap) {
+      target.appendChild(customWrap);
+      return;
+    }
   }
   if (typeof vscIconSvgString !== "function") {
-    return isEnabled ? "✓" : "×";
+    target.textContent = isEnabled ? "✓" : "×";
+    return;
   }
   var svg = vscIconSvgString(action, 14);
   if (!svg) {
-    return isEnabled ? "✓" : "×";
+    target.textContent = isEnabled ? "✓" : "×";
+    return;
   }
-  return (
-    '<span class="vsc-btn-icon" aria-hidden="true">' + svg + "</span>"
-  );
+  var wrap = vscCreateSvgWrap(target.ownerDocument || document, svg, "vsc-btn-icon");
+  if (wrap) {
+    target.appendChild(wrap);
+    return;
+  }
+  target.textContent = isEnabled ? "✓" : "×";
 }
 
 function updateSubtitleNudgeIndicator(video) {
@@ -804,11 +817,10 @@ function updateSubtitleNudgeIndicator(video) {
 
   var isEnabled = isSubtitleNudgeEnabledForVideo(video);
   var title = isEnabled ? "Subtitle nudge enabled" : "Subtitle nudge disabled";
-  var mark = subtitleNudgeIconMarkup(isEnabled);
 
   var indicator = video.vsc.subtitleNudgeIndicator;
   if (indicator) {
-    indicator.innerHTML = mark;
+    renderSubtitleNudgeIndicatorContent(indicator, isEnabled);
     indicator.dataset.enabled = isEnabled ? "true" : "false";
     indicator.dataset.supported = "true";
     indicator.title = title;
@@ -817,7 +829,7 @@ function updateSubtitleNudgeIndicator(video) {
 
   var flashEl = video.vsc.nudgeFlashIndicator;
   if (flashEl) {
-    flashEl.innerHTML = mark;
+    renderSubtitleNudgeIndicatorContent(flashEl, isEnabled);
     flashEl.dataset.enabled = isEnabled ? "true" : "false";
     flashEl.dataset.supported = "true";
     flashEl.setAttribute("aria-label", title);
@@ -1357,12 +1369,15 @@ chrome.storage.sync.get(tc.settings, function (storage) {
                 tc.settings.customButtonIcons &&
                 tc.settings.customButtonIcons[act] &&
                 tc.settings.customButtonIcons[act].svg;
-              btn.innerHTML = "";
+              vscClearElement(btn);
               if (svg) {
-                var cw = doc.createElement("span");
-                cw.className = "vsc-btn-icon";
-                cw.innerHTML = svg;
-                btn.appendChild(cw);
+                var cw = vscCreateSvgWrap(doc, svg, "vsc-btn-icon");
+                if (cw) {
+                  btn.appendChild(cw);
+                } else {
+                  var cdf = controllerButtonDefs[act];
+                  btn.textContent = (cdf && cdf.label) || "?";
+                }
               } else if (typeof vscIconWrap === "function") {
                 var wrap = vscIconWrap(doc, act, 14);
                 if (wrap) {
@@ -1405,10 +1420,12 @@ function createControllerButton(doc, action, label, className) {
     tc.settings.customButtonIcons[action] &&
     tc.settings.customButtonIcons[action].svg;
   if (custom) {
-    var customWrap = doc.createElement("span");
-    customWrap.className = "vsc-btn-icon";
-    customWrap.innerHTML = custom;
-    button.appendChild(customWrap);
+    var customWrap = vscCreateSvgWrap(doc, custom, "vsc-btn-icon");
+    if (customWrap) {
+      button.appendChild(customWrap);
+    } else {
+      button.textContent = label || "?";
+    }
   } else if (typeof vscIconWrap === "function") {
     var wrap = vscIconWrap(doc, action, 14);
     if (wrap) {

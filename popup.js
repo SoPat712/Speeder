@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", function () {
     display:  { label: "", className: "hideButton" },
     reset:    { label: "", className: "" },
     fast:     { label: "", className: "" },
+    nudge:    { label: "", className: "" },
     settings: { label: "", className: "" },
     pause:    { label: "", className: "" },
     muted:    { label: "", className: "" },
@@ -18,6 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   var defaultButtons = ["rewind", "slower", "faster", "advance", "display"];
+  var popupExcludedButtonIds = new Set(["settings"]);
   var storageDefaults = {
     enabled: true,
     showPopupControlBar: true,
@@ -64,25 +66,37 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function resolvePopupButtons(storage, siteRule) {
+    function sanitize(buttons) {
+      if (!Array.isArray(buttons)) return [];
+      var seen = new Set();
+      return buttons.filter(function (id) {
+        if (!controllerButtonDefs[id] || popupExcludedButtonIds.has(id) || seen.has(id)) {
+          return false;
+        }
+        seen.add(id);
+        return true;
+      });
+    }
+
     if (siteRule && Array.isArray(siteRule.popupControllerButtons)) {
-      return siteRule.popupControllerButtons;
+      return sanitize(siteRule.popupControllerButtons);
     }
 
     if (storage.popupMatchHoverControls) {
       if (siteRule && Array.isArray(siteRule.controllerButtons)) {
-        return siteRule.controllerButtons;
+        return sanitize(siteRule.controllerButtons);
       }
 
       if (Array.isArray(storage.controllerButtons)) {
-        return storage.controllerButtons;
+        return sanitize(storage.controllerButtons);
       }
     }
 
     if (Array.isArray(storage.popupControllerButtons)) {
-      return storage.popupControllerButtons;
+      return sanitize(storage.popupControllerButtons);
     }
 
-    return defaultButtons;
+    return sanitize(defaultButtons);
   }
 
   function setControlBarVisible(visible) {
@@ -209,7 +223,6 @@ document.addEventListener("DOMContentLoaded", function () {
     var customMap = customIconsMap || {};
 
     buttons.forEach(function (btnId) {
-      if (btnId === "nudge") return;
       var def = controllerButtonDefs[btnId];
       if (!def) return;
 

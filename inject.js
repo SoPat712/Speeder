@@ -1939,14 +1939,20 @@ function defineVideoController() {
     if (subtitleNudgeIndicator) {
       updateSubtitleNudgeIndicator(this.video);
     }
+    function blurAfterPointerTap(target, e) {
+      if (!target || typeof target.blur !== "function") return;
+      var pt = e.pointerType;
+      if (pt === "mouse" || pt === "touch" || (!pt && e.detail > 0)) {
+        requestAnimationFrame(function () {
+          target.blur();
+        });
+      }
+    }
     dragHandle.addEventListener(
       "mousedown",
       (e) => {
-        runAction(
-          e.target.dataset["action"],
-          getKeyBindings(e.target.dataset["action"], "value"),
-          e
-        );
+        var dragAction = dragHandle.dataset.action;
+        runAction(dragAction, getKeyBindings(dragAction, "value"), e);
         e.stopPropagation();
       },
       true
@@ -1955,11 +1961,9 @@ function defineVideoController() {
       button.addEventListener(
         "click",
         (e) => {
-          runAction(
-            e.target.dataset["action"],
-            getKeyBindings(e.target.dataset["action"]),
-            e
-          );
+          var action = button.dataset.action;
+          runAction(action, getKeyBindings(action), e);
+          blurAfterPointerTap(button, e);
           e.stopPropagation();
         },
         true
@@ -1974,6 +1978,7 @@ function defineVideoController() {
             var newState = !isSubtitleNudgeEnabledForVideo(video);
             setSubtitleNudgeEnabledForVideo(video, newState);
           }
+          blurAfterPointerTap(subtitleNudgeIndicator, e);
           e.stopPropagation();
         },
         true
@@ -2667,6 +2672,7 @@ function runAction(action, value, e) {
       "mark",
       "jump",
       "drag",
+      "nudge",
       "toggleSubtitleNudge",
       "display"
     ];
@@ -2781,6 +2787,12 @@ function runAction(action, value, e) {
         break;
       case "toggleSubtitleNudge":
         setSubtitleNudgeEnabledForVideo(v, subtitleNudgeToggleValue);
+        break;
+      case "nudge":
+        setSubtitleNudgeEnabledForVideo(
+          v,
+          !isSubtitleNudgeEnabledForVideo(v)
+        );
         break;
     }
   });

@@ -147,6 +147,19 @@ var controllerButtonDefs = {
   mark:     { icon: "\u2691", name: "Set marker" },
   jump:     { icon: "\u21E5", name: "Jump to marker" }
 };
+var popupExcludedButtonIds = new Set(["settings"]);
+
+function sanitizePopupButtonOrder(buttonIds) {
+  if (!Array.isArray(buttonIds)) return [];
+  var seen = new Set();
+  return buttonIds.filter(function (id) {
+    if (!controllerButtonDefs[id] || popupExcludedButtonIds.has(id) || seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
 
 /** Cached custom Lucide SVGs (mirrors chrome.storage.local customButtonIcons). */
 var customButtonIconsLive = {};
@@ -713,7 +726,7 @@ function save_options() {
     document.getElementById("showPopupControlBar").checked;
   settings.popupMatchHoverControls =
     document.getElementById("popupMatchHoverControls").checked;
-  settings.popupControllerButtons = getPopupControlBarOrder();
+  settings.popupControllerButtons = sanitizePopupButtonOrder(getPopupControlBarOrder());
 
   // Collect site rules
   settings.siteRules = [];
@@ -802,7 +815,9 @@ function save_options() {
         ruleEl.querySelector(".site-showPopupControlBar").checked;
       var popupActiveZone = ruleEl.querySelector(".site-popup-cb-active");
       if (popupActiveZone) {
-        rule.popupControllerButtons = readControlBarOrder(popupActiveZone);
+        rule.popupControllerButtons = sanitizePopupButtonOrder(
+          readControlBarOrder(popupActiveZone)
+        );
       }
     }
 
@@ -1071,7 +1086,10 @@ function createSiteRule(rule) {
       populateControlBarZones(
         sitePopupActive,
         sitePopupAvailable,
-        rule.popupControllerButtons
+        sanitizePopupButtonOrder(rule.popupControllerButtons),
+        function (id) {
+          return !popupExcludedButtonIds.has(id);
+        }
       );
     } else if (
       sitePopupActive &&
@@ -1081,7 +1099,10 @@ function createSiteRule(rule) {
       populateControlBarZones(
         sitePopupActive,
         sitePopupAvailable,
-        getPopupControlBarOrder()
+        getPopupControlBarOrder(),
+        function (id) {
+          return !popupExcludedButtonIds.has(id);
+        }
       );
     }
   }
@@ -1139,16 +1160,23 @@ function createControlBarBlock(buttonId) {
   return block;
 }
 
-function populateControlBarZones(activeZone, availableZone, activeIds) {
+function populateControlBarZones(activeZone, availableZone, activeIds, allowButtonId) {
   activeZone.innerHTML = "";
   availableZone.innerHTML = "";
 
+  var allowed = function (id) {
+    if (!controllerButtonDefs[id]) return false;
+    return typeof allowButtonId === "function" ? Boolean(allowButtonId(id)) : true;
+  };
+
   activeIds.forEach(function (id) {
+    if (!allowed(id)) return;
     var block = createControlBarBlock(id);
     if (block) activeZone.appendChild(block);
   });
 
   Object.keys(controllerButtonDefs).forEach(function (id) {
+    if (!allowed(id)) return;
     if (!activeIds.includes(id)) {
       var block = createControlBarBlock(id);
       if (block) availableZone.appendChild(block);
@@ -1176,15 +1204,21 @@ function getControlBarOrder() {
 }
 
 function populatePopupControlBarEditor(activeIds) {
+  var popupActiveIds = sanitizePopupButtonOrder(activeIds);
   populateControlBarZones(
     document.getElementById("popupControlBarActive"),
     document.getElementById("popupControlBarAvailable"),
-    activeIds
+    popupActiveIds,
+    function (id) {
+      return !popupExcludedButtonIds.has(id);
+    }
   );
 }
 
 function getPopupControlBarOrder() {
-  return readControlBarOrder(document.getElementById("popupControlBarActive"));
+  return sanitizePopupButtonOrder(
+    readControlBarOrder(document.getElementById("popupControlBarActive"))
+  );
 }
 
 function updatePopupEditorDisabledState() {
@@ -1771,7 +1805,10 @@ document.addEventListener("DOMContentLoaded", function () {
           populateControlBarZones(
             popupActiveZone,
             popupAvailableZone,
-            getPopupControlBarOrder()
+            getPopupControlBarOrder(),
+            function (id) {
+              return !popupExcludedButtonIds.has(id);
+            }
           );
         }
       } else {

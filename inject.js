@@ -888,6 +888,10 @@ function applySourceTransitionPolicy(video, forceUpdate) {
   if (Math.abs(video.playbackRate - desiredSpeed) > 0.01) {
     setSpeed(video, desiredSpeed, false, false);
   }
+
+  // Same-tab SPA (e.g. YouTube watch → Shorts): URL can change while remember-speed
+  // already ran on src mutation — re-apply margins / location / opacity for new rules.
+  reapplySiteRulesAndControllerGeometry();
 }
 
 function extendSpeedRestoreWindow(video, duration) {
@@ -1016,6 +1020,14 @@ function ensureController(node, parent) {
     );
     return null;
   }
+
+  // href selects site rules; re-run on every new/usable media so margins/opacity match current URL.
+  var siteDisabled = applySiteRuleOverrides();
+  if (!tc.settings.enabled || siteDisabled) {
+    return null;
+  }
+  refreshAllControllerGeometry();
+
   log(
     `Creating controller for ${node.tagName}: ${node.src || node.currentSrc || "no src"}`,
     4
@@ -2155,6 +2167,25 @@ function applySiteRuleOverrides() {
   return false;
 }
 
+/** Apply current tc.settings controller layout/opacity to every attached controller (after site rules). */
+function refreshAllControllerGeometry() {
+  tc.mediaElements.forEach(function (video) {
+    if (!video || !video.vsc) return;
+    applyControllerLocation(video.vsc, tc.settings.controllerLocation);
+    var controllerEl = getControllerElement(video.vsc);
+    if (controllerEl) {
+      controllerEl.style.opacity = String(tc.settings.controllerOpacity);
+    }
+  });
+}
+
+/** Re-match site rules for current URL and refresh controller position/opacity on every video. */
+function reapplySiteRulesAndControllerGeometry() {
+  var siteDisabled = applySiteRuleOverrides();
+  if (!tc.settings.enabled || siteDisabled) return;
+  refreshAllControllerGeometry();
+}
+
 function shouldPreserveDesiredSpeed(video, speed) {
   if (!video || !video.vsc) return false;
   var desiredSpeed = getDesiredSpeed(video);
@@ -2482,6 +2513,10 @@ function attachNavigationListeners() {
 
   window.addEventListener("popstate", scheduleRescan);
   window.addEventListener("hashchange", scheduleRescan);
+  /* YouTube often navigates without a history API call the extension can see first */
+  if (typeof document !== "undefined" && isOnYouTube()) {
+    document.addEventListener("yt-navigate-finish", scheduleRescan);
+  }
   window.vscNavigationListenersAttached = true;
 }
 
@@ -2501,14 +2536,7 @@ function initializeNow(doc, forceReinit = false) {
 
   if (forceReinit) {
     log("Force re-initialization requested", 4);
-    tc.mediaElements.forEach(function (video) {
-      if (!video || !video.vsc) return;
-      applyControllerLocation(video.vsc, tc.settings.controllerLocation);
-      var controllerEl = getControllerElement(video.vsc);
-      if (controllerEl) {
-        controllerEl.style.opacity = String(tc.settings.controllerOpacity);
-      }
-    });
+    refreshAllControllerGeometry();
   }
 
   vscInitializedDocuments.add(doc);

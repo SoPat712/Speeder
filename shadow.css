@@ -10,8 +10,11 @@
   line-height: 1;
 }
 
+/* Show extra buttons on hover or keyboard :focus-visible only. Plain :focus-within
+   after a mouse click kept #controls visible while hover-only rules (e.g. draggable
+   margin) turned off when the pointer left the bar. */
 #controller:hover #controls,
-#controller:focus-within #controls,
+#controller:focus-within:has(:focus-visible) #controls,
 :host(:hover) #controls {
   display: inline-flex;
   vertical-align: middle;

@@ -31,32 +31,9 @@ function sanitizeLucideSvg(svgText) {
   var t = String(svgText).replace(/\0/g, "").trim();
   if (!/<svg[\s>]/i.test(t)) return null;
   var doc = new DOMParser().parseFromString(t, "image/svg+xml");
-  var svg = doc.querySelector("svg");
+  if (doc.querySelector("parsererror")) return null;
+  var svg = vscSanitizeSvgTree(doc.querySelector("svg"));
   if (!svg) return null;
-  svg.querySelectorAll("script").forEach(function (n) {
-    n.remove();
-  });
-  svg.querySelectorAll("style").forEach(function (n) {
-    n.remove();
-  });
-  svg.querySelectorAll("*").forEach(function (el) {
-    for (var i = el.attributes.length - 1; i >= 0; i--) {
-      var attr = el.attributes[i];
-      var name = attr.name.toLowerCase();
-      var val = attr.value;
-      if (name.indexOf("on") === 0) {
-        el.removeAttribute(attr.name);
-        continue;
-      }
-      if (
-        (name === "href" || name === "xlink:href") &&
-        /^javascript:/i.test(val)
-      ) {
-        el.removeAttribute(attr.name);
-      }
-    }
-  });
-  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   svg.removeAttribute("width");
   svg.removeAttribute("height");
   svg.setAttribute("width", "100%");

@@ -172,8 +172,9 @@ var customButtonIconsLive = {};
 
 function fillControlBarIconElement(icon, buttonId) {
   if (!icon || !buttonId) return;
+  var doc = icon.ownerDocument || document;
   if (buttonId === "nudge") {
-    icon.innerHTML = "";
+    vscClearElement(icon);
     icon.className = "cb-icon cb-icon-nudge-pair";
     function nudgeChipMarkup(action) {
       var c = customButtonIconsLive[action];
@@ -189,10 +190,10 @@ function fillControlBarIconElement(icon, buttonId) {
       sp.setAttribute("data-nudge-state", stateKey);
       var inner = nudgeChipMarkup(action);
       if (inner) {
-        var wrap = document.createElement("span");
-        wrap.className = "vsc-btn-icon";
-        wrap.innerHTML = inner;
-        sp.appendChild(wrap);
+        var wrap = vscCreateSvgWrap(doc, inner, "vsc-btn-icon");
+        if (wrap) {
+          sp.appendChild(wrap);
+        }
       }
       icon.appendChild(sp);
     }
@@ -207,16 +208,15 @@ function fillControlBarIconElement(icon, buttonId) {
   icon.className = "cb-icon";
   var custom = customButtonIconsLive[buttonId];
   if (custom && custom.svg) {
-    icon.innerHTML = custom.svg;
-    return;
+    if (vscSetSvgContent(icon, custom.svg)) return;
   }
   if (typeof vscIconSvgString === "function") {
     var svgHtml = vscIconSvgString(buttonId, 16);
     if (svgHtml) {
-      icon.innerHTML = svgHtml;
-      return;
+      if (vscSetSvgContent(icon, svgHtml)) return;
     }
   }
+  vscClearElement(icon);
   var def = controllerButtonDefs[buttonId];
   icon.textContent = (def && def.icon) || "?";
 }
@@ -1200,8 +1200,8 @@ function createControlBarBlock(buttonId) {
 }
 
 function populateControlBarZones(activeZone, availableZone, activeIds, allowButtonId) {
-  activeZone.innerHTML = "";
-  availableZone.innerHTML = "";
+  vscClearElement(activeZone);
+  vscClearElement(availableZone);
 
   var allowed = function (id) {
     if (!controllerButtonDefs[id]) return false;
@@ -1394,7 +1394,7 @@ function initLucideButtonIconsUI() {
 
   if (!actionSel.dataset.lucideInit) {
     actionSel.dataset.lucideInit = "1";
-    actionSel.innerHTML = "";
+    vscClearElement(actionSel);
     Object.keys(controllerButtonDefs).forEach(function (aid) {
       if (aid === "nudge") {
         Object.keys(lucideSubtitleNudgeActionLabels).forEach(function (subId) {
@@ -1415,7 +1415,7 @@ function initLucideButtonIconsUI() {
   }
 
   function renderResults(slugs) {
-    resultsEl.innerHTML = "";
+    vscClearElement(resultsEl);
     slugs.forEach(function (slug) {
       var b = document.createElement("button");
       b.type = "button";
@@ -1450,11 +1450,13 @@ function initLucideButtonIconsUI() {
           .then(function (txt) {
             var safe = sanitizeLucideSvg(txt);
             if (!safe) throw new Error("Bad SVG");
-            previewEl.innerHTML = safe;
+            if (!vscSetSvgContent(previewEl, safe)) {
+              throw new Error("Preview render failed");
+            }
             setLucideStatus("Preview: " + slug);
           })
           .catch(function (e) {
-            previewEl.innerHTML = "";
+            vscClearElement(previewEl);
             setLucideStatus(
               "Could not load: " + slug + " — " + e.message
             );
@@ -1473,7 +1475,7 @@ function initLucideButtonIconsUI() {
           .then(function (map) {
             var q = searchInput.value;
             if (!q.trim()) {
-              resultsEl.innerHTML = "";
+              vscClearElement(resultsEl);
               return;
             }
             renderResults(searchLucideSlugs(map, q, 48));
@@ -1638,7 +1640,7 @@ function restore_options() {
         ? storage.siteRules
         : tcDefaults.siteRules || [];
 
-    document.getElementById("siteRulesContainer").innerHTML = "";
+    vscClearElement(document.getElementById("siteRulesContainer"));
     if (siteRules.length > 0) {
       siteRules.forEach((rule) => {
         if (rule && rule.pattern) {

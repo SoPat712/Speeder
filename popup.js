@@ -230,17 +230,21 @@ document.addEventListener("DOMContentLoaded", function () {
       btn.dataset.action = btnId;
       var customEntry = customMap[btnId];
       if (customEntry && customEntry.svg) {
-        var customSpan = document.createElement("span");
-        customSpan.className = "vsc-btn-icon";
-        customSpan.innerHTML = customEntry.svg;
-        btn.appendChild(customSpan);
+        var customSpan = vscCreateSvgWrap(document, customEntry.svg, "vsc-btn-icon");
+        if (customSpan) {
+          btn.appendChild(customSpan);
+        } else {
+          btn.textContent = def.label || "?";
+        }
       } else if (typeof vscIconSvgString === "function") {
         var svgStr = vscIconSvgString(btnId, 16);
         if (svgStr) {
-          var iconSpan = document.createElement("span");
-          iconSpan.className = "vsc-btn-icon";
-          iconSpan.innerHTML = svgStr;
-          btn.appendChild(iconSpan);
+          var iconSpan = vscCreateSvgWrap(document, svgStr, "vsc-btn-icon");
+          if (iconSpan) {
+            btn.appendChild(iconSpan);
+          } else {
+            btn.textContent = def.label || "?";
+          }
         } else {
           btn.textContent = def.label || "?";
         }

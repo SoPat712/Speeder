@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Bump manifest on dev, merge dev→beta→main, push an annotated stable tag (v* without -beta).
+# Squash beta onto main, set manifest version, one release commit, push stable tag (v* without -beta).
+# Does not merge dev or push to beta — promote only what is already on beta.
 # Triggers .github/workflows/deploy.yml: listed AMO submission.
 
 set -euo pipefail
@@ -54,11 +55,11 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-git checkout dev
-git pull origin dev
+git checkout beta
+git pull origin beta
 
-echo "Current version in manifest.json: $(manifest_version)"
-read -r -p "New version for manifest.json (e.g. 5.0.4): " SEMVER_IN
+echo "Current version on beta (manifest.json): $(manifest_version)"
+read -r -p "Release version for manifest.json + tag (e.g. 5.0.4): " SEMVER_IN
 SEMVER="$(normalize_semver "$SEMVER_IN")"
 validate_semver "$SEMVER"
 
@@ -71,28 +72,22 @@ fi
 
 echo
 echo "This will:"
-echo "  1. set manifest.json version to $SEMVER and commit on dev"
-echo "  2. merge dev → beta and push beta"
-echo "  3. merge beta → main and push main"
-echo "  4. create tag $TAG on main and push it (triggers listed AMO submit)"
-echo "  5. checkout dev"
+echo "  1. checkout main, merge --squash origin/beta (single release commit on main)"
+echo "  2. set manifest.json to $SEMVER in that commit (if anything else changed, it is included too)"
+echo "  3. push origin main, create tag $TAG, push tag (triggers listed AMO submit)"
+echo "  4. checkout dev (merge main→dev yourself if you want them aligned)"
 read -r -p "Continue? [y/N] " confirm
 [[ "${confirm:-}" =~ ^[yY](es)?$ ]] || { echo "Aborted."; exit 1; }
 
 echo "🚀 Releasing stable $TAG to AMO (listed)"
 
-bump_manifest "$SEMVER"
-git add manifest.json
-git commit -m "Bump version to $SEMVER"
-
-git checkout beta
-git pull origin beta
-git merge dev --no-ff -m "Merge dev ($TAG)"
-git push origin beta
-
 git checkout main
 git pull origin main
-git merge beta --no-ff -m "Merge beta ($TAG)"
+git merge --squash beta
+bump_manifest "$SEMVER"
+git add -A
+git commit -m "Release $TAG"
+
 git push origin main
 
 git tag -a "$TAG" -m "$TAG"
@@ -100,4 +95,4 @@ git push origin "$TAG"
 
 git checkout dev
 
-echo "✅ Done: stable $TAG (manifest $SEMVER, main + tag pushed)"
+echo "✅ Done: main squashed from beta, tagged $TAG (manifest $SEMVER)"

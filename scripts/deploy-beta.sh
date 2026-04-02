@@ -76,10 +76,10 @@ fi
 
 echo
 echo "This will:"
-echo "  1. set manifest.json version to $SEMVER and commit on dev"
+echo "  1. set manifest.json version to $SEMVER, commit on dev, push origin dev"
 echo "  2. checkout beta, merge dev (no-ff), push origin beta"
 echo "  3. create tag $TAG and push it (triggers beta AMO + prerelease)"
-echo "  4. checkout dev"
+echo "  4. checkout dev (main is not modified)"
 read -r -p "Continue? [y/N] " confirm
 [[ "${confirm:-}" =~ ^[yY](es)?$ ]] || { echo "Aborted."; exit 1; }
 
@@ -88,6 +88,7 @@ echo "🚀 Releasing beta $TAG"
 bump_manifest "$SEMVER"
 git add manifest.json
 git commit -m "Bump version to $SEMVER"
+git push origin dev
 
 git checkout beta
 git pull origin beta
@@ -98,5 +99,6 @@ git tag -a "$TAG" -m "$TAG"
 git push origin "$TAG"
 
 git checkout dev
+git pull origin dev
 
-echo "✅ Done: beta $TAG (manifest $SEMVER, merge + tag pushed)"
+echo "✅ Done: beta $TAG (manifest $SEMVER; dev + beta + tag pushed)"

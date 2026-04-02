@@ -138,7 +138,7 @@ var controllerButtonDefs = {
   faster:   { icon: "+",      name: "Increase speed" },
   advance:  { icon: "\u00BB", name: "Advance" },
   display:  { icon: "\u00D7", name: "Close controller" },
-  reset:    { icon: "\u21BA", name: "Reset speed" },
+  reset:    { icon: "\u21BB", name: "Reset speed" },
   fast:     { icon: "\u2605", name: "Preferred speed" },
   nudge:    { icon: "\u2713", name: "Subtitle nudge" },
   settings: { icon: "\u2699", name: "Settings" },
@@ -147,6 +147,79 @@ var controllerButtonDefs = {
   mark:     { icon: "\u2691", name: "Set marker" },
   jump:     { icon: "\u21E5", name: "Jump to marker" }
 };
+var popupExcludedButtonIds = new Set(["settings"]);
+
+/** Lucide picker only — not control-bar blocks (chip uses subtitleNudgeOn/Off). */
+var lucideSubtitleNudgeActionLabels = {
+  subtitleNudgeOn: "Subtitle nudge — enabled",
+  subtitleNudgeOff: "Subtitle nudge — disabled"
+};
+
+function sanitizePopupButtonOrder(buttonIds) {
+  if (!Array.isArray(buttonIds)) return [];
+  var seen = new Set();
+  return buttonIds.filter(function (id) {
+    if (!controllerButtonDefs[id] || popupExcludedButtonIds.has(id) || seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
+
+/** Cached custom Lucide SVGs (mirrors chrome.storage.local customButtonIcons). */
+var customButtonIconsLive = {};
+
+function fillControlBarIconElement(icon, buttonId) {
+  if (!icon || !buttonId) return;
+  if (buttonId === "nudge") {
+    icon.innerHTML = "";
+    icon.className = "cb-icon cb-icon-nudge-pair";
+    function nudgeChipMarkup(action) {
+      var c = customButtonIconsLive[action];
+      if (c && c.svg) return c.svg;
+      if (typeof vscIconSvgString === "function") {
+        return vscIconSvgString(action, 14) || "";
+      }
+      return "";
+    }
+    function appendChip(action, stateKey) {
+      var sp = document.createElement("span");
+      sp.className = "cb-nudge-chip";
+      sp.setAttribute("data-nudge-state", stateKey);
+      var inner = nudgeChipMarkup(action);
+      if (inner) {
+        var wrap = document.createElement("span");
+        wrap.className = "vsc-btn-icon";
+        wrap.innerHTML = inner;
+        sp.appendChild(wrap);
+      }
+      icon.appendChild(sp);
+    }
+    appendChip("subtitleNudgeOn", "on");
+    var sep = document.createElement("span");
+    sep.className = "cb-nudge-sep";
+    sep.textContent = "/";
+    icon.appendChild(sep);
+    appendChip("subtitleNudgeOff", "off");
+    return;
+  }
+  icon.className = "cb-icon";
+  var custom = customButtonIconsLive[buttonId];
+  if (custom && custom.svg) {
+    icon.innerHTML = custom.svg;
+    return;
+  }
+  if (typeof vscIconSvgString === "function") {
+    var svgHtml = vscIconSvgString(buttonId, 16);
+    if (svgHtml) {
+      icon.innerHTML = svgHtml;
+      return;
+    }
+  }
+  var def = controllerButtonDefs[buttonId];
+  icon.textContent = (def && def.icon) || "?";
+}
 
 function createDefaultBinding(action, key, keyCode, value) {
   return {
@@ -198,6 +271,7 @@ var tcDefaults = {
     {
       pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/shorts\\/.*/",
       enabled: true,
+      rememberSpeed: true,
       controllerMarginTop: 60,
       controllerMarginBottom: 85
     }
@@ -226,6 +300,19 @@ const actionLabels = {
   jump: "Jump to marker",
   toggleSubtitleNudge: "Toggle subtitle nudge"
 };
+
+const speedBindingActions = ["slower", "faster", "fast"];
+
+function formatSpeedBindingDisplay(action, value) {
+  if (!speedBindingActions.includes(action)) {
+    return value;
+  }
+  var n = Number(value);
+  if (!isFinite(n)) {
+    return value;
+  }
+  return n.toFixed(2);
+}
 
 const customActionsNoValues = [
   "reset",
@@ -526,7 +613,7 @@ function add_shortcut(action, value) {
     valueInput.value = "N/A";
     valueInput.disabled = true;
   } else {
-    valueInput.value = value || 0;
+    valueInput.value = formatSpeedBindingDisplay(action, value || 0);
   }
 
   var removeButton = document.createElement("button");
@@ -678,7 +765,7 @@ function save_options() {
     document.getElementById("showPopupControlBar").checked;
   settings.popupMatchHoverControls =
     document.getElementById("popupMatchHoverControls").checked;
-  settings.popupControllerButtons = getPopupControlBarOrder();
+  settings.popupControllerButtons = sanitizePopupButtonOrder(getPopupControlBarOrder());
 
   // Collect site rules
   settings.siteRules = [];
@@ -767,7 +854,9 @@ function save_options() {
         ruleEl.querySelector(".site-showPopupControlBar").checked;
       var popupActiveZone = ruleEl.querySelector(".site-popup-cb-active");
       if (popupActiveZone) {
-        rule.popupControllerButtons = readControlBarOrder(popupActiveZone);
+        rule.popupControllerButtons = sanitizePopupButtonOrder(
+          readControlBarOrder(popupActiveZone)
+        );
       }
     }
 
@@ -834,27 +923,6 @@ function ensureAllDefaultBindings(storage) {
   });
 }
 
-function migrateLegacyBlacklist(storage) {
-  if (!storage.blacklist || typeof storage.blacklist !== "string") {
-    return [];
-  }
-
-  var siteRules = [];
-  var lines = storage.blacklist.split("\n");
-  
-  lines.forEach((line) => {
-    var pattern = line.replace(regStrip, "");
-    if (pattern.length === 0) return;
-    
-    siteRules.push({
-      pattern: pattern,
-      disableExtension: true
-    });
-  });
-
-  return siteRules;
-}
-
 function addSiteRuleShortcut(container, action, binding, value, force) {
   var div = document.createElement("div");
   div.setAttribute("class", "shortcut-row customs");
@@ -899,9 +967,11 @@ function addSiteRuleShortcut(container, action, binding, value, force) {
   valueInput.className = "customValue";
   valueInput.type = "text";
   valueInput.placeholder = "value (0.10)";
-  valueInput.value = value || 0;
   if (customActionsNoValues.includes(action)) {
+    valueInput.value = "N/A";
     valueInput.disabled = true;
+  } else {
+    valueInput.value = formatSpeedBindingDisplay(action, value || 0);
   }
 
   var forceLabel = document.createElement("label");
@@ -1055,7 +1125,10 @@ function createSiteRule(rule) {
       populateControlBarZones(
         sitePopupActive,
         sitePopupAvailable,
-        rule.popupControllerButtons
+        sanitizePopupButtonOrder(rule.popupControllerButtons),
+        function (id) {
+          return !popupExcludedButtonIds.has(id);
+        }
       );
     } else if (
       sitePopupActive &&
@@ -1065,7 +1138,10 @@ function createSiteRule(rule) {
       populateControlBarZones(
         sitePopupActive,
         sitePopupAvailable,
-        getPopupControlBarOrder()
+        getPopupControlBarOrder(),
+        function (id) {
+          return !popupExcludedButtonIds.has(id);
+        }
       );
     }
   }
@@ -1110,7 +1186,7 @@ function createControlBarBlock(buttonId) {
 
   var icon = document.createElement("span");
   icon.className = "cb-icon";
-  icon.textContent = def.icon;
+  fillControlBarIconElement(icon, buttonId);
 
   var label = document.createElement("span");
   label.className = "cb-label";
@@ -1123,16 +1199,23 @@ function createControlBarBlock(buttonId) {
   return block;
 }
 
-function populateControlBarZones(activeZone, availableZone, activeIds) {
+function populateControlBarZones(activeZone, availableZone, activeIds, allowButtonId) {
   activeZone.innerHTML = "";
   availableZone.innerHTML = "";
 
+  var allowed = function (id) {
+    if (!controllerButtonDefs[id]) return false;
+    return typeof allowButtonId === "function" ? Boolean(allowButtonId(id)) : true;
+  };
+
   activeIds.forEach(function (id) {
+    if (!allowed(id)) return;
     var block = createControlBarBlock(id);
     if (block) activeZone.appendChild(block);
   });
 
   Object.keys(controllerButtonDefs).forEach(function (id) {
+    if (!allowed(id)) return;
     if (!activeIds.includes(id)) {
       var block = createControlBarBlock(id);
       if (block) availableZone.appendChild(block);
@@ -1160,15 +1243,21 @@ function getControlBarOrder() {
 }
 
 function populatePopupControlBarEditor(activeIds) {
+  var popupActiveIds = sanitizePopupButtonOrder(activeIds);
   populateControlBarZones(
     document.getElementById("popupControlBarActive"),
     document.getElementById("popupControlBarAvailable"),
-    activeIds
+    popupActiveIds,
+    function (id) {
+      return !popupExcludedButtonIds.has(id);
+    }
   );
 }
 
 function getPopupControlBarOrder() {
-  return readControlBarOrder(document.getElementById("popupControlBarActive"));
+  return sanitizePopupButtonOrder(
+    readControlBarOrder(document.getElementById("popupControlBarActive"))
+  );
 }
 
 function updatePopupEditorDisabledState() {
@@ -1265,8 +1354,216 @@ function initControlBarEditor() {
   });
 }
 
+var lucidePickerSelectedSlug = null;
+var lucideSearchTimer = null;
+
+function setLucideStatus(msg) {
+  var el = document.getElementById("lucideIconStatus");
+  if (el) el.textContent = msg || "";
+}
+
+function repaintAllCbIconsFromCustomMap() {
+  document.querySelectorAll(".cb-block .cb-icon").forEach(function (icon) {
+    var block = icon.closest(".cb-block");
+    if (!block) return;
+    fillControlBarIconElement(icon, block.dataset.buttonId);
+  });
+}
+
+function persistCustomButtonIcons(map, callback) {
+  chrome.storage.local.set({ customButtonIcons: map }, function () {
+    if (chrome.runtime.lastError) {
+      setLucideStatus(
+        "Could not save icons: " + chrome.runtime.lastError.message
+      );
+      return;
+    }
+    customButtonIconsLive = map;
+    if (callback) callback();
+    repaintAllCbIconsFromCustomMap();
+  });
+}
+
+function initLucideButtonIconsUI() {
+  var actionSel = document.getElementById("lucideIconActionSelect");
+  var searchInput = document.getElementById("lucideIconSearch");
+  var resultsEl = document.getElementById("lucideIconResults");
+  var previewEl = document.getElementById("lucideIconPreview");
+  if (!actionSel || !searchInput || !resultsEl || !previewEl) return;
+  if (typeof getLucideTagsMap !== "function") return;
+
+  if (!actionSel.dataset.lucideInit) {
+    actionSel.dataset.lucideInit = "1";
+    actionSel.innerHTML = "";
+    Object.keys(controllerButtonDefs).forEach(function (aid) {
+      if (aid === "nudge") {
+        Object.keys(lucideSubtitleNudgeActionLabels).forEach(function (subId) {
+          var o2 = document.createElement("option");
+          o2.value = subId;
+          o2.textContent =
+            lucideSubtitleNudgeActionLabels[subId] + " (" + subId + ")";
+          actionSel.appendChild(o2);
+        });
+        return;
+      }
+      var o = document.createElement("option");
+      o.value = aid;
+      o.textContent =
+        controllerButtonDefs[aid].name + " (" + aid + ")";
+      actionSel.appendChild(o);
+    });
+  }
+
+  function renderResults(slugs) {
+    resultsEl.innerHTML = "";
+    slugs.forEach(function (slug) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "lucide-result-tile";
+      b.dataset.slug = slug;
+      b.title = slug;
+      b.setAttribute("aria-label", slug);
+      if (slug === lucidePickerSelectedSlug) {
+        b.classList.add("lucide-picked");
+      }
+      var url =
+        typeof lucideIconSvgUrl === "function" ? lucideIconSvgUrl(slug) : "";
+      if (url) {
+        var img = document.createElement("img");
+        img.className = "lucide-result-thumb";
+        img.src = url;
+        img.alt = "";
+        img.loading = "lazy";
+        b.appendChild(img);
+      } else {
+        b.textContent = slug.slice(0, 3);
+      }
+      b.addEventListener("click", function () {
+        lucidePickerSelectedSlug = slug;
+        Array.prototype.forEach.call(
+          resultsEl.querySelectorAll("button"),
+          function (x) {
+            x.classList.toggle("lucide-picked", x.dataset.slug === slug);
+          }
+        );
+        fetchLucideSvg(slug)
+          .then(function (txt) {
+            var safe = sanitizeLucideSvg(txt);
+            if (!safe) throw new Error("Bad SVG");
+            previewEl.innerHTML = safe;
+            setLucideStatus("Preview: " + slug);
+          })
+          .catch(function (e) {
+            previewEl.innerHTML = "";
+            setLucideStatus(
+              "Could not load: " + slug + " — " + e.message
+            );
+          });
+      });
+      resultsEl.appendChild(b);
+    });
+  }
+
+  if (!searchInput.dataset.lucideBound) {
+    searchInput.dataset.lucideBound = "1";
+    searchInput.addEventListener("input", function () {
+      clearTimeout(lucideSearchTimer);
+      lucideSearchTimer = setTimeout(function () {
+        getLucideTagsMap(chrome.storage.local, false)
+          .then(function (map) {
+            var q = searchInput.value;
+            if (!q.trim()) {
+              resultsEl.innerHTML = "";
+              return;
+            }
+            renderResults(searchLucideSlugs(map, q, 48));
+          })
+          .catch(function (e) {
+            setLucideStatus("Icon list error: " + e.message);
+          });
+      }, 200);
+    });
+  }
+
+  var applyBtn = document.getElementById("lucideIconApply");
+  if (applyBtn && !applyBtn.dataset.lucideBound) {
+    applyBtn.dataset.lucideBound = "1";
+    applyBtn.addEventListener("click", function () {
+      var action = actionSel.value;
+      var slug = lucidePickerSelectedSlug;
+      if (!action || !slug) {
+        setLucideStatus("Pick an action and click an icon first.");
+        return;
+      }
+      fetchLucideSvg(slug)
+        .then(function (txt) {
+          var safe = sanitizeLucideSvg(txt);
+          if (!safe) throw new Error("Sanitize failed");
+          var next = Object.assign({}, customButtonIconsLive);
+          next[action] = { slug: slug, svg: safe };
+          persistCustomButtonIcons(next, function () {
+            setLucideStatus(
+              "Saved " +
+                slug +
+                " for " +
+                action +
+                ". Reload pages for the hover bar."
+            );
+          });
+        })
+        .catch(function (e) {
+          setLucideStatus("Apply failed: " + e.message);
+        });
+    });
+  }
+
+  var clrOne = document.getElementById("lucideIconClearAction");
+  if (clrOne && !clrOne.dataset.lucideBound) {
+    clrOne.dataset.lucideBound = "1";
+    clrOne.addEventListener("click", function () {
+      var action = actionSel.value;
+      if (!action) return;
+      var next = Object.assign({}, customButtonIconsLive);
+      delete next[action];
+      persistCustomButtonIcons(next, function () {
+        setLucideStatus("Cleared custom icon for " + action + ".");
+      });
+    });
+  }
+
+  var clrAll = document.getElementById("lucideIconClearAll");
+  if (clrAll && !clrAll.dataset.lucideBound) {
+    clrAll.dataset.lucideBound = "1";
+    clrAll.addEventListener("click", function () {
+      persistCustomButtonIcons({}, function () {
+        setLucideStatus("All custom icons cleared.");
+      });
+    });
+  }
+
+  var reloadTags = document.getElementById("lucideIconReloadTags");
+  if (reloadTags && !reloadTags.dataset.lucideBound) {
+    reloadTags.dataset.lucideBound = "1";
+    reloadTags.addEventListener("click", function () {
+      getLucideTagsMap(chrome.storage.local, true)
+        .then(function () {
+          setLucideStatus("Icon name list refreshed.");
+        })
+        .catch(function (e) {
+          setLucideStatus("Refresh failed: " + e.message);
+        });
+    });
+  }
+}
+
 function restore_options() {
   chrome.storage.sync.get(tcDefaults, function (storage) {
+    chrome.storage.local.get(["customButtonIcons"], function (loc) {
+      customButtonIconsLive =
+        loc && loc.customButtonIcons && typeof loc.customButtonIcons === "object"
+          ? loc.customButtonIcons
+          : {};
+
     document.getElementById("rememberSpeed").checked = storage.rememberSpeed;
     document.getElementById("forceLastSavedSpeed").checked =
       storage.forceLastSavedSpeed;
@@ -1329,22 +1626,17 @@ function restore_options() {
           valueInput.disabled = true;
         }
       } else if (valueInput) {
-        valueInput.value = item.value;
+        valueInput.value = formatSpeedBindingDisplay(item.action, item.value);
       }
     });
 
     refreshAddShortcutSelector();
 
-    // Load site rules (use defaults if none in storage or if storage has empty array)
-    var siteRules = Array.isArray(storage.siteRules) && storage.siteRules.length > 0
-      ? storage.siteRules
-      : (storage.blacklist ? migrateLegacyBlacklist(storage) : (tcDefaults.siteRules || []));
-
-    // If we migrated from blacklist, save the new format
-    if (storage.blacklist && siteRules.length > 0) {
-      chrome.storage.sync.set({ siteRules: siteRules });
-      chrome.storage.sync.remove(["blacklist"]);
-    }
+    // Load site rules (use defaults if none in storage or empty array)
+    var siteRules =
+      Array.isArray(storage.siteRules) && storage.siteRules.length > 0
+        ? storage.siteRules
+        : tcDefaults.siteRules || [];
 
     document.getElementById("siteRulesContainer").innerHTML = "";
     if (siteRules.length > 0) {
@@ -1368,11 +1660,19 @@ function restore_options() {
       : tcDefaults.popupControllerButtons;
     populatePopupControlBarEditor(popupButtons);
     updatePopupEditorDisabledState();
+
+    initLucideButtonIconsUI();
+    });
   });
 }
 
 function restore_defaults() {
   document.querySelectorAll(".customs:not([id])").forEach((el) => el.remove());
+
+  chrome.storage.local.remove(
+    ["customButtonIcons", "lucideTagsCacheV1", "lucideTagsCacheV1At"],
+    function () {}
+  );
 
   chrome.storage.sync.set(tcDefaults, function () {
     restore_options();
@@ -1553,7 +1853,10 @@ document.addEventListener("DOMContentLoaded", function () {
           populateControlBarZones(
             popupActiveZone,
             popupAvailableZone,
-            getPopupControlBarOrder()
+            getPopupControlBarOrder(),
+            function (id) {
+              return !popupExcludedButtonIds.has(id);
+            }
           );
         }
       } else {

@@ -15,12 +15,16 @@
 }
 
 html {
-  min-height: 100%;
+  /* Avoid coupling to the browser viewport: embedded options (e.g. Add-ons
+   * Manager iframe) must size to content, not 100vh, or a large empty band
+   * appears below the page. */
+  height: auto;
+  min-height: 0;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 0;
   padding: 24px 16px 40px;
   background: var(--bg);
   color: var(--text);
@@ -49,6 +53,7 @@ body {
 }
 
 h1,
+h2,
 h3,
 h4 {
   margin: 0;
@@ -102,6 +107,35 @@ h4 {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--panel);
+}
+
+.control-bars-group {
+  padding: 20px;
+}
+
+.control-bars-inner {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-card-nested {
+  background: var(--panel-subtle);
+  border-radius: 10px;
+}
+
+.section-heading-major {
+  margin-bottom: 14px;
+}
+
+.section-heading-major h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.section-heading-major .section-intro {
+  margin-top: 0;
 }
 
 .section-heading {
@@ -299,6 +333,19 @@ label em {
   border-top: 1px solid var(--border);
 }
 
+.row input[type="text"],
+.row select {
+  justify-self: end;
+}
+
+.row.row-checkbox {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+
+.row.row-checkbox input[type="checkbox"] {
+  justify-self: end;
+}
+
 .settings-card .row:first-of-type {
   padding-top: 0;
   border-top: 0;
@@ -310,16 +357,17 @@ label em {
 
 .controller-margin-inputs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 116px));
   gap: 8px;
-  width: 100%;
+  width: max-content;
+  justify-self: end;
 }
 
 .margin-pad-cell {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 0;
+  min-width: 116px;
 }
 
 .margin-pad-mini {
@@ -332,12 +380,13 @@ label em {
 
 .controller-margin-inputs input[type="text"] {
   width: 100%;
-  min-width: 0;
+  min-width: 116px;
   box-sizing: border-box;
+  text-align: right;
 }
 
 .site-rule-option.site-rule-margin-option {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
 }
 
 .site-rule-override-section {
@@ -353,17 +402,23 @@ label em {
 }
 
 .site-override-lead {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 16px;
   align-items: flex-start;
-  gap: 10px;
   font-weight: 600;
   margin-bottom: 8px;
   cursor: pointer;
-  width: auto;
+  width: 100%;
 }
 
-.site-override-lead input {
+.site-override-lead input[type="checkbox"] {
+  justify-self: end;
   margin-top: 3px;
+}
+
+.site-override-lead span {
+  margin: 0;
 }
 
 .site-rule-override-section .site-override-fields,
@@ -481,6 +536,221 @@ label em {
   border: 1px solid var(--border);
   font-size: 12px;
   line-height: 1;
+  color: var(--text);
+}
+
+.cb-icon svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.cb-icon.cb-icon-nudge-pair {
+  width: auto;
+  min-width: 0;
+  padding: 0 4px;
+  gap: 4px;
+  background: transparent;
+  border: none;
+}
+
+.cb-nudge-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.cb-nudge-chip[data-nudge-state="on"] {
+  background: #4b9135;
+  border: 1px solid #6ec754;
+}
+
+.cb-nudge-chip[data-nudge-state="off"] {
+  background: #943e3e;
+  border: 1px solid #c06060;
+}
+
+.cb-nudge-chip .vsc-btn-icon svg,
+.cb-nudge-chip svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.cb-nudge-sep {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.45;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.row-lucide-pair select {
+  justify-self: end;
+}
+
+.row-lucide-search-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.row-lucide-search-row .lucide-search-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.lucide-search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.lucide-search-field:focus-within {
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+}
+
+.lucide-search-icon {
+  display: flex;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.lucide-search-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 14px;
+}
+
+.lucide-search-input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.lucide-search-input:focus {
+  outline: none;
+}
+
+.lucide-icon-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+button.lucide-result-tile {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--panel-subtle);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+}
+
+button.lucide-result-tile:hover {
+  background: var(--panel);
+  border-color: #9ca3af;
+}
+
+button.lucide-result-tile .lucide-result-thumb {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+button.lucide-result-tile.lucide-picked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.12);
+  background: var(--panel);
+}
+
+.lucide-icon-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+
+.lucide-icon-preview-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-top: 14px;
+}
+
+.lucide-icon-preview {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel-subtle);
+  color: var(--text);
+}
+
+.lucide-icon-preview svg {
+  width: 36px;
+  height: 36px;
+}
+
+.lucide-icon-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.lucide-icon-actions .lucide-apply {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid var(--border-strong) !important;
+  font-weight: 600;
+}
+
+.lucide-icon-actions .lucide-apply:hover {
+  background: #f3f4f6 !important;
+  border-color: #9ca3af !important;
+}
+
+.lucide-icon-actions .secondary {
+  background: var(--panel-subtle);
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 
 .cb-label {
@@ -525,11 +795,29 @@ label em {
 
 .site-rule-option {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
+  grid-template-columns: minmax(0, 1fr) 160px;
   gap: 16px;
   align-items: start;
   padding: 8px 0;
   border-top: 1px solid var(--border);
+}
+
+.site-rule-option-checkbox {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+
+.site-rule-option-checkbox > input[type="checkbox"] {
+  justify-self: end;
+}
+
+.site-rule-option > input[type="text"],
+.site-rule-option > select {
+  justify-self: end;
+  text-align: right;
+}
+
+.site-rule-option.site-rule-margin-option .controller-margin-inputs {
+  justify-self: end;
 }
 
 .site-rule-body > .site-rule-option:first-child,
@@ -538,11 +826,30 @@ label em {
   border-top: 0;
 }
 
-.site-rule-option label {
-  display: flex;
+.site-rule-option > label:not(.site-rule-split-label) {
+  display: block;
+  margin: 0;
+}
+
+.site-rule-split-label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 16px;
   align-items: flex-start;
-  gap: 10px;
-  width: auto;
+  width: 100%;
+  margin: 0;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.site-rule-split-label input[type="checkbox"] {
+  justify-self: end;
+  margin-top: 3px;
+}
+
+.site-rule-option-checkbox > .site-rule-split-label {
+  grid-column: 1 / -1;
 }
 
 .site-rule-controlbar,
@@ -552,12 +859,8 @@ label em {
   border-top: 1px solid var(--border);
 }
 
-.site-rule-controlbar > label,
-.site-rule-shortcuts > label {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: auto;
+.site-rule-controlbar > label.site-override-lead,
+.site-rule-shortcuts > label.site-override-lead {
   margin: 0;
 }
 
@@ -615,13 +918,6 @@ label em {
   display: none;
 }
 
-#faq hr {
-  height: 1px;
-  margin: 0 0 14px;
-  border: 0;
-  background: var(--border);
-}
-
 .support-footer {
   padding: 16px 20px;
   color: var(--muted);
@@ -636,12 +932,31 @@ label em {
 }
 
 @media (max-width: 720px) {
+  .lucide-icon-preview-row {
+    grid-template-columns: 1fr;
+  }
+
   .shortcut-row,
   .shortcut-row.customs,
   .row,
+  .row.row-checkbox,
   .site-rule-option,
   .site-shortcuts-container .shortcut-row {
     grid-template-columns: 1fr;
+  }
+
+  .row input[type="text"],
+  .row select {
+    justify-self: stretch;
+  }
+
+  .site-rule-option > input[type="text"],
+  .site-rule-option > select {
+    justify-self: stretch;
+  }
+
+  .site-override-lead {
+    grid-template-columns: minmax(0, 1fr) 24px;
   }
 
   .action-row button,
@@ -668,6 +983,10 @@ label em {
   }
 
   .settings-card {
+    padding: 16px;
+  }
+
+  .control-bars-group {
     padding: 16px;
   }
 
@@ -718,5 +1037,26 @@ label em {
   select:focus,
   textarea:focus {
     border-color: #6b7280;
+  }
+
+  .lucide-search-field:focus-within {
+    border-color: #6b7280;
+    box-shadow: 0 0 0 3px rgba(242, 244, 246, 0.12);
+  }
+
+  .lucide-icon-actions .lucide-apply {
+    background: #ffffff !important;
+    color: #111315 !important;
+    border-color: #e5e7eb !important;
+  }
+
+  .lucide-icon-actions .lucide-apply:hover {
+    background: #f3f4f6 !important;
+    border-color: #d1d5db !important;
+  }
+
+  button.lucide-result-tile .lucide-result-thumb {
+    filter: brightness(0) invert(1);
+    opacity: 0.92;
   }
 }

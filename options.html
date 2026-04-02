@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Speeder Settings</title>
     <link rel="stylesheet" href="options.css" />
+    <script src="ui-icons.js"></script>
+    <script src="lucide-client.js"></script>
     <script src="options.js"></script>
     <script src="importExport.js"></script>
   </head>
@@ -180,11 +182,11 @@
 
           <h4 class="defaults-sub-heading">General</h4>
 
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="enabled">Enable</label>
             <input id="enabled" type="checkbox" />
           </div>
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="audioBoolean">Work on audio</label>
             <input id="audioBoolean" type="checkbox" />
           </div>
@@ -192,11 +194,11 @@
           <div class="defaults-divider"></div>
           <h4 class="defaults-sub-heading">Playback</h4>
 
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="rememberSpeed">Remember playback speed</label>
             <input id="rememberSpeed" type="checkbox" />
           </div>
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="forceLastSavedSpeed"
               >Force last saved speed<br />
               <em
@@ -210,7 +212,7 @@
           <div class="defaults-divider"></div>
           <h4 class="defaults-sub-heading">Controller</h4>
 
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="startHidden">Hide controller by default</label>
             <input id="startHidden" type="checkbox" />
           </div>
@@ -250,7 +252,7 @@
               </div>
             </div>
           </div>
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="hideWithControls"
               >Hide with controls<br />
               <em
@@ -270,15 +272,10 @@
             </label>
             <input id="hideWithControlsTimer" type="text" placeholder="2" />
           </div>
-          <div class="row">
-            <label for="showPopupControlBar">Show popup control bar</label>
-            <input id="showPopupControlBar" type="checkbox" />
-          </div>
-
           <div class="defaults-divider"></div>
           <h4 class="defaults-sub-heading">Subtitle sync</h4>
 
-          <div class="row">
+          <div class="row row-checkbox">
             <label for="enableSubtitleNudge"
               >Enable subtitle nudge<br /><em
                 >Makes tiny playback changes to help keep subtitles aligned.</em
@@ -302,58 +299,160 @@
           </div>
         </section>
 
-        <section id="controlBarSettings" class="settings-card">
-          <div class="section-heading">
-            <h3>Control bar</h3>
+        <section
+          id="controlBarsGroup"
+          class="settings-card control-bars-group"
+          aria-labelledby="controlBarsGroupHeading"
+        >
+          <div class="section-heading section-heading-major">
+            <h2 id="controlBarsGroupHeading">Control bars</h2>
             <p class="section-intro">
-              Drag blocks to reorder. Move between Active and Available to show
-              or hide buttons.
+              In-page hover bar, extension popup bar, and Lucide icons for
+              buttons.
             </p>
           </div>
-          <div class="cb-editor">
-            <div class="cb-zone">
-              <div class="cb-zone-label">Active</div>
-              <div
-                id="controlBarActive"
-                class="cb-dropzone cb-active-zone"
-              ></div>
-            </div>
-            <div class="cb-zone">
-              <div class="cb-zone-label">Available</div>
-              <div
-                id="controlBarAvailable"
-                class="cb-dropzone cb-available-zone"
-              ></div>
-            </div>
-          </div>
-        </section>
+          <div class="control-bars-inner">
+            <section id="controlBarSettings" class="settings-card settings-card-nested">
+              <div class="section-heading">
+                <h3>Hover control bar</h3>
+                <p class="section-intro">
+                  Drag blocks to reorder. Move between Active and Available to
+                  show or hide buttons.
+                </p>
+              </div>
+              <div class="cb-editor">
+                <div class="cb-zone">
+                  <div class="cb-zone-label">Active</div>
+                  <div
+                    id="controlBarActive"
+                    class="cb-dropzone cb-active-zone"
+                  ></div>
+                </div>
+                <div class="cb-zone">
+                  <div class="cb-zone-label">Available</div>
+                  <div
+                    id="controlBarAvailable"
+                    class="cb-dropzone cb-available-zone"
+                  ></div>
+                </div>
+              </div>
+            </section>
 
-        <section id="popupControlBarSettings" class="settings-card">
-          <div class="section-heading">
-            <h3>Popup control bar</h3>
-            <p class="section-intro">
-              Configure which buttons appear in the browser popup control bar.
-            </p>
-          </div>
-          <div class="row">
-            <label for="popupMatchHoverControls">Match hover controls</label>
-            <input id="popupMatchHoverControls" type="checkbox" />
-          </div>
-          <div id="popupCbEditorWrap" class="cb-editor cb-editor-disabled">
-            <div class="cb-zone">
-              <div class="cb-zone-label">Active</div>
+            <section id="popupControlBarSettings" class="settings-card settings-card-nested">
+              <div class="section-heading">
+                <h3>Popup control bar</h3>
+                <p class="section-intro">
+                  Configure which buttons appear in the browser popup control bar.
+                </p>
+              </div>
+              <div class="row row-checkbox">
+                <label for="showPopupControlBar">Show popup control bar</label>
+                <input id="showPopupControlBar" type="checkbox" />
+              </div>
+              <div class="row row-checkbox">
+                <label for="popupMatchHoverControls">Match hover controls</label>
+                <input id="popupMatchHoverControls" type="checkbox" />
+              </div>
+              <div id="popupCbEditorWrap" class="cb-editor cb-editor-disabled">
+                <div class="cb-zone">
+                  <div class="cb-zone-label">Active</div>
+                  <div
+                    id="popupControlBarActive"
+                    class="cb-dropzone cb-active-zone"
+                  ></div>
+                </div>
+                <div class="cb-zone">
+                  <div class="cb-zone-label">Available</div>
+                  <div
+                    id="popupControlBarAvailable"
+                    class="cb-dropzone cb-available-zone"
+                  ></div>
+                </div>
+              </div>
+            </section>
+
+            <section id="lucideIconSettings" class="settings-card settings-card-nested">
+              <div class="section-heading">
+                <h3>Button icons (Lucide)</h3>
+                <p class="section-intro">
+                  Search icons from the
+                  <a
+                    href="https://lucide.dev"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Lucide</a
+                  >
+                  set (fetched from jsDelivr). Custom icons are cached in local
+                  storage and included when you export settings. Subtitle nudge
+                  icons use two menu entries (enabled and disabled), not the bar
+                  block id
+                  <code>nudge</code>.
+                </p>
+              </div>
+              <div class="row row-lucide-pair">
+                <label for="lucideIconActionSelect">Controller action</label>
+                <select id="lucideIconActionSelect"></select>
+              </div>
+              <div class="row row-lucide-search-row">
+                <label for="lucideIconSearch" class="lucide-search-label"
+                  >Search icons</label
+                >
+                <div class="lucide-search-field">
+                  <span class="lucide-search-icon" aria-hidden="true">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.3-4.3" />
+                    </svg>
+                  </span>
+                  <input
+                    type="search"
+                    id="lucideIconSearch"
+                    class="lucide-search-input"
+                    placeholder="Search by name or tag (e.g. star, arrow, media)…"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </div>
+              </div>
               <div
-                id="popupControlBarActive"
-                class="cb-dropzone cb-active-zone"
+                id="lucideIconResults"
+                class="lucide-icon-results"
+                role="listbox"
+                aria-label="Matching Lucide icons"
               ></div>
-            </div>
-            <div class="cb-zone">
-              <div class="cb-zone-label">Available</div>
-              <div
-                id="popupControlBarAvailable"
-                class="cb-dropzone cb-available-zone"
-              ></div>
-            </div>
+              <p id="lucideIconStatus" class="lucide-icon-status" aria-live="polite"></p>
+              <div class="lucide-icon-preview-row">
+                <div
+                  id="lucideIconPreview"
+                  class="lucide-icon-preview"
+                  aria-live="polite"
+                ></div>
+                <div class="lucide-icon-actions">
+                  <button type="button" id="lucideIconApply" class="lucide-apply">
+                    Apply to action
+                  </button>
+                  <button type="button" id="lucideIconClearAction" class="secondary">
+                    Clear this action
+                  </button>
+                  <button type="button" id="lucideIconClearAll" class="secondary">
+                    Clear all custom icons
+                  </button>
+                  <button type="button" id="lucideIconReloadTags" class="secondary">
+                    Refresh icon list from network
+                  </button>
+                </div>
+              </div>
+            </section>
           </div>
         </section>
 
@@ -389,20 +488,20 @@
               <button type="button" class="remove-site-rule">Remove</button>
             </div>
             <div class="site-rule-body">
-              <div class="site-rule-option">
-                <label>
+              <div class="site-rule-option site-rule-option-checkbox">
+                <label class="site-rule-split-label">
+                  <span>Enable Speeder on this site</span>
                   <input type="checkbox" class="site-enabled" />
-                  Enable Speeder on this site
                 </label>
               </div>
               <div class="site-rule-content">
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override placement for this site</span>
                     <input type="checkbox" class="override-placement" />
-                    Override placement for this site
                   </label>
                   <div class="site-placement-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-field">
                       <label>Default controller location:</label>
                       <select class="site-controllerLocation">
                         <option value="top-left">Top left</option>
@@ -436,11 +535,11 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override hide-by-default for this site</span>
                     <input type="checkbox" class="override-visibility" />
-                    Override hide-by-default for this site
                   </label>
                   <div class="site-visibility-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Hide controller by default:</label>
                       <input type="checkbox" class="site-startHidden" />
                     </div>
@@ -448,17 +547,17 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override auto-hide for this site</span>
                     <input type="checkbox" class="override-autohide" />
-                    Override auto-hide for this site
                   </label>
                   <div class="site-autohide-container" style="display: none">
-                    <div class="site-rule-option">
-                      <label>
+                    <div class="site-rule-option site-rule-option-checkbox">
+                      <label class="site-rule-split-label">
+                        <span>Hide with controls (idle-based)</span>
                         <input type="checkbox" class="site-hideWithControls" />
-                        Hide with controls (idle-based)
                       </label>
                     </div>
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-field">
                       <label>Auto-hide timer (0.1&ndash;15s):</label>
                       <input type="text" class="site-hideWithControlsTimer" />
                     </div>
@@ -466,19 +565,19 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override playback for this site</span>
                     <input type="checkbox" class="override-playback" />
-                    Override playback for this site
                   </label>
                   <div class="site-playback-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Remember playback speed:</label>
                       <input type="checkbox" class="site-rememberSpeed" />
                     </div>
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Force last saved speed:</label>
                       <input type="checkbox" class="site-forceLastSavedSpeed" />
                     </div>
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Work on audio:</label>
                       <input type="checkbox" class="site-audioBoolean" />
                     </div>
@@ -486,11 +585,11 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override opacity for this site</span>
                     <input type="checkbox" class="override-opacity" />
-                    Override opacity for this site
                   </label>
                   <div class="site-opacity-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-field">
                       <label>Controller opacity:</label>
                       <input type="text" class="site-controllerOpacity" />
                     </div>
@@ -498,15 +597,15 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
+                    <span>Override subtitle nudge for this site</span>
                     <input type="checkbox" class="override-subtitleNudge" />
-                    Override subtitle nudge for this site
                   </label>
                   <div class="site-subtitleNudge-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Enable subtitle nudge:</label>
                       <input type="checkbox" class="site-enableSubtitleNudge" />
                     </div>
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-field">
                       <label>Nudge interval (10&ndash;1000ms):</label>
                       <input type="text" class="site-subtitleNudgeInterval" placeholder="50" />
                     </div>
@@ -514,8 +613,8 @@
                 </div>
                 <div class="site-rule-controlbar">
                   <label class="site-override-lead">
+                    <span>Override in-player control bar for this site</span>
                     <input type="checkbox" class="override-controlbar" />
-                    Override in-player control bar for this site
                   </label>
                   <div class="site-controlbar-container" style="display: none">
                     <div class="cb-editor">
@@ -532,11 +631,11 @@
                 </div>
                 <div class="site-rule-controlbar">
                   <label class="site-override-lead">
+                    <span>Override extension popup for this site</span>
                     <input type="checkbox" class="override-popup-controlbar" />
-                    Override extension popup for this site
                   </label>
                   <div class="site-popup-controlbar-container" style="display: none">
-                    <div class="site-rule-option">
+                    <div class="site-rule-option site-rule-option-checkbox">
                       <label>Show popup control bar</label>
                       <input type="checkbox" class="site-showPopupControlBar" />
                     </div>
@@ -554,8 +653,8 @@
                 </div>
                 <div class="site-rule-shortcuts">
                   <label class="site-override-lead">
+                    <span>Override shortcuts for this site</span>
                     <input type="checkbox" class="override-shortcuts" />
-                    Override shortcuts for this site
                   </label>
                   <div class="site-shortcuts-container" style="display: none"></div>
                 </div>
@@ -580,8 +679,6 @@
         </section>
 
         <section id="faq" class="settings-card info-card">
-          <hr />
-
           <h4>Extension controls not appearing?</h4>
           <p>
             This extension only works with HTML5 audio and video. If the

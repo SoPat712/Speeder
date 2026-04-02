@@ -1,7 +1,14 @@
-var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
-
 var isUserSeek = false; // Track if seek was user-initiated
 var lastToggleSpeed = {}; // Store last toggle speeds per video
+
+function getPrimaryVideoElement() {
+  if (!tc.mediaElements || tc.mediaElements.length === 0) return null;
+  for (var i = 0; i < tc.mediaElements.length; i++) {
+    var el = tc.mediaElements[i];
+    if (el && !el.paused) return el;
+  }
+  return tc.mediaElements[0];
+}
 
 var tc = {
   settings: {
@@ -29,7 +36,8 @@ var tc = {
     logLevel: 3,
     enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
     subtitleNudgeInterval: 50, // Default 50ms balances subtitle tracking with CPU cost
-    subtitleNudgeAmount: 0.001
+    subtitleNudgeAmount: 0.001,
+    customButtonIcons: {}
   },
   mediaElements: [],
   isNudging: false,
@@ -106,19 +114,20 @@ var controllerLocationStyles = {
   }
 };
 
+/* `label` fallback only when ui-icons has no path for the action. */
 var controllerButtonDefs = {
-  rewind:   { label: "\u00AB", className: "rw" },
-  slower:   { label: "\u2212", className: "" },
-  faster:   { label: "+",      className: "" },
-  advance:  { label: "\u00BB", className: "rw" },
-  display:  { label: "\u00D7", className: "hideButton" },
-  reset:    { label: "\u21BA", className: "" },
-  fast:     { label: "\u2605", className: "" },
-  settings: { label: "\u2699", className: "" },
-  pause:    { label: "\u23EF", className: "" },
-  muted:    { label: "M",      className: "" },
-  mark:     { label: "\u2691", className: "" },
-  jump:     { label: "\u21E5", className: "" }
+  rewind:   { label: "", className: "rw" },
+  slower:   { label: "", className: "" },
+  faster:   { label: "", className: "" },
+  advance:  { label: "", className: "rw" },
+  display:  { label: "", className: "hideButton" },
+  reset:    { label: "\u21BB", className: "" },
+  fast:     { label: "", className: "" },
+  settings: { label: "", className: "" },
+  pause:    { label: "", className: "" },
+  muted:    { label: "", className: "" },
+  mark:     { label: "", className: "" },
+  jump:     { label: "", className: "" }
 };
 
 var keyCodeToEventKey = {
@@ -767,16 +776,39 @@ function setSubtitleNudgeEnabledForVideo(video, enabled) {
   return normalizedEnabled;
 }
 
+function subtitleNudgeIconMarkup(isEnabled) {
+  var action = isEnabled ? "subtitleNudgeOn" : "subtitleNudgeOff";
+  var custom =
+    tc.settings.customButtonIcons &&
+    tc.settings.customButtonIcons[action] &&
+    tc.settings.customButtonIcons[action].svg;
+  if (custom) {
+    return (
+      '<span class="vsc-btn-icon" aria-hidden="true">' + custom + "</span>"
+    );
+  }
+  if (typeof vscIconSvgString !== "function") {
+    return isEnabled ? "✓" : "×";
+  }
+  var svg = vscIconSvgString(action, 14);
+  if (!svg) {
+    return isEnabled ? "✓" : "×";
+  }
+  return (
+    '<span class="vsc-btn-icon" aria-hidden="true">' + svg + "</span>"
+  );
+}
+
 function updateSubtitleNudgeIndicator(video) {
   if (!video || !video.vsc) return;
 
   var isEnabled = isSubtitleNudgeEnabledForVideo(video);
-  var label = isEnabled ? "✓" : "×";
   var title = isEnabled ? "Subtitle nudge enabled" : "Subtitle nudge disabled";
+  var mark = subtitleNudgeIconMarkup(isEnabled);
 
   var indicator = video.vsc.subtitleNudgeIndicator;
   if (indicator) {
-    indicator.textContent = label;
+    indicator.innerHTML = mark;
     indicator.dataset.enabled = isEnabled ? "true" : "false";
     indicator.dataset.supported = "true";
     indicator.title = title;
@@ -785,9 +817,10 @@ function updateSubtitleNudgeIndicator(video) {
 
   var flashEl = video.vsc.nudgeFlashIndicator;
   if (flashEl) {
-    flashEl.textContent = label;
+    flashEl.innerHTML = mark;
     flashEl.dataset.enabled = isEnabled ? "true" : "false";
     flashEl.dataset.supported = "true";
+    flashEl.setAttribute("aria-label", title);
   }
 }
 
@@ -864,6 +897,10 @@ function applySourceTransitionPolicy(video, forceUpdate) {
   if (Math.abs(video.playbackRate - desiredSpeed) > 0.01) {
     setSpeed(video, desiredSpeed, false, false);
   }
+
+  // Same-tab SPA (e.g. YouTube watch → Shorts): URL can change while remember-speed
+  // already ran on src mutation — re-apply margins / location / opacity for new rules.
+  reapplySiteRulesAndControllerGeometry();
 }
 
 function extendSpeedRestoreWindow(video, duration) {
@@ -992,6 +1029,14 @@ function ensureController(node, parent) {
     );
     return null;
   }
+
+  // href selects site rules; re-run on every new/usable media so margins/opacity match current URL.
+  var siteDisabled = applySiteRuleOverrides();
+  if (!tc.settings.enabled || siteDisabled) {
+    return null;
+  }
+  refreshAllControllerGeometry();
+
   log(
     `Creating controller for ${node.tagName}: ${node.src || node.currentSrc || "no src"}`,
     4
@@ -1210,25 +1255,6 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     ? storage.controllerButtons
     : tc.settings.controllerButtons;
 
-  // Migrate legacy blacklist if present
-  if (storage.blacklist && typeof storage.blacklist === "string" && tc.settings.siteRules.length === 0) {
-    var lines = storage.blacklist.split("\n");
-    lines.forEach((line) => {
-      var pattern = line.replace(regStrip, "");
-      if (pattern.length > 0) {
-        tc.settings.siteRules.push({
-          pattern: pattern,
-          disableExtension: true
-        });
-      }
-    });
-    if (tc.settings.siteRules.length > 0) {
-      chrome.storage.sync.set({ siteRules: tc.settings.siteRules });
-      chrome.storage.sync.remove(["blacklist"]);
-      log("Migrated legacy blacklist to site rules", 4);
-    }
-  }
-
   tc.settings.enableSubtitleNudge =
     typeof storage.enableSubtitleNudge !== "undefined"
       ? Boolean(storage.enableSubtitleNudge)
@@ -1267,43 +1293,96 @@ chrome.storage.sync.get(tc.settings, function (storage) {
           log("Re-scan command received from popup.", 4);
           initializeWhenReady(document, true);
           sendResponse({ status: "complete" });
-        } else if (request.action === "get_speed") {
-          var speed = 1.0;
-          if (tc.mediaElements && tc.mediaElements.length > 0) {
-            for (var i = 0; i < tc.mediaElements.length; i++) {
-              if (tc.mediaElements[i] && !tc.mediaElements[i].paused) {
-                speed = tc.mediaElements[i].playbackRate;
-                break;
-              }
-            }
-            if (speed === 1.0 && tc.mediaElements[0]) {
-              speed = tc.mediaElements[0].playbackRate;
-            }
-          }
-          sendResponse({ speed: speed });
-        } else if (request.action === "get_page_context") {
+          return false;
+        }
+        if (request.action === "get_speed") {
+          // Do not sendResponse in frames with no media — only one response is
+          // accepted tab-wide, and the top frame often wins before an iframe.
+          var videoGs = getPrimaryVideoElement();
+          if (!videoGs) return false;
+          sendResponse({
+            speed: videoGs.playbackRate
+          });
+          return false;
+        }
+        if (request.action === "get_page_context") {
           sendResponse({ url: location.href });
-        } else if (request.action === "run_action") {
+          return false;
+        }
+        if (request.action === "run_action") {
           var value = request.value;
           if (value === undefined || value === null) {
             value = getKeyBindings(request.actionName, "value");
           }
           runAction(request.actionName, value);
-          var newSpeed = 1.0;
-          if (tc.mediaElements && tc.mediaElements.length > 0) {
-            newSpeed = tc.mediaElements[0].playbackRate;
-          }
-          sendResponse({ speed: newSpeed });
+          var videoAfter = getPrimaryVideoElement();
+          if (!videoAfter) return false;
+          sendResponse({
+            speed: videoAfter.playbackRate
+          });
+          return false;
         }
-
-        return true;
+        return false;
       }
     );
 
     // Set the flag to prevent adding the listener again.
     window.vscMessageListener = true;
   }
-  initializeWhenReady(document);
+  chrome.storage.local.get(["customButtonIcons"], function (loc) {
+    tc.settings.customButtonIcons =
+      loc &&
+      loc.customButtonIcons &&
+      typeof loc.customButtonIcons === "object"
+        ? loc.customButtonIcons
+        : {};
+
+    if (!window.vscCustomIconListener) {
+      window.vscCustomIconListener = true;
+      chrome.storage.onChanged.addListener(function (changes, area) {
+        if (area !== "local" || !changes.customButtonIcons) return;
+        var nv = changes.customButtonIcons.newValue;
+        tc.settings.customButtonIcons =
+          nv && typeof nv === "object" ? nv : {};
+        if (tc.mediaElements && tc.mediaElements.length) {
+          tc.mediaElements.forEach(function (video) {
+            if (!video.vsc || !video.vsc.div) return;
+            var doc = video.ownerDocument;
+            var shadow = video.vsc.div.shadowRoot;
+            if (!shadow) return;
+            shadow.querySelectorAll("button[data-action]").forEach(function (btn) {
+              var act = btn.dataset.action;
+              if (!act) return;
+              var svg =
+                tc.settings.customButtonIcons &&
+                tc.settings.customButtonIcons[act] &&
+                tc.settings.customButtonIcons[act].svg;
+              btn.innerHTML = "";
+              if (svg) {
+                var cw = doc.createElement("span");
+                cw.className = "vsc-btn-icon";
+                cw.innerHTML = svg;
+                btn.appendChild(cw);
+              } else if (typeof vscIconWrap === "function") {
+                var wrap = vscIconWrap(doc, act, 14);
+                if (wrap) {
+                  btn.appendChild(wrap);
+                } else {
+                  var cdf = controllerButtonDefs[act];
+                  btn.textContent = (cdf && cdf.label) || "?";
+                }
+              } else {
+                var cdf2 = controllerButtonDefs[act];
+                btn.textContent = (cdf2 && cdf2.label) || "?";
+              }
+            });
+            updateSubtitleNudgeIndicator(video);
+          });
+        }
+      });
+    }
+    initializeWhenReady(document);
+  });
 });
 
 function getKeyBindings(action, what = "value") {
@@ -1321,7 +1400,25 @@ function setKeyBindings(action, value) {
 function createControllerButton(doc, action, label, className) {
   var button = doc.createElement("button");
   button.dataset.action = action;
-  button.textContent = label;
+  var custom =
+    tc.settings.customButtonIcons &&
+    tc.settings.customButtonIcons[action] &&
+    tc.settings.customButtonIcons[action].svg;
+  if (custom) {
+    var customWrap = doc.createElement("span");
+    customWrap.className = "vsc-btn-icon";
+    customWrap.innerHTML = custom;
+    button.appendChild(customWrap);
+  } else if (typeof vscIconWrap === "function") {
+    var wrap = vscIconWrap(doc, action, 14);
+    if (wrap) {
+      button.appendChild(wrap);
+    } else {
+      button.textContent = label || "?";
+    }
+  } else {
+    button.textContent = label || "?";
+  }
   if (className) {
     button.className = className;
   }
@@ -1343,6 +1440,8 @@ function defineVideoController() {
     this.suppressedRateChangeCount = 0;
     this.suppressedRateChangeUntil = 0;
     this.visibilityResumeHandler = null;
+    this.resetToggleArmed = false;
+    this.resetButtonEl = null;
     this.controllerLocation = normalizeControllerLocation(
       tc.settings.controllerLocation
     );
@@ -1836,24 +1935,34 @@ function defineVideoController() {
     nudgeFlashIndicator.setAttribute("aria-hidden", "true");
 
     controller.appendChild(dragHandle);
-    controller.appendChild(nudgeFlashIndicator);
     controller.appendChild(controls);
+    /* Flash sits after #controls so it never inserts space between speed and buttons. */
+    controller.appendChild(nudgeFlashIndicator);
     shadow.appendChild(controller);
 
     this.speedIndicator = dragHandle;
     this.subtitleNudgeIndicator = subtitleNudgeIndicator;
     this.nudgeFlashIndicator = nudgeFlashIndicator;
+    this.resetButtonEl =
+      shadow.querySelector('button[data-action="reset"]') || null;
+    this.resetToggleArmed = false;
     if (subtitleNudgeIndicator) {
       updateSubtitleNudgeIndicator(this.video);
+    }
+    function blurAfterPointerTap(target, e) {
+      if (!target || typeof target.blur !== "function") return;
+      var pt = e.pointerType;
+      if (pt === "mouse" || pt === "touch" || (!pt && e.detail > 0)) {
+        requestAnimationFrame(function () {
+          target.blur();
+        });
+      }
     }
     dragHandle.addEventListener(
       "mousedown",
       (e) => {
-        runAction(
-          e.target.dataset["action"],
-          getKeyBindings(e.target.dataset["action"], "value"),
-          e
-        );
+        var dragAction = dragHandle.dataset.action;
+        runAction(dragAction, getKeyBindings(dragAction, "value"), e);
         e.stopPropagation();
       },
       true
@@ -1862,11 +1971,9 @@ function defineVideoController() {
       button.addEventListener(
         "click",
         (e) => {
-          runAction(
-            e.target.dataset["action"],
-            getKeyBindings(e.target.dataset["action"]),
-            e
-          );
+          var action = button.dataset.action;
+          runAction(action, getKeyBindings(action), e);
+          blurAfterPointerTap(button, e);
           e.stopPropagation();
         },
         true
@@ -1881,6 +1988,7 @@ function defineVideoController() {
             var newState = !isSubtitleNudgeEnabledForVideo(video);
             setSubtitleNudgeEnabledForVideo(video, newState);
           }
+          blurAfterPointerTap(subtitleNudgeIndicator, e);
           e.stopPropagation();
         },
         true
@@ -2074,6 +2182,25 @@ function applySiteRuleOverrides() {
   return false;
 }
 
+/** Apply current tc.settings controller layout/opacity to every attached controller (after site rules). */
+function refreshAllControllerGeometry() {
+  tc.mediaElements.forEach(function (video) {
+    if (!video || !video.vsc) return;
+    applyControllerLocation(video.vsc, tc.settings.controllerLocation);
+    var controllerEl = getControllerElement(video.vsc);
+    if (controllerEl) {
+      controllerEl.style.opacity = String(tc.settings.controllerOpacity);
+    }
+  });
+}
+
+/** Re-match site rules for current URL and refresh controller position/opacity on every video. */
+function reapplySiteRulesAndControllerGeometry() {
+  var siteDisabled = applySiteRuleOverrides();
+  if (!tc.settings.enabled || siteDisabled) return;
+  refreshAllControllerGeometry();
+}
+
 function shouldPreserveDesiredSpeed(video, speed) {
   if (!video || !video.vsc) return false;
   var desiredSpeed = getDesiredSpeed(video);
@@ -2091,8 +2218,11 @@ function shouldPreserveDesiredSpeed(video, speed) {
 function setupListener(root) {
   root = root || document;
   if (root.vscRateListenerAttached) return;
-  function updateSpeedFromEvent(video) {
+  function updateSpeedFromEvent(video, skipResetDisarm) {
     if (!video.vsc || !video.vsc.speedIndicator) return;
+    if (!skipResetDisarm) {
+      video.vsc.resetToggleArmed = false;
+    }
     var speed = video.playbackRate; // Preserve full precision (e.g. 0.0625)
     video.vsc.speedIndicator.textContent = speed.toFixed(2);
     video.vsc.targetSpeed = speed;
@@ -2119,7 +2249,7 @@ function setupListener(root) {
       if (tc.settings.forceLastSavedSpeed) {
         if (event.detail && event.detail.origin === "videoSpeed") {
           video.playbackRate = event.detail.speed;
-          updateSpeedFromEvent(video);
+          updateSpeedFromEvent(video, true);
         } else {
           video.playbackRate = sanitizeSpeed(tc.settings.lastSpeed, 1.0);
         }
@@ -2130,7 +2260,7 @@ function setupListener(root) {
         var pendingRateChange = takePendingRateChange(video, currentSpeed);
 
         if (pendingRateChange) {
-          updateSpeedFromEvent(video);
+          updateSpeedFromEvent(video, true);
           return;
         }
 
@@ -2139,6 +2269,7 @@ function setupListener(root) {
             `Ignoring external rate change to ${currentSpeed.toFixed(4)} while preserving ${desiredSpeed.toFixed(4)}`,
             4
           );
+          video.vsc.resetToggleArmed = false;
           video.vsc.speedIndicator.textContent = desiredSpeed.toFixed(2);
           scheduleSpeedRestore(video, desiredSpeed, "pause/play or seek");
           return;
@@ -2397,6 +2528,10 @@ function attachNavigationListeners() {
 
   window.addEventListener("popstate", scheduleRescan);
   window.addEventListener("hashchange", scheduleRescan);
+  /* YouTube often navigates without a history API call the extension can see first */
+  if (typeof document !== "undefined" && isOnYouTube()) {
+    document.addEventListener("yt-navigate-finish", scheduleRescan);
+  }
   window.vscNavigationListenersAttached = true;
 }
 
@@ -2416,20 +2551,19 @@ function initializeNow(doc, forceReinit = false) {
 
   if (forceReinit) {
     log("Force re-initialization requested", 4);
-    tc.mediaElements.forEach(function (video) {
-      if (!video || !video.vsc) return;
-      applyControllerLocation(video.vsc, tc.settings.controllerLocation);
-      var controllerEl = getControllerElement(video.vsc);
-      if (controllerEl) {
-        controllerEl.style.opacity = String(tc.settings.controllerOpacity);
-      }
-    });
+    refreshAllControllerGeometry();
   }
 
   vscInitializedDocuments.add(doc);
 }
 
-function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
+function setSpeed(
+  video,
+  speed,
+  isInitialCall = false,
+  isUserKeyPress = false,
+  fromResetSpeedToggle = false
+) {
   const numericSpeed = Number(speed);
 
   if (!isValidSpeed(numericSpeed)) {
@@ -2441,6 +2575,10 @@ function setSpeed(video, speed, isInitialCall = false, isUserKeyPress = false) {
   }
 
   if (!video || !video.vsc || !video.vsc.speedIndicator) return;
+
+  if (isUserKeyPress && !fromResetSpeedToggle) {
+    video.vsc.resetToggleArmed = false;
+  }
 
   log(
     `setSpeed: Target ${numericSpeed.toFixed(2)}. Initial: ${isInitialCall}. UserKeyPress: ${isUserKeyPress}`,
@@ -2544,6 +2682,7 @@ function runAction(action, value, e) {
       "mark",
       "jump",
       "drag",
+      "nudge",
       "toggleSubtitleNudge",
       "display"
     ];
@@ -2659,6 +2798,12 @@ function runAction(action, value, e) {
       case "toggleSubtitleNudge":
         setSubtitleNudgeEnabledForVideo(v, subtitleNudgeToggleValue);
         break;
+      case "nudge":
+        setSubtitleNudgeEnabledForVideo(
+          v,
+          !isSubtitleNudgeEnabledForVideo(v)
+        );
+        break;
     }
   });
   log("runAction End", 5);
@@ -2697,11 +2842,12 @@ function resetSpeed(v, target, isFastKey = false) {
         Math.abs(lastToggle - 1.0) < 0.01
           ? getKeyBindings("fast") || 1.8
           : lastToggle;
-      setSpeed(v, speedToRestore, false, true);
+      setSpeed(v, speedToRestore, false, true, true);
     } else {
       // Not at 1.0, save current as toggle speed and go to 1.0
       lastToggleSpeed[videoId] = currentSpeed;
-      setSpeed(v, resetSpeedValue, false, true);
+      v.vsc.resetToggleArmed = true;
+      setSpeed(v, resetSpeedValue, false, true, true);
     }
   }
 }

@@ -4,10 +4,20 @@
   font-size: 13px;
 }
 
+/* Global * uses 1.9em line-height; without this, every node inside #controller
+   (including svg) keeps a tall line box and the bar grows + content rides high. */
+#controller * {
+  line-height: 1;
+}
+
+/* Show extra buttons on hover or keyboard :focus-visible only. Plain :focus-within
+   after a mouse click kept #controls visible while hover-only rules (e.g. draggable
+   margin) turned off when the pointer left the bar. */
 #controller:hover #controls,
-#controller:focus-within #controls,
+#controller:focus-within:has(:focus-visible) #controls,
 :host(:hover) #controls {
-  display: inline;
+  display: inline-flex;
+  vertical-align: middle;
 }
 
 #controller {
@@ -40,8 +50,9 @@
   opacity: 0.7;
 }
 
+/* Space between speed readout and hover buttons — tweak this value (px) as you like */
 #controller:hover > .draggable {
-  margin-right: 0.8em;
+  margin-right: 5px;
 }
 
 /* Center presets: midpoint between left- and right-preset inset lines; center bar on that X. */
@@ -55,25 +66,30 @@
 
 #controls {
   display: none;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 3px;
   white-space: nowrap;
   overflow: visible;
   max-width: none;
 }
 
-#controls > * + * {
-  margin-left: 3px;
-}
-
-/* Standalone flash indicator next to speed text — hidden by default,
-   briefly shown when nudge is toggled via N key or click */
+/* Standalone flash next to speed when N is pressed — hidden = no layout footprint */
 #nudge-flash-indicator {
   display: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
   vertical-align: middle;
   align-items: center;
   justify-content: center;
-  margin-left: 0.3em;
-  padding: 3px 6px;
-  border-radius: 5px;
   font-size: 14px;
   line-height: 14px;
   font-weight: bold;
@@ -81,8 +97,27 @@
   box-sizing: border-box;
 }
 
+/* Same 24×24 footprint as #controls button */
 #nudge-flash-indicator.visible {
   display: inline-flex;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  max-width: 24px;
+  max-height: 24px;
+  margin-left: 5px;
+  padding: 0;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 5px;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 /* Hide flash indicator when hovering — the one in #controls is visible instead */
@@ -100,44 +135,73 @@
 #nudge-flash-indicator[data-enabled="true"] {
   color: #fff;
   background: #4b9135;
-  border: 1px solid #6ec754;
+  border-color: #6ec754;
 }
 
 #nudge-flash-indicator[data-enabled="false"] {
   color: #fff;
   background: #943e3e;
-  border: 1px solid #c06060;
+  border-color: #c06060;
 }
 
+/* Same 24×24 chip as control buttons (Lucide check / x inside) */
 #nudge-indicator {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 6px;
-  border-radius: 5px;
-  font-size: 14px;
-  line-height: 14px;
-  font-weight: bold;
-  font-family: "Lucida Console", Monaco, monospace;
   box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  max-height: 24px;
+  padding: 0;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 5px;
+  font-size: 0;
+  line-height: 0;
   cursor: pointer;
-  margin-bottom: 2px;
+  margin: 0;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 #nudge-indicator[data-enabled="true"] {
   color: #fff;
   background: #4b9135;
-  border: 1px solid #6ec754;
+  border-color: #6ec754;
 }
 
 #nudge-indicator[data-enabled="false"] {
   color: #fff;
   background: #943e3e;
-  border: 1px solid #c06060;
+  border-color: #c06060;
 }
 
 #nudge-indicator[data-supported="false"] {
   opacity: 0.6;
+}
+
+#nudge-flash-indicator.visible .vsc-btn-icon,
+#nudge-indicator .vsc-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+}
+
+#nudge-flash-indicator.visible .vsc-btn-icon svg,
+#nudge-indicator .vsc-btn-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+  transform: translateY(0.5px);
 }
 
 #controller.dragging {
@@ -148,12 +212,14 @@
 }
 
 #controller.dragging #controls {
-  display: inline;
+  display: inline-flex;
+  vertical-align: middle;
 }
 
 .draggable {
   cursor: -webkit-grab;
   cursor: -moz-grab;
+  vertical-align: middle;
 }
 
 .draggable:active {
@@ -173,6 +239,46 @@ button {
   border: 1px solid white;
   font-family: "Lucida Console", Monaco, monospace;
   margin-bottom: 2px;
+}
+
+/* Icon buttons: square targets, compact bar (no extra vertical stretch). */
+#controls button {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  max-height: 24px;
+  padding: 0;
+  margin: 0;
+  border-width: 1px;
+  line-height: 0;
+  font-size: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+button .vsc-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+}
+
+button .vsc-btn-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+  /* Lucide 24×24 paths sit slightly high in the viewBox */
+  transform: translateY(0.5px);
 }
 
 button:focus {

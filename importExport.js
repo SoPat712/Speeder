@@ -13,25 +13,28 @@ function generateBackupFilename() {
 
 function exportSettings() {
   chrome.storage.sync.get(null, function (storage) {
-    const backup = {
-      version: "1.0",
-      exportDate: new Date().toISOString(),
-      settings: storage
-    };
+    chrome.storage.local.get(null, function (localStorage) {
+      const backup = {
+        version: "1.1",
+        exportDate: new Date().toISOString(),
+        settings: storage,
+        localSettings: localStorage || {}
+      };
 
-    const dataStr = JSON.stringify(backup, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
+      const dataStr = JSON.stringify(backup, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = generateBackupFilename();
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = generateBackupFilename();
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-    showStatus("Settings exported successfully");
+      showStatus("Settings exported successfully");
+    });
   });
 }
 
@@ -62,24 +65,49 @@ function importSettings() {
           return;
         }
 
-        // Import all settings
-        chrome.storage.sync.clear(function () {
-          // If clear fails, we still try to set
-          chrome.storage.sync.set(settingsToImport, function () {
+        var localToImport =
+          backup.localSettings && typeof backup.localSettings === "object"
+            ? backup.localSettings
+            : null;
+
+        function afterLocalImport() {
+          chrome.storage.sync.clear(function () {
+            chrome.storage.sync.set(settingsToImport, function () {
+              if (chrome.runtime.lastError) {
+                showStatus(
+                  "Error: Failed to save imported settings - " +
+                    chrome.runtime.lastError.message,
+                  true
+                );
+                return;
+              }
+              showStatus("Settings imported successfully. Reloading...");
+              setTimeout(function () {
+                if (typeof restore_options === "function") {
+                  restore_options();
+                } else {
+                  location.reload();
+                }
+              }, 500);
+            });
+          });
+        }
+
+        if (localToImport && Object.keys(localToImport).length > 0) {
+          chrome.storage.local.set(localToImport, function () {
             if (chrome.runtime.lastError) {
-              showStatus("Error: Failed to save imported settings - " + chrome.runtime.lastError.message, true);
+              showStatus(
+                "Error: Failed to save local extension data - " +
+                  chrome.runtime.lastError.message,
+                true
+              );
               return;
             }
-            showStatus("Settings imported successfully. Reloading...");
-            setTimeout(function () {
-              if (typeof restore_options === "function") {
-                restore_options();
-              } else {
-                location.reload();
-              }
-            }, 500);
+            afterLocalImport();
           });
-        });
+        } else {
+          afterLocalImport();
+        }
       } catch (err) {
         showStatus("Error: Failed to parse backup file - " + err.message, true);
       }

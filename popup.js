@@ -1,63 +1,38 @@
 document.addEventListener("DOMContentLoaded", function () {
   var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
 
+  /* `label` is only used if ui-icons.js has no path for this action (fallback). */
   var controllerButtonDefs = {
-    rewind:   { label: "\u00AB", className: "rw" },
-    slower:   { label: "\u2212", className: "" },
-    faster:   { label: "+",      className: "" },
-    advance:  { label: "\u00BB", className: "rw" },
-    display:  { label: "\u00D7", className: "hideButton" },
-    reset:    { label: "\u21BA", className: "" },
-    fast:     { label: "\u2605", className: "" },
-    settings: { label: "\u2699", className: "" },
-    pause:    { label: "\u23EF", className: "" },
-    muted:    { label: "M",      className: "" },
-    mark:     { label: "\u2691", className: "" },
-    jump:     { label: "\u21E5", className: "" }
+    rewind:   { label: "", className: "rw" },
+    slower:   { label: "", className: "" },
+    faster:   { label: "", className: "" },
+    advance:  { label: "", className: "rw" },
+    display:  { label: "", className: "hideButton" },
+    reset:    { label: "\u21BB", className: "" },
+    fast:     { label: "", className: "" },
+    nudge:    { label: "", className: "" },
+    settings: { label: "", className: "" },
+    pause:    { label: "", className: "" },
+    muted:    { label: "", className: "" },
+    mark:     { label: "", className: "" },
+    jump:     { label: "", className: "" }
   };
 
   var defaultButtons = ["rewind", "slower", "faster", "advance", "display"];
+  var popupExcludedButtonIds = new Set(["settings"]);
   var storageDefaults = {
     enabled: true,
     showPopupControlBar: true,
     controllerButtons: defaultButtons,
     popupMatchHoverControls: true,
     popupControllerButtons: defaultButtons,
-    siteRules: [],
-    blacklist: `\
-      www.instagram.com
-      twitter.com
-      vine.co
-      imgur.com
-      teams.microsoft.com
-    `.replace(/^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm, "")
+    siteRules: []
   };
   var renderToken = 0;
 
   function escapeStringRegExp(str) {
     const m = /[|\\{}()[\]^$+*?.]/g;
     return str.replace(m, "\\$&");
-  }
-
-  function isBlacklisted(url, blacklist) {
-    let b = false;
-    const l = blacklist ? blacklist.split("\n") : [];
-    l.forEach((m) => {
-      if (b) return;
-      m = m.replace(regStrip, "");
-      if (m.length == 0) return;
-      let r;
-      if (m.startsWith("/") && m.lastIndexOf("/") > 0) {
-        try {
-          const ls = m.lastIndexOf("/");
-          r = new RegExp(m.substring(1, ls), m.substring(ls + 1));
-        } catch (e) {
-          return;
-        }
-      } else r = new RegExp(escapeStringRegExp(m));
-      if (r && r.test(url)) b = true;
-    });
-    return b;
   }
 
   function matchSiteRule(url, siteRules) {
@@ -91,25 +66,37 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function resolvePopupButtons(storage, siteRule) {
+    function sanitize(buttons) {
+      if (!Array.isArray(buttons)) return [];
+      var seen = new Set();
+      return buttons.filter(function (id) {
+        if (!controllerButtonDefs[id] || popupExcludedButtonIds.has(id) || seen.has(id)) {
+          return false;
+        }
+        seen.add(id);
+        return true;
+      });
+    }
+
     if (siteRule && Array.isArray(siteRule.popupControllerButtons)) {
-      return siteRule.popupControllerButtons;
+      return sanitize(siteRule.popupControllerButtons);
     }
 
     if (storage.popupMatchHoverControls) {
       if (siteRule && Array.isArray(siteRule.controllerButtons)) {
-        return siteRule.controllerButtons;
+        return sanitize(siteRule.controllerButtons);
       }
 
       if (Array.isArray(storage.controllerButtons)) {
-        return storage.controllerButtons;
+        return sanitize(storage.controllerButtons);
       }
     }
 
     if (Array.isArray(storage.popupControllerButtons)) {
-      return storage.popupControllerButtons;
+      return sanitize(storage.popupControllerButtons);
     }
 
-    return defaultButtons;
+    return sanitize(defaultButtons);
   }
 
   function setControlBarVisible(visible) {
@@ -171,29 +158,95 @@ document.addEventListener("DOMContentLoaded", function () {
     if (el) el.textContent = (speed != null ? Number(speed) : 1).toFixed(2);
   }
 
-  function querySpeed() {
-    sendToActiveTab({ action: "get_speed" }, function (response) {
-      if (response && response.speed != null) {
-        updateSpeedDisplay(response.speed);
+  function applySpeedAndResetFromResponse(response) {
+    if (response && response.speed != null) {
+      updateSpeedDisplay(response.speed);
+    }
+  }
+
+  function pickBestFrameSpeedResult(results) {
+    if (!results || !results.length) return null;
+    var i;
+    var r;
+    var fallback = null;
+    for (i = 0; i < results.length; i++) {
+      r = results[i];
+      if (!r || typeof r.speed !== "number") {
+        continue;
       }
+      if (r.preferred) {
+        return { speed: r.speed };
+      }
+      if (!fallback) {
+        fallback = { speed: r.speed };
+      }
+    }
+    return fallback;
+  }
+
+  function querySpeed() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (!tabs[0] || tabs[0].id == null) {
+        return;
+      }
+      var tabId = tabs[0].id;
+      chrome.tabs.executeScript(
+        tabId,
+        { allFrames: true, file: "frameSpeedSnapshot.js" },
+        function (results) {
+          if (chrome.runtime.lastError) {
+            sendToActiveTab({ action: "get_speed" }, function (response) {
+              applySpeedAndResetFromResponse(response || { speed: 1 });
+            });
+            return;
+          }
+          var best = pickBestFrameSpeedResult(results);
+          if (best) {
+            applySpeedAndResetFromResponse(best);
+          } else {
+            sendToActiveTab({ action: "get_speed" }, function (response) {
+              applySpeedAndResetFromResponse(response || { speed: 1 });
+            });
+          }
+        }
+      );
     });
   }
 
-  function buildControlBar(buttons) {
+  function buildControlBar(buttons, customIconsMap) {
     var bar = document.getElementById("popupControlBar");
     if (!bar) return;
 
     var existing = bar.querySelectorAll("button");
     existing.forEach(function (btn) { btn.remove(); });
 
+    var customMap = customIconsMap || {};
+
     buttons.forEach(function (btnId) {
-      if (btnId === "nudge") return;
       var def = controllerButtonDefs[btnId];
       if (!def) return;
 
       var btn = document.createElement("button");
       btn.dataset.action = btnId;
-      btn.textContent = def.label;
+      var customEntry = customMap[btnId];
+      if (customEntry && customEntry.svg) {
+        var customSpan = document.createElement("span");
+        customSpan.className = "vsc-btn-icon";
+        customSpan.innerHTML = customEntry.svg;
+        btn.appendChild(customSpan);
+      } else if (typeof vscIconSvgString === "function") {
+        var svgStr = vscIconSvgString(btnId, 16);
+        if (svgStr) {
+          var iconSpan = document.createElement("span");
+          iconSpan.className = "vsc-btn-icon";
+          iconSpan.innerHTML = svgStr;
+          btn.appendChild(iconSpan);
+        } else {
+          btn.textContent = def.label || "?";
+        }
+      } else {
+        btn.textContent = def.label || "?";
+      }
       if (def.className) btn.className = def.className;
       btn.title = btnId.charAt(0).toUpperCase() + btnId.slice(1);
 
@@ -204,10 +257,8 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         sendToActiveTab(
           { action: "run_action", actionName: btnId },
-          function (response) {
-            if (response && response.speed != null) {
-              updateSpeedDisplay(response.speed);
-            }
+          function () {
+            querySpeed();
           }
         );
       });
@@ -272,18 +323,23 @@ document.addEventListener("DOMContentLoaded", function () {
   function renderForActiveTab() {
     var currentRenderToken = ++renderToken;
 
-    chrome.storage.sync.get(storageDefaults, function (storage) {
+    chrome.storage.local.get(["customButtonIcons"], function (loc) {
       if (currentRenderToken !== renderToken) return;
+      var customIconsMap =
+        loc && loc.customButtonIcons && typeof loc.customButtonIcons === "object"
+          ? loc.customButtonIcons
+          : {};
+
+      chrome.storage.sync.get(storageDefaults, function (storage) {
+        if (currentRenderToken !== renderToken) return;
 
       getActiveTabContext(function (context) {
         if (currentRenderToken !== renderToken) return;
 
         var url = context && context.url ? context.url : "";
         var siteRule = matchSiteRule(url, storage.siteRules);
-        var blacklisted = isBlacklisted(url, storage.blacklist);
         var siteDisabled = isSiteRuleDisabled(siteRule);
-        var siteAvailable =
-          storage.enabled !== false && !blacklisted && !siteDisabled;
+        var siteAvailable = storage.enabled !== false && !siteDisabled;
         var showBar = storage.showPopupControlBar !== false;
 
         if (siteRule && siteRule.showPopupControlBar !== undefined) {
@@ -291,14 +347,11 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         toggleEnabledUI(storage.enabled !== false);
-        buildControlBar(resolvePopupButtons(storage, siteRule));
+        buildControlBar(
+          resolvePopupButtons(storage, siteRule),
+          customIconsMap
+        );
         setControlBarVisible(siteAvailable && showBar);
-
-        if (blacklisted) {
-          setStatusMessage("Site is blacklisted.");
-          updateSpeedDisplay(1);
-          return;
-        }
 
         if (siteDisabled) {
           setStatusMessage("Speeder is disabled for this site.");
@@ -312,6 +365,7 @@ document.addEventListener("DOMContentLoaded", function () {
         } else {
           updateSpeedDisplay(1);
         }
+      });
       });
     });
   }
@@ -328,6 +382,10 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   chrome.storage.onChanged.addListener(function (changes, areaName) {
+    if (areaName === "local" && changes.customButtonIcons) {
+      renderForActiveTab();
+      return;
+    }
     if (areaName !== "sync") return;
     if (
       changes.enabled ||
@@ -335,8 +393,7 @@ document.addEventListener("DOMContentLoaded", function () {
       changes.controllerButtons ||
       changes.popupMatchHoverControls ||
       changes.popupControllerButtons ||
-      changes.siteRules ||
-      changes.blacklist
+      changes.siteRules
     ) {
       renderForActiveTab();
     }

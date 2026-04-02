@@ -121,7 +121,7 @@ var controllerButtonDefs = {
   faster:   { label: "", className: "" },
   advance:  { label: "", className: "rw" },
   display:  { label: "", className: "hideButton" },
-  reset:    { label: "", className: "" },
+  reset:    { label: "\u21BB", className: "" },
   fast:     { label: "", className: "" },
   settings: { label: "", className: "" },
   pause:    { label: "", className: "" },
@@ -778,6 +778,15 @@ function setSubtitleNudgeEnabledForVideo(video, enabled) {
 
 function subtitleNudgeIconMarkup(isEnabled) {
   var action = isEnabled ? "subtitleNudgeOn" : "subtitleNudgeOff";
+  var custom =
+    tc.settings.customButtonIcons &&
+    tc.settings.customButtonIcons[action] &&
+    tc.settings.customButtonIcons[action].svg;
+  if (custom) {
+    return (
+      '<span class="vsc-btn-icon" aria-hidden="true">' + custom + "</span>"
+    );
+  }
   if (typeof vscIconSvgString !== "function") {
     return isEnabled ? "✓" : "×";
   }
@@ -1367,6 +1376,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
                 btn.textContent = (cdf2 && cdf2.label) || "?";
               }
             });
+            updateSubtitleNudgeIndicator(video);
           });
         }
       });

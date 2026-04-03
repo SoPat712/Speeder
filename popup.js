@@ -20,49 +20,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
   var defaultButtons = ["rewind", "slower", "faster", "advance", "display"];
   var popupExcludedButtonIds = new Set(["settings"]);
-  var storageDefaults = {
-    enabled: true,
-    showPopupControlBar: true,
-    controllerButtons: defaultButtons,
-    popupMatchHoverControls: true,
-    popupControllerButtons: defaultButtons,
-    siteRules: []
-  };
   var renderToken = 0;
-
-  function escapeStringRegExp(str) {
-    const m = /[|\\{}()[\]^$+*?.]/g;
-    return str.replace(m, "\\$&");
-  }
 
   function matchSiteRule(url, siteRules) {
     if (!url || !Array.isArray(siteRules)) return null;
-    for (var i = 0; i < siteRules.length; i++) {
-      var rule = siteRules[i];
-      if (!rule || !rule.pattern) continue;
-      var pattern = rule.pattern.replace(regStrip, "");
-      if (pattern.length === 0) continue;
-      var re;
-      if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
-        try {
-          var ls = pattern.lastIndexOf("/");
-          re = new RegExp(pattern.substring(1, ls), pattern.substring(ls + 1));
-        } catch (e) {
-          continue;
-        }
-      } else {
-        re = new RegExp(escapeStringRegExp(pattern));
-      }
-      if (re && re.test(url)) return rule;
-    }
-    return null;
+    return vscMatchSiteRule(url, siteRules);
   }
 
   function isSiteRuleDisabled(rule) {
-    return Boolean(
-      rule &&
-      (rule.enabled === false || rule.disableExtension === true)
-    );
+    return vscIsSiteRuleDisabled(rule);
   }
 
   function resolvePopupButtons(storage, siteRule) {
@@ -230,17 +196,21 @@ document.addEventListener("DOMContentLoaded", function () {
       btn.dataset.action = btnId;
       var customEntry = customMap[btnId];
       if (customEntry && customEntry.svg) {
-        var customSpan = document.createElement("span");
-        customSpan.className = "vsc-btn-icon";
-        customSpan.innerHTML = customEntry.svg;
-        btn.appendChild(customSpan);
+        var customSpan = vscCreateSvgWrap(document, customEntry.svg, "vsc-btn-icon");
+        if (customSpan) {
+          btn.appendChild(customSpan);
+        } else {
+          btn.textContent = def.label || "?";
+        }
       } else if (typeof vscIconSvgString === "function") {
         var svgStr = vscIconSvgString(btnId, 16);
         if (svgStr) {
-          var iconSpan = document.createElement("span");
-          iconSpan.className = "vsc-btn-icon";
-          iconSpan.innerHTML = svgStr;
-          btn.appendChild(iconSpan);
+          var iconSpan = vscCreateSvgWrap(document, svgStr, "vsc-btn-icon");
+          if (iconSpan) {
+            btn.appendChild(iconSpan);
+          } else {
+            btn.textContent = def.label || "?";
+          }
         } else {
           btn.textContent = def.label || "?";
         }
@@ -330,8 +300,9 @@ document.addEventListener("DOMContentLoaded", function () {
           ? loc.customButtonIcons
           : {};
 
-      chrome.storage.sync.get(storageDefaults, function (storage) {
+      chrome.storage.sync.get(null, function (storage) {
         if (currentRenderToken !== renderToken) return;
+        storage = vscExpandStoredSettings(storage);
 
       getActiveTabContext(function (context) {
         if (currentRenderToken !== renderToken) return;
@@ -393,7 +364,9 @@ document.addEventListener("DOMContentLoaded", function () {
       changes.controllerButtons ||
       changes.popupMatchHoverControls ||
       changes.popupControllerButtons ||
-      changes.siteRules
+      changes.siteRules ||
+      changes.siteRulesMeta ||
+      changes.siteRulesFormat
     ) {
       renderForActiveTab();
     }
@@ -402,9 +375,37 @@ document.addEventListener("DOMContentLoaded", function () {
   renderForActiveTab();
 
   function toggleEnabled(enabled, callback) {
-    chrome.storage.sync.set({ enabled: enabled }, function () {
-      toggleEnabledUI(enabled);
-      if (callback) callback(enabled);
+    chrome.storage.sync.get(null, function (storage) {
+      var nextSettings = vscExpandStoredSettings(storage);
+      nextSettings.enabled = enabled;
+      var storedSettings = vscBuildStoredSettingsDiff(nextSettings);
+
+      chrome.storage.sync.remove(vscGetManagedSyncKeys(), function () {
+        if (chrome.runtime.lastError) {
+          setStatusMessage(
+            "Failed to update settings: " + chrome.runtime.lastError.message
+          );
+          return;
+        }
+
+        if (Object.keys(storedSettings).length === 0) {
+          toggleEnabledUI(enabled);
+          if (callback) callback(enabled);
+          return;
+        }
+
+        chrome.storage.sync.set(storedSettings, function () {
+          if (chrome.runtime.lastError) {
+            setStatusMessage(
+              "Failed to update settings: " + chrome.runtime.lastError.message
+            );
+            return;
+          }
+
+          toggleEnabledUI(enabled);
+          if (callback) callback(enabled);
+        });
+      });
     });
   }
 

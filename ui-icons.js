@@ -3,6 +3,7 @@
  * Use stroke="currentColor" so buttons inherit foreground for monochrome UI.
  */
 var VSC_ICON_SIZE_DEFAULT = 18;
+var VSC_SVG_NS = "http://www.w3.org/2000/svg";
 
 /** Inner SVG markup only (paths / shapes inside <svg>). */
 var vscUiIconPaths = {
@@ -54,6 +55,79 @@ function vscIconSvgString(action, size) {
   );
 }
 
+function vscClearElement(el) {
+  if (!el) return;
+  while (el.firstChild) {
+    el.removeChild(el.firstChild);
+  }
+}
+
+function vscSanitizeSvgTree(svg) {
+  if (!svg || String(svg.tagName).toLowerCase() !== "svg") return null;
+
+  svg.querySelectorAll("script, style, foreignObject").forEach(function (n) {
+    n.remove();
+  });
+
+  svg.querySelectorAll("*").forEach(function (el) {
+    for (var i = el.attributes.length - 1; i >= 0; i--) {
+      var attr = el.attributes[i];
+      var name = attr.name.toLowerCase();
+      var val = attr.value;
+      if (name.indexOf("on") === 0) {
+        el.removeAttribute(attr.name);
+        continue;
+      }
+      if (
+        (name === "href" || name === "xlink:href") &&
+        /^\s*javascript:/i.test(val)
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
+
+  svg.setAttribute("xmlns", VSC_SVG_NS);
+  svg.setAttribute("aria-hidden", "true");
+  return svg;
+}
+
+function vscCreateSvgNode(doc, svgText) {
+  if (!doc || !svgText || typeof svgText !== "string") return null;
+  var clean = String(svgText).replace(/\0/g, "").trim();
+  if (!clean || !/<svg[\s>]/i.test(clean)) return null;
+
+  var parsed = new DOMParser().parseFromString(clean, "image/svg+xml");
+  if (parsed.querySelector("parsererror")) return null;
+
+  var svg = vscSanitizeSvgTree(parsed.querySelector("svg"));
+  if (!svg) return null;
+
+  return doc.importNode(svg, true);
+}
+
+function vscSetSvgContent(el, svgText) {
+  if (!el) return false;
+  vscClearElement(el);
+
+  var doc = el.ownerDocument || document;
+  var svg = vscCreateSvgNode(doc, svgText);
+  if (!svg) return false;
+
+  el.appendChild(svg);
+  return true;
+}
+
+function vscCreateSvgWrap(doc, svgText, className) {
+  if (!doc) return null;
+  var span = doc.createElement("span");
+  span.className = className || "vsc-btn-icon";
+  if (!vscSetSvgContent(span, svgText)) {
+    return null;
+  }
+  return span;
+}
+
 /**
  * @param {Document} doc
  * @param {string} action
@@ -62,8 +136,5 @@ function vscIconSvgString(action, size) {
 function vscIconWrap(doc, action, size) {
   var html = vscIconSvgString(action, size);
   if (!html) return null;
-  var span = doc.createElement("span");
-  span.className = "vsc-btn-icon";
-  span.innerHTML = html;
-  return span;
+  return vscCreateSvgWrap(doc, html, "vsc-btn-icon");
 }

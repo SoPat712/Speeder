@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      WEB_EXT_IGNORE_FILES: scripts/**
 
     steps:
       - uses: actions/checkout@v4

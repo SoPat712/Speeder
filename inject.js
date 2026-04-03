@@ -1,5 +1,6 @@
 var isUserSeek = false; // Track if seek was user-initiated
 var lastToggleSpeed = {}; // Store last toggle speeds per video
+var sharedSettingsDefaults = vscGetSettingsDefaults();
 
 function getPrimaryVideoElement() {
   if (!tc.mediaElements || tc.mediaElements.length === 0) return null;
@@ -12,31 +13,37 @@ function getPrimaryVideoElement() {
 
 var tc = {
   settings: {
-    lastSpeed: 1.0,
-    enabled: true,
+    lastSpeed: sharedSettingsDefaults.lastSpeed,
+    enabled: sharedSettingsDefaults.enabled,
     speeds: {},
-    displayKeyCode: 86,
-    rememberSpeed: false,
-    forceLastSavedSpeed: false,
-    audioBoolean: false,
-    startHidden: false,
-    hideWithYouTubeControls: false,
-    hideWithControls: false,
-    hideWithControlsTimer: 2.0,
-    controllerLocation: "top-left",
-    controllerOpacity: 0.3,
-    controllerMarginTop: 0,
-    controllerMarginRight: 0,
-    controllerMarginBottom: 65,
-    controllerMarginLeft: 0,
-    keyBindings: [],
-    siteRules: [],
-    controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
+    displayKeyCode: sharedSettingsDefaults.displayKeyCode,
+    rememberSpeed: sharedSettingsDefaults.rememberSpeed,
+    forceLastSavedSpeed: sharedSettingsDefaults.forceLastSavedSpeed,
+    audioBoolean: sharedSettingsDefaults.audioBoolean,
+    startHidden: sharedSettingsDefaults.startHidden,
+    hideWithYouTubeControls: sharedSettingsDefaults.hideWithYouTubeControls,
+    hideWithControls: sharedSettingsDefaults.hideWithControls,
+    hideWithControlsTimer: sharedSettingsDefaults.hideWithControlsTimer,
+    controllerLocation: sharedSettingsDefaults.controllerLocation,
+    controllerOpacity: sharedSettingsDefaults.controllerOpacity,
+    controllerMarginTop: sharedSettingsDefaults.controllerMarginTop,
+    controllerMarginRight: sharedSettingsDefaults.controllerMarginRight,
+    controllerMarginBottom: sharedSettingsDefaults.controllerMarginBottom,
+    controllerMarginLeft: sharedSettingsDefaults.controllerMarginLeft,
+    keyBindings: Array.isArray(sharedSettingsDefaults.keyBindings)
+      ? sharedSettingsDefaults.keyBindings.slice()
+      : [],
+    siteRules: Array.isArray(sharedSettingsDefaults.siteRules)
+      ? sharedSettingsDefaults.siteRules.slice()
+      : [],
+    controllerButtons: Array.isArray(sharedSettingsDefaults.controllerButtons)
+      ? sharedSettingsDefaults.controllerButtons.slice()
+      : ["rewind", "slower", "faster", "advance", "display"],
     defaultLogLevel: 3,
     logLevel: 3,
-    enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
-    subtitleNudgeInterval: 50, // Default 50ms balances subtitle tracking with CPU cost
-    subtitleNudgeAmount: 0.001,
+    enableSubtitleNudge: sharedSettingsDefaults.enableSubtitleNudge,
+    subtitleNudgeInterval: sharedSettingsDefaults.subtitleNudgeInterval,
+    subtitleNudgeAmount: sharedSettingsDefaults.subtitleNudgeAmount,
     customButtonIcons: {}
   },
   mediaElements: [],
@@ -184,6 +191,8 @@ function createDefaultBinding(action, key, keyCode, value) {
     action: action,
     key: key,
     keyCode: keyCode,
+    code: null,
+    disabled: false,
     value: value,
     force: false,
     predefined: true
@@ -220,7 +229,7 @@ function defaultKeyBindings(storage) {
       "reset",
       "R",
       Number(storage.resetKeyCode) || 82,
-      1.0
+      0
     ),
     createDefaultBinding(
       "fast",
@@ -427,6 +436,165 @@ function applyControllerLocation(videoController, location) {
     controller,
     location
   );
+}
+
+function getYouTubeAutoHidePlayer(video) {
+  if (!video || !isOnYouTube()) return null;
+
+  return video.closest(".html5-video-player") || video.closest("#movie_player");
+}
+
+function getAutoHideModeForVideo(video) {
+  if (!tc.settings.hideWithControls) return "off";
+  return getYouTubeAutoHidePlayer(video) ? "youtube" : "generic";
+}
+
+function getControllerMountParent(video, parentHint) {
+  var parentEl = parentHint || (video && (video.parentElement || video.parentNode));
+  if (!parentEl) return null;
+
+  switch (true) {
+    case location.hostname == "www.amazon.com":
+    case location.hostname == "www.reddit.com":
+    case /hbogo\./.test(location.hostname):
+      return parentEl.parentElement || parentEl;
+    case location.hostname == "www.facebook.com":
+      var facebookParent = parentEl;
+      for (
+        var depth = 0;
+        depth < 8 && facebookParent && facebookParent.parentElement;
+        depth++
+      ) {
+        facebookParent = facebookParent.parentElement;
+      }
+      return facebookParent || parentEl;
+    case location.hostname == "tv.apple.com":
+      var root = parentEl.getRootNode();
+      var scrim = root && root.querySelector ? root.querySelector(".scrim") : null;
+      return scrim || parentEl;
+    case location.hostname == "www.youtube.com":
+    case location.hostname == "m.youtube.com":
+    case location.hostname == "music.youtube.com":
+      return getYouTubeAutoHidePlayer(video) || parentEl;
+    default:
+      return parentEl;
+  }
+}
+
+function getControllerBehaviorSignature(video) {
+  return JSON.stringify({
+    startHidden: Boolean(tc.settings.startHidden),
+    hideWithControls: Boolean(tc.settings.hideWithControls),
+    hideWithControlsTimer: Number(tc.settings.hideWithControlsTimer),
+    controllerLocation: normalizeControllerLocation(tc.settings.controllerLocation),
+    controllerOpacity: Number(tc.settings.controllerOpacity),
+    controllerMarginTop: normalizeControllerMarginPx(tc.settings.controllerMarginTop, 0),
+    controllerMarginBottom: normalizeControllerMarginPx(
+      tc.settings.controllerMarginBottom,
+      0
+    ),
+    controllerButtons: Array.isArray(tc.settings.controllerButtons)
+      ? tc.settings.controllerButtons.slice()
+      : [],
+    enableSubtitleNudge: Boolean(tc.settings.enableSubtitleNudge),
+    subtitleNudgeInterval: Number(tc.settings.subtitleNudgeInterval),
+    autoHideMode: getAutoHideModeForVideo(video),
+    mediaTag: video && video.tagName ? video.tagName : ""
+  });
+}
+
+function rebuildControllerForVideo(video, parentHint, reason) {
+  if (!video) return null;
+
+  var previous = video.vsc || null;
+  var preservedState = previous
+    ? {
+      mark: previous.mark,
+      resetToggleArmed: previous.resetToggleArmed === true,
+      subtitleNudgeEnabledOverride: previous.subtitleNudgeEnabledOverride,
+      userHidden:
+        Boolean(previous.div) &&
+        previous.div.classList.contains("vsc-hidden")
+    }
+    : null;
+
+  if (previous) {
+    previous.remove();
+  }
+
+  if (!video.isConnected || !hasUsableMediaSource(video)) {
+    return null;
+  }
+
+  var nextController = new tc.videoController(
+    video,
+    parentHint || video.parentElement || video.parentNode
+  );
+  if (!nextController) return null;
+
+  if (preservedState) {
+    nextController.mark = preservedState.mark;
+    nextController.resetToggleArmed = preservedState.resetToggleArmed;
+
+    if (
+      typeof preservedState.subtitleNudgeEnabledOverride === "boolean"
+    ) {
+      nextController.subtitleNudgeEnabledOverride =
+        preservedState.subtitleNudgeEnabledOverride;
+      updateSubtitleNudgeIndicator(video);
+      if (!preservedState.subtitleNudgeEnabledOverride) {
+        nextController.stopSubtitleNudge();
+      } else if (!video.paused && video.playbackRate !== 1.0) {
+        nextController.startSubtitleNudge();
+      }
+    }
+
+    if (preservedState.userHidden && nextController.div) {
+      nextController.div.classList.add("vsc-hidden");
+    }
+  }
+
+  log("Rebuilt controller: " + (reason || "refresh"), 4);
+  return nextController;
+}
+
+function refreshManagedController(video, parentHint) {
+  if (!video || !video.vsc) return null;
+  if (!video.isConnected) {
+    removeController(video);
+    return null;
+  }
+
+  var controller = video.vsc;
+  controller.parent = video.parentElement || parentHint || controller.parent;
+
+  var expectedMountParent = getControllerMountParent(video, controller.parent);
+  var nextSignature = getControllerBehaviorSignature(video);
+  var wrapper = controller.div;
+  var needsRebuild =
+    !wrapper ||
+    !wrapper.isConnected ||
+    !expectedMountParent ||
+    wrapper.parentNode !== expectedMountParent ||
+    controller.behaviorSignature !== nextSignature;
+
+  if (needsRebuild) {
+    return rebuildControllerForVideo(
+      video,
+      controller.parent,
+      "DOM/source/site-rule change"
+    );
+  }
+
+  controller.mountParent = expectedMountParent;
+  controller.behaviorSignature = nextSignature;
+  applyControllerLocation(controller, tc.settings.controllerLocation);
+  var controllerEl = getControllerElement(controller);
+  if (controllerEl) {
+    controllerEl.style.opacity = String(tc.settings.controllerOpacity);
+  }
+  updateSubtitleNudgeIndicator(video);
+  return controller;
 }
 
 function captureSiteRuleBase() {
@@ -776,27 +944,40 @@ function setSubtitleNudgeEnabledForVideo(video, enabled) {
   return normalizedEnabled;
 }
 
-function subtitleNudgeIconMarkup(isEnabled) {
+function renderSubtitleNudgeIndicatorContent(target, isEnabled) {
+  if (!target) return;
   var action = isEnabled ? "subtitleNudgeOn" : "subtitleNudgeOff";
   var custom =
     tc.settings.customButtonIcons &&
     tc.settings.customButtonIcons[action] &&
     tc.settings.customButtonIcons[action].svg;
+  vscClearElement(target);
   if (custom) {
-    return (
-      '<span class="vsc-btn-icon" aria-hidden="true">' + custom + "</span>"
+    var customWrap = vscCreateSvgWrap(
+      target.ownerDocument || document,
+      custom,
+      "vsc-btn-icon"
     );
+    if (customWrap) {
+      target.appendChild(customWrap);
+      return;
+    }
   }
   if (typeof vscIconSvgString !== "function") {
-    return isEnabled ? "✓" : "×";
+    target.textContent = isEnabled ? "✓" : "×";
+    return;
   }
   var svg = vscIconSvgString(action, 14);
   if (!svg) {
-    return isEnabled ? "✓" : "×";
+    target.textContent = isEnabled ? "✓" : "×";
+    return;
   }
-  return (
-    '<span class="vsc-btn-icon" aria-hidden="true">' + svg + "</span>"
-  );
+  var wrap = vscCreateSvgWrap(target.ownerDocument || document, svg, "vsc-btn-icon");
+  if (wrap) {
+    target.appendChild(wrap);
+    return;
+  }
+  target.textContent = isEnabled ? "✓" : "×";
 }
 
 function updateSubtitleNudgeIndicator(video) {
@@ -804,11 +985,10 @@ function updateSubtitleNudgeIndicator(video) {
 
   var isEnabled = isSubtitleNudgeEnabledForVideo(video);
   var title = isEnabled ? "Subtitle nudge enabled" : "Subtitle nudge disabled";
-  var mark = subtitleNudgeIconMarkup(isEnabled);
 
   var indicator = video.vsc.subtitleNudgeIndicator;
   if (indicator) {
-    indicator.innerHTML = mark;
+    renderSubtitleNudgeIndicatorContent(indicator, isEnabled);
     indicator.dataset.enabled = isEnabled ? "true" : "false";
     indicator.dataset.supported = "true";
     indicator.title = title;
@@ -817,7 +997,7 @@ function updateSubtitleNudgeIndicator(video) {
 
   var flashEl = video.vsc.nudgeFlashIndicator;
   if (flashEl) {
-    flashEl.innerHTML = mark;
+    renderSubtitleNudgeIndicatorContent(flashEl, isEnabled);
     flashEl.dataset.enabled = isEnabled ? "true" : "false";
     flashEl.dataset.supported = "true";
     flashEl.setAttribute("aria-label", title);
@@ -898,8 +1078,8 @@ function applySourceTransitionPolicy(video, forceUpdate) {
     setSpeed(video, desiredSpeed, false, false);
   }
 
-  // Same-tab SPA (e.g. YouTube watch → Shorts): URL can change while remember-speed
-  // already ran on src mutation — re-apply margins / location / opacity for new rules.
+  // Same-tab SPA or DOM-driven player swaps can change the effective rule output
+  // after the media source updates, so refresh or rebuild controllers here too.
   reapplySiteRulesAndControllerGeometry();
 }
 
@@ -1021,8 +1201,14 @@ function hasUsableMediaSource(node) {
 }
 
 function ensureController(node, parent) {
-  if (!isMediaElement(node) || node.vsc) return node && node.vsc;
-  if (!hasUsableMediaSource(node)) {
+  if (!isMediaElement(node)) return node && node.vsc;
+
+  if (!node.isConnected) {
+    removeController(node);
+    return null;
+  }
+
+  if (!node.vsc && !hasUsableMediaSource(node)) {
     log(
       `Deferring controller creation for ${node.tagName}: no usable source yet`,
       5
@@ -1033,9 +1219,13 @@ function ensureController(node, parent) {
   // href selects site rules; re-run on every new/usable media so margins/opacity match current URL.
   var siteDisabled = applySiteRuleOverrides();
   if (!tc.settings.enabled || siteDisabled) {
+    removeController(node);
     return null;
   }
-  refreshAllControllerGeometry();
+
+  if (node.vsc) {
+    return refreshManagedController(node, parent);
+  }
 
   log(
     `Creating controller for ${node.tagName}: ${node.src || node.currentSrc || "no src"}`,
@@ -1179,7 +1369,8 @@ function log(message, level) {
   }
 }
 
-chrome.storage.sync.get(tc.settings, function (storage) {
+chrome.storage.sync.get(null, function (storage) {
+  storage = vscExpandStoredSettings(storage);
   var storedBindings = Array.isArray(storage.keyBindings)
     ? storage.keyBindings
     : [];
@@ -1190,19 +1381,6 @@ chrome.storage.sync.get(tc.settings, function (storage) {
 
   if (tc.settings.keyBindings.length === 0) {
     tc.settings.keyBindings = defaultKeyBindings(storage);
-    tc.settings.version = "0.5.3";
-    chrome.storage.sync.set({
-      keyBindings: tc.settings.keyBindings,
-      version: tc.settings.version,
-      displayKeyCode: tc.settings.displayKeyCode,
-      rememberSpeed: tc.settings.rememberSpeed,
-      forceLastSavedSpeed: tc.settings.forceLastSavedSpeed,
-      audioBoolean: tc.settings.audioBoolean,
-      startHidden: tc.settings.startHidden,
-      enabled: tc.settings.enabled,
-      controllerLocation: tc.settings.controllerLocation,
-      controllerOpacity: tc.settings.controllerOpacity
-    });
   }
   tc.settings.lastSpeed = Number(storage.lastSpeed);
   if (!isValidSpeed(tc.settings.lastSpeed) && tc.settings.lastSpeed !== 1.0) {
@@ -1280,7 +1458,14 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     addedDefaultBinding;
 
   if (addedDefaultBinding) {
-    chrome.storage.sync.set({ keyBindings: tc.settings.keyBindings });
+    var keyBindingsDiff = vscBuildStoredSettingsDiff({
+      keyBindings: tc.settings.keyBindings
+    });
+    if (Object.prototype.hasOwnProperty.call(keyBindingsDiff, "keyBindings")) {
+      chrome.storage.sync.set({ keyBindings: keyBindingsDiff.keyBindings });
+    } else {
+      chrome.storage.sync.remove("keyBindings");
+    }
   }
   captureSiteRuleBase();
   patchAttachShadow();
@@ -1357,12 +1542,15 @@ chrome.storage.sync.get(tc.settings, function (storage) {
                 tc.settings.customButtonIcons &&
                 tc.settings.customButtonIcons[act] &&
                 tc.settings.customButtonIcons[act].svg;
-              btn.innerHTML = "";
+              vscClearElement(btn);
               if (svg) {
-                var cw = doc.createElement("span");
-                cw.className = "vsc-btn-icon";
-                cw.innerHTML = svg;
-                btn.appendChild(cw);
+                var cw = vscCreateSvgWrap(doc, svg, "vsc-btn-icon");
+                if (cw) {
+                  btn.appendChild(cw);
+                } else {
+                  var cdf = controllerButtonDefs[act];
+                  btn.textContent = (cdf && cdf.label) || "?";
+                }
               } else if (typeof vscIconWrap === "function") {
                 var wrap = vscIconWrap(doc, act, 14);
                 if (wrap) {
@@ -1405,10 +1593,12 @@ function createControllerButton(doc, action, label, className) {
     tc.settings.customButtonIcons[action] &&
     tc.settings.customButtonIcons[action].svg;
   if (custom) {
-    var customWrap = doc.createElement("span");
-    customWrap.className = "vsc-btn-icon";
-    customWrap.innerHTML = custom;
-    button.appendChild(customWrap);
+    var customWrap = vscCreateSvgWrap(doc, custom, "vsc-btn-icon");
+    if (customWrap) {
+      button.appendChild(customWrap);
+    } else {
+      button.textContent = label || "?";
+    }
   } else if (typeof vscIconWrap === "function") {
     var wrap = vscIconWrap(doc, action, 14);
     if (wrap) {
@@ -1466,7 +1656,14 @@ function defineVideoController() {
       return;
     }
 
-    log(`Controller created and attached to DOM. Hidden: ${this.div.classList.contains('vsc-hidden')}`, 4);
+    this.mountParent =
+      this.div.parentNode || getControllerMountParent(target, this.parent);
+    this.behaviorSignature = getControllerBehaviorSignature(target);
+
+    log(
+      `Controller created and attached to DOM. Hidden: ${this.div.classList.contains('vsc-hidden')}`,
+      4
+    );
 
     var mediaEventAction = function (event) {
       if (
@@ -1740,10 +1937,10 @@ function defineVideoController() {
   };
 
   tc.videoController.prototype.setupYouTubeAutoHide = function (wrapper) {
-    if (!wrapper || !isOnYouTube()) return;
+    if (!wrapper) return;
 
     const video = this.video;
-    const ytPlayer = video.closest(".html5-video-player");
+    const ytPlayer = getYouTubeAutoHidePlayer(video);
     if (!ytPlayer) {
       log("YouTube player not found for auto-hide setup", 4);
       return;
@@ -1883,7 +2080,8 @@ function defineVideoController() {
       wrapper.classList.add("vsc-nosource");
     if (tc.settings.startHidden) wrapper.classList.add("vsc-hidden");
     // Use lower z-index for non-YouTube sites to avoid overlapping modals
-    if (!isOnYouTube()) wrapper.classList.add("vsc-non-youtube");
+    if (!getYouTubeAutoHidePlayer(this.video))
+      wrapper.classList.add("vsc-non-youtube");
     var shadow = wrapper.attachShadow({ mode: "open" });
     var shadowStylesheet = doc.createElement("link");
     shadowStylesheet.rel = "stylesheet";
@@ -1999,7 +2197,7 @@ function defineVideoController() {
 
     // Setup auto-hide observers if enabled
     if (tc.settings.hideWithControls) {
-      if (isOnYouTube()) {
+      if (getAutoHideModeForVideo(this.video) === "youtube") {
         this.setupYouTubeAutoHide(wrapper);
       } else {
         this.setupGenericAutoHide(wrapper);
@@ -2071,59 +2269,25 @@ function defineVideoController() {
   };
 }
 
-function escapeStringRegExp(str) {
-  const m = /[|\\{}()[\]^$+*?.]/g;
-  return str.replace(m, "\\$&");
-}
 function applySiteRuleOverrides() {
   resetSettingsFromSiteRuleBase();
+  tc.activeSiteRule = null;
 
   if (!Array.isArray(tc.settings.siteRules) || tc.settings.siteRules.length === 0) {
     return false;
   }
 
   var currentUrl = location.href;
-  var matchedRule = null;
-
-  for (var i = 0; i < tc.settings.siteRules.length; i++) {
-    var rule = tc.settings.siteRules[i];
-    var pattern = rule.pattern;
-    if (!pattern || pattern.length === 0) continue;
-
-    var regex;
-    if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
-      try {
-        var lastSlash = pattern.lastIndexOf("/");
-        regex = new RegExp(
-          pattern.substring(1, lastSlash),
-          pattern.substring(lastSlash + 1)
-        );
-      } catch (e) {
-        log(`Invalid site rule regex: ${pattern}. ${e.message}`, 2);
-        continue;
-      }
-    } else {
-      regex = new RegExp(escapeStringRegExp(pattern));
-    }
-
-    if (regex && regex.test(currentUrl)) {
-      matchedRule = rule;
-      break;
-    }
-  }
+  var matchedRule = vscMatchSiteRule(currentUrl, tc.settings.siteRules);
 
   if (!matchedRule) return false;
 
   tc.activeSiteRule = matchedRule;
-  log(`Matched site rule: ${matchedRule.pattern}`, 4);
+  log("Matched site rule overrides for current URL", 4);
 
   // Check if extension should be enabled/disabled on this site
-  if (matchedRule.enabled === false) {
+  if (vscIsSiteRuleDisabled(matchedRule)) {
     log(`Extension disabled for site: ${currentUrl}`, 4);
-    return true;
-  } else if (matchedRule.disableExtension === true) {
-    // Handle old format
-    log(`Extension disabled (legacy) for site: ${currentUrl}`, 4);
     return true;
   }
 
@@ -2182,23 +2346,22 @@ function applySiteRuleOverrides() {
   return false;
 }
 
-/** Apply current tc.settings controller layout/opacity to every attached controller (after site rules). */
-function refreshAllControllerGeometry() {
-  tc.mediaElements.forEach(function (video) {
-    if (!video || !video.vsc) return;
-    applyControllerLocation(video.vsc, tc.settings.controllerLocation);
-    var controllerEl = getControllerElement(video.vsc);
-    if (controllerEl) {
-      controllerEl.style.opacity = String(tc.settings.controllerOpacity);
-    }
-  });
-}
-
-/** Re-match site rules for current URL and refresh controller position/opacity on every video. */
+/** Re-match site rules for current URL and refresh or rebuild every controller. */
 function reapplySiteRulesAndControllerGeometry() {
   var siteDisabled = applySiteRuleOverrides();
-  if (!tc.settings.enabled || siteDisabled) return;
-  refreshAllControllerGeometry();
+  var videos = tc.mediaElements.slice();
+
+  if (!tc.settings.enabled || siteDisabled) {
+    videos.forEach(function (video) {
+      removeController(video);
+    });
+    return;
+  }
+
+  videos.forEach(function (video) {
+    if (!video) return;
+    ensureController(video, video.parentElement || video.parentNode);
+  });
 }
 
 function shouldPreserveDesiredSpeed(video, speed) {
@@ -2539,7 +2702,6 @@ function initializeNow(doc, forceReinit = false) {
   if ((!forceReinit && vscInitializedDocuments.has(doc)) || !doc.body) return;
 
   var siteDisabled = applySiteRuleOverrides();
-  if (!tc.settings.enabled || siteDisabled) return;
 
   if (!doc.body.classList.contains("vsc-initialized")) {
     doc.body.classList.add("vsc-initialized");
@@ -2551,7 +2713,9 @@ function initializeNow(doc, forceReinit = false) {
 
   if (forceReinit) {
     log("Force re-initialization requested", 4);
-    refreshAllControllerGeometry();
+    reapplySiteRulesAndControllerGeometry();
+  } else if (!tc.settings.enabled || siteDisabled) {
+    reapplySiteRulesAndControllerGeometry();
   }
 
   vscInitializedDocuments.add(doc);

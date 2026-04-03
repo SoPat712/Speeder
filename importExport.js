@@ -1,5 +1,55 @@
 // Import/Export functionality for Video Speed Controller settings
 
+const EXPORTABLE_LOCAL_SETTINGS_KEYS = ["customButtonIcons"];
+
+function getExportableLocalSettings(localStorage) {
+  const exportable = {};
+  const customButtonIcons =
+    localStorage &&
+    localStorage.customButtonIcons &&
+    typeof localStorage.customButtonIcons === "object" &&
+    !Array.isArray(localStorage.customButtonIcons)
+      ? localStorage.customButtonIcons
+      : null;
+
+  if (customButtonIcons) {
+    exportable.customButtonIcons = customButtonIcons;
+  }
+
+  return exportable;
+}
+
+function replaceImportableLocalSettings(localSettings, callback) {
+  chrome.storage.local.remove(EXPORTABLE_LOCAL_SETTINGS_KEYS, function () {
+    if (chrome.runtime.lastError) {
+      showStatus(
+        "Error: Failed to clear local icon overrides - " +
+          chrome.runtime.lastError.message,
+        true
+      );
+      return;
+    }
+
+    if (!localSettings || Object.keys(localSettings).length === 0) {
+      callback();
+      return;
+    }
+
+    chrome.storage.local.set(localSettings, function () {
+      if (chrome.runtime.lastError) {
+        showStatus(
+          "Error: Failed to save local icon overrides - " +
+            chrome.runtime.lastError.message,
+          true
+        );
+        return;
+      }
+
+      callback();
+    });
+  });
+}
+
 function generateBackupFilename() {
   const now = new Date();
   const year = now.getFullYear();
@@ -11,30 +61,69 @@ function generateBackupFilename() {
   return `speeder-backup_${year}-${month}-${day}_${hours}.${minutes}.${seconds}.json`;
 }
 
+function getBackupManifestVersion() {
+  var manifest = chrome.runtime.getManifest();
+  return manifest && manifest.version ? manifest.version : "unknown";
+}
+
+function getExportableSyncSettings(syncStorage) {
+  return vscBuildStoredSettingsDiff(vscExpandStoredSettings(syncStorage));
+}
+
+function getImportableSyncSettings(backup, rawSettings) {
+  var importable = vscClonePlainData(rawSettings) || {};
+
+  if (
+    backup &&
+    backup.siteRulesFormat &&
+    importable.siteRulesFormat === undefined
+  ) {
+    importable.siteRulesFormat = backup.siteRulesFormat;
+  }
+
+  if (
+    backup &&
+    backup.siteRulesMeta &&
+    importable.siteRulesMeta === undefined
+  ) {
+    importable.siteRulesMeta = backup.siteRulesMeta;
+  }
+
+  return vscExpandStoredSettings(importable);
+}
+
 function exportSettings() {
   chrome.storage.sync.get(null, function (storage) {
-    chrome.storage.local.get(null, function (localStorage) {
-      const backup = {
-        version: "1.1",
-        exportDate: new Date().toISOString(),
-        settings: storage,
-        localSettings: localStorage || {}
-      };
+    chrome.storage.local.get(
+      EXPORTABLE_LOCAL_SETTINGS_KEYS,
+      function (localStorage) {
+        const localSettings = getExportableLocalSettings(localStorage);
+        const syncSettings = getExportableSyncSettings(storage);
+        const backup = {
+          version: getBackupManifestVersion(),
+          exportDate: new Date().toISOString(),
+          settings: syncSettings
+        };
 
-      const dataStr = JSON.stringify(backup, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
+        if (Object.keys(localSettings).length > 0) {
+          backup.localSettings = localSettings;
+        }
 
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = generateBackupFilename();
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+        const dataStr = JSON.stringify(backup, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
 
-      showStatus("Settings exported successfully");
-    });
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = generateBackupFilename();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showStatus("Settings exported successfully");
+      }
+    );
   });
 }
 
@@ -55,9 +144,9 @@ function importSettings() {
 
         // Detect backup format: check for 'settings' wrapper or raw storage keys
         if (backup.settings && typeof backup.settings === "object") {
-          settingsToImport = backup.settings;
+          settingsToImport = getImportableSyncSettings(backup, backup.settings);
         } else if (typeof backup === "object" && (backup.keyBindings || backup.rememberSpeed !== undefined)) {
-          settingsToImport = backup; // Raw storage object
+          settingsToImport = getImportableSyncSettings(backup, backup);
         }
 
         if (!settingsToImport) {
@@ -65,49 +154,29 @@ function importSettings() {
           return;
         }
 
-        var localToImport =
-          backup.localSettings && typeof backup.localSettings === "object"
-            ? backup.localSettings
-            : null;
+        var localToImport = getExportableLocalSettings(backup.localSettings);
 
         function afterLocalImport() {
-          chrome.storage.sync.clear(function () {
-            chrome.storage.sync.set(settingsToImport, function () {
-              if (chrome.runtime.lastError) {
-                showStatus(
-                  "Error: Failed to save imported settings - " +
-                    chrome.runtime.lastError.message,
-                  true
-                );
-                return;
-              }
-              showStatus("Settings imported successfully. Reloading...");
-              setTimeout(function () {
-                if (typeof restore_options === "function") {
-                  restore_options();
-                } else {
-                  location.reload();
-                }
-              }, 500);
-            });
-          });
-        }
-
-        if (localToImport && Object.keys(localToImport).length > 0) {
-          chrome.storage.local.set(localToImport, function () {
-            if (chrome.runtime.lastError) {
+          persistManagedSyncSettings(settingsToImport, function (error) {
+            if (error) {
               showStatus(
-                "Error: Failed to save local extension data - " +
-                  chrome.runtime.lastError.message,
+                "Error: Failed to save imported settings - " + error.message,
                 true
               );
               return;
             }
-            afterLocalImport();
+            showStatus("Settings imported successfully. Reloading...");
+            setTimeout(function () {
+              if (typeof restore_options === "function") {
+                restore_options();
+              } else {
+                location.reload();
+              }
+            }, 500);
           });
-        } else {
-          afterLocalImport();
         }
+
+        replaceImportableLocalSettings(localToImport, afterLocalImport);
       } catch (err) {
         showStatus("Error: Failed to parse backup file - " + err.message, true);
       }

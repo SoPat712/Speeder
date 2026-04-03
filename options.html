@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Speeder Settings</title>
     <link rel="stylesheet" href="options.css" />
+    <script src="settings-core.js"></script>
     <script src="ui-icons.js"></script>
     <script src="lucide-client.js"></script>
     <script src="options.js"></script>
@@ -550,18 +551,29 @@
                     <span>Override auto-hide for this site</span>
                     <input type="checkbox" class="override-autohide" />
                   </label>
-                  <div class="site-autohide-container" style="display: none">
-                    <div class="site-rule-option site-rule-option-checkbox">
-                      <label class="site-rule-split-label">
-                        <span>Hide with controls (idle-based)</span>
-                        <input type="checkbox" class="site-hideWithControls" />
-                      </label>
+                    <div class="site-autohide-container" style="display: none">
+                      <div class="site-rule-option site-rule-option-checkbox">
+                        <label class="site-rule-split-label">
+                          <span
+                            >Hide with controls<br /><em
+                              >Fade the controller in and out with the video
+                              interface: perfect sync on YouTube, idle-based
+                              elsewhere.</em
+                            ></span
+                          >
+                          <input type="checkbox" class="site-hideWithControls" />
+                        </label>
+                      </div>
+                      <div class="site-rule-option site-rule-option-field">
+                        <label
+                          >Auto-hide timer (seconds)<br /><em
+                            >Seconds of inactivity before hiding: 0.1&ndash;15
+                            for non-YouTube sites.</em
+                          ></label
+                        >
+                        <input type="text" class="site-hideWithControlsTimer" />
+                      </div>
                     </div>
-                    <div class="site-rule-option site-rule-option-field">
-                      <label>Auto-hide timer (0.1&ndash;15s):</label>
-                      <input type="text" class="site-hideWithControlsTimer" />
-                    </div>
-                  </div>
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">

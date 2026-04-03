@@ -61,16 +61,48 @@ function generateBackupFilename() {
   return `speeder-backup_${year}-${month}-${day}_${hours}.${minutes}.${seconds}.json`;
 }
 
+function getBackupManifestVersion() {
+  var manifest = chrome.runtime.getManifest();
+  return manifest && manifest.version ? manifest.version : "unknown";
+}
+
+function getExportableSyncSettings(syncStorage) {
+  return vscBuildStoredSettingsDiff(vscExpandStoredSettings(syncStorage));
+}
+
+function getImportableSyncSettings(backup, rawSettings) {
+  var importable = vscClonePlainData(rawSettings) || {};
+
+  if (
+    backup &&
+    backup.siteRulesFormat &&
+    importable.siteRulesFormat === undefined
+  ) {
+    importable.siteRulesFormat = backup.siteRulesFormat;
+  }
+
+  if (
+    backup &&
+    backup.siteRulesMeta &&
+    importable.siteRulesMeta === undefined
+  ) {
+    importable.siteRulesMeta = backup.siteRulesMeta;
+  }
+
+  return vscExpandStoredSettings(importable);
+}
+
 function exportSettings() {
   chrome.storage.sync.get(null, function (storage) {
     chrome.storage.local.get(
       EXPORTABLE_LOCAL_SETTINGS_KEYS,
       function (localStorage) {
         const localSettings = getExportableLocalSettings(localStorage);
+        const syncSettings = getExportableSyncSettings(storage);
         const backup = {
-          version: "1.1",
+          version: getBackupManifestVersion(),
           exportDate: new Date().toISOString(),
-          settings: storage
+          settings: syncSettings
         };
 
         if (Object.keys(localSettings).length > 0) {
@@ -112,9 +144,9 @@ function importSettings() {
 
         // Detect backup format: check for 'settings' wrapper or raw storage keys
         if (backup.settings && typeof backup.settings === "object") {
-          settingsToImport = backup.settings;
+          settingsToImport = getImportableSyncSettings(backup, backup.settings);
         } else if (typeof backup === "object" && (backup.keyBindings || backup.rememberSpeed !== undefined)) {
-          settingsToImport = backup; // Raw storage object
+          settingsToImport = getImportableSyncSettings(backup, backup);
         }
 
         if (!settingsToImport) {
@@ -125,25 +157,22 @@ function importSettings() {
         var localToImport = getExportableLocalSettings(backup.localSettings);
 
         function afterLocalImport() {
-          chrome.storage.sync.clear(function () {
-            chrome.storage.sync.set(settingsToImport, function () {
-              if (chrome.runtime.lastError) {
-                showStatus(
-                  "Error: Failed to save imported settings - " +
-                    chrome.runtime.lastError.message,
-                  true
-                );
-                return;
+          persistManagedSyncSettings(settingsToImport, function (error) {
+            if (error) {
+              showStatus(
+                "Error: Failed to save imported settings - " + error.message,
+                true
+              );
+              return;
+            }
+            showStatus("Settings imported successfully. Reloading...");
+            setTimeout(function () {
+              if (typeof restore_options === "function") {
+                restore_options();
+              } else {
+                location.reload();
               }
-              showStatus("Settings imported successfully. Reloading...");
-              setTimeout(function () {
-                if (typeof restore_options === "function") {
-                  restore_options();
-                } else {
-                  location.reload();
-                }
-              }, 500);
-            });
+            }, 500);
           });
         }
 

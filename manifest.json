@@ -59,6 +59,7 @@
         "inject.css"
       ],
       "js": [
+        "settings-core.js",
         "ui-icons.js",
         "inject.js"
       ]

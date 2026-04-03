@@ -226,64 +226,48 @@ function createDefaultBinding(action, key, keyCode, value) {
     action: action,
     key: key,
     keyCode: keyCode,
+    code: null,
+    disabled: false,
     value: value,
     force: false,
     predefined: true
   };
 }
 
-var tcDefaults = {
-  speed: 1.0,
-  lastSpeed: 1.0,
-  displayKeyCode: 86,
-  rememberSpeed: false,
-  audioBoolean: false,
-  startHidden: false,
-  hideWithYouTubeControls: false,
-  hideWithControls: false,
-  hideWithControlsTimer: 2.0,
-  controllerLocation: "top-left",
-  forceLastSavedSpeed: false,
-  enabled: true,
-  controllerOpacity: 0.3,
-  controllerMarginTop: 0,
-  controllerMarginRight: 0,
-  controllerMarginBottom: 65,
-  controllerMarginLeft: 0,
-  keyBindings: [
-    createDefaultBinding("display", "V", 86, 0),
-    createDefaultBinding("move", "P", 80, 0),
-    createDefaultBinding("slower", "S", 83, 0.1),
-    createDefaultBinding("faster", "D", 68, 0.1),
-    createDefaultBinding("rewind", "Z", 90, 10),
-    createDefaultBinding("advance", "X", 88, 10),
-    createDefaultBinding("reset", "R", 82, 1),
-    createDefaultBinding("fast", "G", 71, 1.8),
-    createDefaultBinding("toggleSubtitleNudge", "N", 78, 0)
-  ],
-  siteRules: [
-    {
-      pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/(?!shorts\\/).*/",
-      enabled: true,
-      enableSubtitleNudge: true,
-      subtitleNudgeInterval: 50
-    },
-    {
-      pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/shorts\\/.*/",
-      enabled: true,
-      rememberSpeed: true,
-      controllerMarginTop: 60,
-      controllerMarginBottom: 85
+var tcDefaults = vscGetSettingsDefaults();
+var legacySyncKeys = [
+  "resetSpeed",
+  "speedStep",
+  "fastSpeed",
+  "rewindTime",
+  "advanceTime",
+  "resetKeyCode",
+  "slowerKeyCode",
+  "fasterKeyCode",
+  "rewindKeyCode",
+  "advanceKeyCode",
+  "fastKeyCode",
+  "blacklist"
+];
+
+function persistManagedSyncSettings(settings, callback) {
+  var nextSettings = vscBuildStoredSettingsDiff(settings);
+  chrome.storage.sync.remove(vscGetManagedSyncKeys(), function () {
+    if (chrome.runtime.lastError) {
+      callback(chrome.runtime.lastError);
+      return;
     }
-  ],
-  controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
-  showPopupControlBar: true,
-  popupMatchHoverControls: true,
-  popupControllerButtons: ["rewind", "slower", "faster", "advance", "display"],
-  enableSubtitleNudge: false,
-  subtitleNudgeInterval: 50,
-  subtitleNudgeAmount: 0.001
-};
+
+    if (Object.keys(nextSettings).length === 0) {
+      callback(null);
+      return;
+    }
+
+    chrome.storage.sync.set(nextSettings, function () {
+      callback(chrome.runtime.lastError || null);
+    });
+  });
+}
 
 const actionLabels = {
   display: "Show/hide controller",
@@ -889,15 +873,20 @@ function save_options() {
     settings.siteRules.push(rule);
   });
 
-  // Legacy keys to remove
-  const legacyKeys = [
-    "resetSpeed", "speedStep", "fastSpeed", "rewindTime", "advanceTime",
-    "resetKeyCode", "slowerKeyCode", "fasterKeyCode", "rewindKeyCode",
-    "advanceKeyCode", "fastKeyCode", "blacklist"
-  ];
+  chrome.storage.sync.remove(legacySyncKeys, function () {
+    if (chrome.runtime.lastError) {
+      status.textContent =
+        "Error: Failed to clear legacy settings - " +
+        chrome.runtime.lastError.message;
+      return;
+    }
 
-  chrome.storage.sync.remove(legacyKeys, function () {
-    chrome.storage.sync.set(settings, function () {
+    persistManagedSyncSettings(settings, function (error) {
+      if (error) {
+        status.textContent =
+          "Error: Failed to save settings - " + error.message;
+        return;
+      }
       status.textContent = "Options saved";
       setTimeout(function () {
         status.textContent = "";
@@ -1559,53 +1548,49 @@ function initLucideButtonIconsUI() {
 }
 
 function restore_options() {
-  chrome.storage.sync.get(tcDefaults, function (storage) {
+  chrome.storage.sync.get(null, function (storage) {
+    var settings = vscExpandStoredSettings(storage);
     chrome.storage.local.get(["customButtonIcons"], function (loc) {
       customButtonIconsLive =
         loc && loc.customButtonIcons && typeof loc.customButtonIcons === "object"
           ? loc.customButtonIcons
           : {};
 
-    document.getElementById("rememberSpeed").checked = storage.rememberSpeed;
+    document.getElementById("rememberSpeed").checked = settings.rememberSpeed;
     document.getElementById("forceLastSavedSpeed").checked =
-      storage.forceLastSavedSpeed;
-    document.getElementById("audioBoolean").checked = storage.audioBoolean;
-    document.getElementById("enabled").checked = storage.enabled;
-    document.getElementById("startHidden").checked = storage.startHidden;
-
-    // Migration/Normalization for hideWithControls
-    const hideWithControls = typeof storage.hideWithControls !== "undefined"
-      ? storage.hideWithControls
-      : storage.hideWithYouTubeControls;
-    
-    document.getElementById("hideWithControls").checked = hideWithControls;
+      settings.forceLastSavedSpeed;
+    document.getElementById("audioBoolean").checked = settings.audioBoolean;
+    document.getElementById("enabled").checked = settings.enabled;
+    document.getElementById("startHidden").checked = settings.startHidden;
+    document.getElementById("hideWithControls").checked =
+      settings.hideWithControls;
     document.getElementById("hideWithControlsTimer").value = 
-      storage.hideWithControlsTimer || tcDefaults.hideWithControlsTimer;
+      settings.hideWithControlsTimer || tcDefaults.hideWithControlsTimer;
 
     document.getElementById("controllerLocation").value =
-      normalizeControllerLocation(storage.controllerLocation);
+      normalizeControllerLocation(settings.controllerLocation);
     document.getElementById("controllerOpacity").value =
-      storage.controllerOpacity;
+      settings.controllerOpacity;
     document.getElementById("controllerMarginTop").value =
-      storage.controllerMarginTop ?? tcDefaults.controllerMarginTop;
+      settings.controllerMarginTop ?? tcDefaults.controllerMarginTop;
     document.getElementById("controllerMarginBottom").value =
-      storage.controllerMarginBottom ?? tcDefaults.controllerMarginBottom;
+      settings.controllerMarginBottom ?? tcDefaults.controllerMarginBottom;
     document.getElementById("showPopupControlBar").checked =
-      storage.showPopupControlBar !== false;
+      settings.showPopupControlBar !== false;
     document.getElementById("enableSubtitleNudge").checked =
-      storage.enableSubtitleNudge;
+      settings.enableSubtitleNudge;
     document.getElementById("subtitleNudgeInterval").value =
-      storage.subtitleNudgeInterval;
+      settings.subtitleNudgeInterval;
 
-    if (!Array.isArray(storage.keyBindings) || storage.keyBindings.length === 0) {
-      storage.keyBindings = tcDefaults.keyBindings.slice();
+    if (!Array.isArray(settings.keyBindings) || settings.keyBindings.length === 0) {
+      settings.keyBindings = tcDefaults.keyBindings.slice();
     }
 
-    ensureAllDefaultBindings(storage);
+    ensureAllDefaultBindings(settings);
 
     document.querySelectorAll(".customs:not([id])").forEach((row) => row.remove());
 
-    storage.keyBindings.forEach((item) => {
+    settings.keyBindings.forEach((item) => {
       var row = document.getElementById(item.action);
       var normalizedBinding = normalizeStoredBinding(item);
 
@@ -1634,11 +1619,9 @@ function restore_options() {
 
     refreshAddShortcutSelector();
 
-    // Load site rules (use defaults if none in storage or empty array)
-    var siteRules =
-      Array.isArray(storage.siteRules) && storage.siteRules.length > 0
-        ? storage.siteRules
-        : tcDefaults.siteRules || [];
+    var siteRules = Array.isArray(settings.siteRules)
+      ? settings.siteRules
+      : tcDefaults.siteRules || [];
 
     vscClearElement(document.getElementById("siteRulesContainer"));
     if (siteRules.length > 0) {
@@ -1649,16 +1632,16 @@ function restore_options() {
       });
     }
 
-    var controllerButtons = Array.isArray(storage.controllerButtons)
-      ? storage.controllerButtons
+    var controllerButtons = Array.isArray(settings.controllerButtons)
+      ? settings.controllerButtons
       : tcDefaults.controllerButtons;
     populateControlBarEditor(controllerButtons);
 
     document.getElementById("popupMatchHoverControls").checked =
-      storage.popupMatchHoverControls !== false;
+      settings.popupMatchHoverControls !== false;
 
-    var popupButtons = Array.isArray(storage.popupControllerButtons)
-      ? storage.popupControllerButtons
+    var popupButtons = Array.isArray(settings.popupControllerButtons)
+      ? settings.popupControllerButtons
       : tcDefaults.popupControllerButtons;
     populatePopupControlBarEditor(popupButtons);
     updatePopupEditorDisabledState();
@@ -1676,13 +1659,30 @@ function restore_defaults() {
     function () {}
   );
 
-  chrome.storage.sync.set(tcDefaults, function () {
-    restore_options();
-    var status = document.getElementById("status");
-    status.textContent = "Default options restored";
-    setTimeout(function () {
-      status.textContent = "";
-    }, 1000);
+  chrome.storage.sync.remove(legacySyncKeys, function () {
+    if (chrome.runtime.lastError) {
+      var errorStatus = document.getElementById("status");
+      errorStatus.textContent =
+        "Error: Failed to clear legacy settings - " +
+        chrome.runtime.lastError.message;
+      return;
+    }
+
+    persistManagedSyncSettings(tcDefaults, function (error) {
+      if (error) {
+        var errorStatus = document.getElementById("status");
+        errorStatus.textContent =
+          "Error: Failed to restore defaults - " + error.message;
+        return;
+      }
+
+      restore_options();
+      var status = document.getElementById("status");
+      status.textContent = "Default options restored";
+      setTimeout(function () {
+        status.textContent = "";
+      }, 1000);
+    });
   });
 }
 

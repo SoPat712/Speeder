@@ -1,5 +1,6 @@
 var isUserSeek = false; // Track if seek was user-initiated
 var lastToggleSpeed = {}; // Store last toggle speeds per video
+var sharedSettingsDefaults = vscGetSettingsDefaults();
 
 function getPrimaryVideoElement() {
   if (!tc.mediaElements || tc.mediaElements.length === 0) return null;
@@ -12,31 +13,37 @@ function getPrimaryVideoElement() {
 
 var tc = {
   settings: {
-    lastSpeed: 1.0,
-    enabled: true,
+    lastSpeed: sharedSettingsDefaults.lastSpeed,
+    enabled: sharedSettingsDefaults.enabled,
     speeds: {},
-    displayKeyCode: 86,
-    rememberSpeed: false,
-    forceLastSavedSpeed: false,
-    audioBoolean: false,
-    startHidden: false,
-    hideWithYouTubeControls: false,
-    hideWithControls: false,
-    hideWithControlsTimer: 2.0,
-    controllerLocation: "top-left",
-    controllerOpacity: 0.3,
-    controllerMarginTop: 0,
-    controllerMarginRight: 0,
-    controllerMarginBottom: 65,
-    controllerMarginLeft: 0,
-    keyBindings: [],
-    siteRules: [],
-    controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
+    displayKeyCode: sharedSettingsDefaults.displayKeyCode,
+    rememberSpeed: sharedSettingsDefaults.rememberSpeed,
+    forceLastSavedSpeed: sharedSettingsDefaults.forceLastSavedSpeed,
+    audioBoolean: sharedSettingsDefaults.audioBoolean,
+    startHidden: sharedSettingsDefaults.startHidden,
+    hideWithYouTubeControls: sharedSettingsDefaults.hideWithYouTubeControls,
+    hideWithControls: sharedSettingsDefaults.hideWithControls,
+    hideWithControlsTimer: sharedSettingsDefaults.hideWithControlsTimer,
+    controllerLocation: sharedSettingsDefaults.controllerLocation,
+    controllerOpacity: sharedSettingsDefaults.controllerOpacity,
+    controllerMarginTop: sharedSettingsDefaults.controllerMarginTop,
+    controllerMarginRight: sharedSettingsDefaults.controllerMarginRight,
+    controllerMarginBottom: sharedSettingsDefaults.controllerMarginBottom,
+    controllerMarginLeft: sharedSettingsDefaults.controllerMarginLeft,
+    keyBindings: Array.isArray(sharedSettingsDefaults.keyBindings)
+      ? sharedSettingsDefaults.keyBindings.slice()
+      : [],
+    siteRules: Array.isArray(sharedSettingsDefaults.siteRules)
+      ? sharedSettingsDefaults.siteRules.slice()
+      : [],
+    controllerButtons: Array.isArray(sharedSettingsDefaults.controllerButtons)
+      ? sharedSettingsDefaults.controllerButtons.slice()
+      : ["rewind", "slower", "faster", "advance", "display"],
     defaultLogLevel: 3,
     logLevel: 3,
-    enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
-    subtitleNudgeInterval: 50, // Default 50ms balances subtitle tracking with CPU cost
-    subtitleNudgeAmount: 0.001,
+    enableSubtitleNudge: sharedSettingsDefaults.enableSubtitleNudge,
+    subtitleNudgeInterval: sharedSettingsDefaults.subtitleNudgeInterval,
+    subtitleNudgeAmount: sharedSettingsDefaults.subtitleNudgeAmount,
     customButtonIcons: {}
   },
   mediaElements: [],
@@ -184,6 +191,8 @@ function createDefaultBinding(action, key, keyCode, value) {
     action: action,
     key: key,
     keyCode: keyCode,
+    code: null,
+    disabled: false,
     value: value,
     force: false,
     predefined: true
@@ -220,7 +229,7 @@ function defaultKeyBindings(storage) {
       "reset",
       "R",
       Number(storage.resetKeyCode) || 82,
-      1.0
+      0
     ),
     createDefaultBinding(
       "fast",
@@ -1191,7 +1200,8 @@ function log(message, level) {
   }
 }
 
-chrome.storage.sync.get(tc.settings, function (storage) {
+chrome.storage.sync.get(null, function (storage) {
+  storage = vscExpandStoredSettings(storage);
   var storedBindings = Array.isArray(storage.keyBindings)
     ? storage.keyBindings
     : [];
@@ -1202,19 +1212,6 @@ chrome.storage.sync.get(tc.settings, function (storage) {
 
   if (tc.settings.keyBindings.length === 0) {
     tc.settings.keyBindings = defaultKeyBindings(storage);
-    tc.settings.version = "0.5.3";
-    chrome.storage.sync.set({
-      keyBindings: tc.settings.keyBindings,
-      version: tc.settings.version,
-      displayKeyCode: tc.settings.displayKeyCode,
-      rememberSpeed: tc.settings.rememberSpeed,
-      forceLastSavedSpeed: tc.settings.forceLastSavedSpeed,
-      audioBoolean: tc.settings.audioBoolean,
-      startHidden: tc.settings.startHidden,
-      enabled: tc.settings.enabled,
-      controllerLocation: tc.settings.controllerLocation,
-      controllerOpacity: tc.settings.controllerOpacity
-    });
   }
   tc.settings.lastSpeed = Number(storage.lastSpeed);
   if (!isValidSpeed(tc.settings.lastSpeed) && tc.settings.lastSpeed !== 1.0) {
@@ -1292,7 +1289,14 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     addedDefaultBinding;
 
   if (addedDefaultBinding) {
-    chrome.storage.sync.set({ keyBindings: tc.settings.keyBindings });
+    var keyBindingsDiff = vscBuildStoredSettingsDiff({
+      keyBindings: tc.settings.keyBindings
+    });
+    if (Object.prototype.hasOwnProperty.call(keyBindingsDiff, "keyBindings")) {
+      chrome.storage.sync.set({ keyBindings: keyBindingsDiff.keyBindings });
+    } else {
+      chrome.storage.sync.remove("keyBindings");
+    }
   }
   captureSiteRuleBase();
   patchAttachShadow();
@@ -2094,53 +2098,23 @@ function escapeStringRegExp(str) {
 }
 function applySiteRuleOverrides() {
   resetSettingsFromSiteRuleBase();
+  tc.activeSiteRule = null;
 
   if (!Array.isArray(tc.settings.siteRules) || tc.settings.siteRules.length === 0) {
     return false;
   }
 
   var currentUrl = location.href;
-  var matchedRule = null;
-
-  for (var i = 0; i < tc.settings.siteRules.length; i++) {
-    var rule = tc.settings.siteRules[i];
-    var pattern = rule.pattern;
-    if (!pattern || pattern.length === 0) continue;
-
-    var regex;
-    if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
-      try {
-        var lastSlash = pattern.lastIndexOf("/");
-        regex = new RegExp(
-          pattern.substring(1, lastSlash),
-          pattern.substring(lastSlash + 1)
-        );
-      } catch (e) {
-        log(`Invalid site rule regex: ${pattern}. ${e.message}`, 2);
-        continue;
-      }
-    } else {
-      regex = new RegExp(escapeStringRegExp(pattern));
-    }
-
-    if (regex && regex.test(currentUrl)) {
-      matchedRule = rule;
-      break;
-    }
-  }
+  var matchedRule = vscMatchSiteRule(currentUrl, tc.settings.siteRules);
 
   if (!matchedRule) return false;
 
   tc.activeSiteRule = matchedRule;
-  log(`Matched site rule: ${matchedRule.pattern}`, 4);
+  log("Matched site rule overrides for current URL", 4);
 
   // Check if extension should be enabled/disabled on this site
-  if (matchedRule.enabled === false) {
+  if (vscIsSiteRuleDisabled(matchedRule)) {
     log(`Extension disabled for site: ${currentUrl}`, 4);
-    return true;
-  } else if (matchedRule.disableExtension === true) {
-    // Handle old format
-    log(`Extension disabled (legacy) for site: ${currentUrl}`, 4);
     return true;
   }
 

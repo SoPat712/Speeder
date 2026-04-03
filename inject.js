@@ -438,6 +438,165 @@ function applyControllerLocation(videoController, location) {
   );
 }
 
+function getYouTubeAutoHidePlayer(video) {
+  if (!video || !isOnYouTube()) return null;
+
+  return video.closest(".html5-video-player") || video.closest("#movie_player");
+}
+
+function getAutoHideModeForVideo(video) {
+  if (!tc.settings.hideWithControls) return "off";
+  return getYouTubeAutoHidePlayer(video) ? "youtube" : "generic";
+}
+
+function getControllerMountParent(video, parentHint) {
+  var parentEl = parentHint || (video && (video.parentElement || video.parentNode));
+  if (!parentEl) return null;
+
+  switch (true) {
+    case location.hostname == "www.amazon.com":
+    case location.hostname == "www.reddit.com":
+    case /hbogo\./.test(location.hostname):
+      return parentEl.parentElement || parentEl;
+    case location.hostname == "www.facebook.com":
+      var facebookParent = parentEl;
+      for (
+        var depth = 0;
+        depth < 8 && facebookParent && facebookParent.parentElement;
+        depth++
+      ) {
+        facebookParent = facebookParent.parentElement;
+      }
+      return facebookParent || parentEl;
+    case location.hostname == "tv.apple.com":
+      var root = parentEl.getRootNode();
+      var scrim = root && root.querySelector ? root.querySelector(".scrim") : null;
+      return scrim || parentEl;
+    case location.hostname == "www.youtube.com":
+    case location.hostname == "m.youtube.com":
+    case location.hostname == "music.youtube.com":
+      return getYouTubeAutoHidePlayer(video) || parentEl;
+    default:
+      return parentEl;
+  }
+}
+
+function getControllerBehaviorSignature(video) {
+  return JSON.stringify({
+    startHidden: Boolean(tc.settings.startHidden),
+    hideWithControls: Boolean(tc.settings.hideWithControls),
+    hideWithControlsTimer: Number(tc.settings.hideWithControlsTimer),
+    controllerLocation: normalizeControllerLocation(tc.settings.controllerLocation),
+    controllerOpacity: Number(tc.settings.controllerOpacity),
+    controllerMarginTop: normalizeControllerMarginPx(tc.settings.controllerMarginTop, 0),
+    controllerMarginBottom: normalizeControllerMarginPx(
+      tc.settings.controllerMarginBottom,
+      0
+    ),
+    controllerButtons: Array.isArray(tc.settings.controllerButtons)
+      ? tc.settings.controllerButtons.slice()
+      : [],
+    enableSubtitleNudge: Boolean(tc.settings.enableSubtitleNudge),
+    subtitleNudgeInterval: Number(tc.settings.subtitleNudgeInterval),
+    autoHideMode: getAutoHideModeForVideo(video),
+    mediaTag: video && video.tagName ? video.tagName : ""
+  });
+}
+
+function rebuildControllerForVideo(video, parentHint, reason) {
+  if (!video) return null;
+
+  var previous = video.vsc || null;
+  var preservedState = previous
+    ? {
+      mark: previous.mark,
+      resetToggleArmed: previous.resetToggleArmed === true,
+      subtitleNudgeEnabledOverride: previous.subtitleNudgeEnabledOverride,
+      userHidden:
+        Boolean(previous.div) &&
+        previous.div.classList.contains("vsc-hidden")
+    }
+    : null;
+
+  if (previous) {
+    previous.remove();
+  }
+
+  if (!video.isConnected || !hasUsableMediaSource(video)) {
+    return null;
+  }
+
+  var nextController = new tc.videoController(
+    video,
+    parentHint || video.parentElement || video.parentNode
+  );
+  if (!nextController) return null;
+
+  if (preservedState) {
+    nextController.mark = preservedState.mark;
+    nextController.resetToggleArmed = preservedState.resetToggleArmed;
+
+    if (
+      typeof preservedState.subtitleNudgeEnabledOverride === "boolean"
+    ) {
+      nextController.subtitleNudgeEnabledOverride =
+        preservedState.subtitleNudgeEnabledOverride;
+      updateSubtitleNudgeIndicator(video);
+      if (!preservedState.subtitleNudgeEnabledOverride) {
+        nextController.stopSubtitleNudge();
+      } else if (!video.paused && video.playbackRate !== 1.0) {
+        nextController.startSubtitleNudge();
+      }
+    }
+
+    if (preservedState.userHidden && nextController.div) {
+      nextController.div.classList.add("vsc-hidden");
+    }
+  }
+
+  log("Rebuilt controller: " + (reason || "refresh"), 4);
+  return nextController;
+}
+
+function refreshManagedController(video, parentHint) {
+  if (!video || !video.vsc) return null;
+  if (!video.isConnected) {
+    removeController(video);
+    return null;
+  }
+
+  var controller = video.vsc;
+  controller.parent = video.parentElement || parentHint || controller.parent;
+
+  var expectedMountParent = getControllerMountParent(video, controller.parent);
+  var nextSignature = getControllerBehaviorSignature(video);
+  var wrapper = controller.div;
+  var needsRebuild =
+    !wrapper ||
+    !wrapper.isConnected ||
+    !expectedMountParent ||
+    wrapper.parentNode !== expectedMountParent ||
+    controller.behaviorSignature !== nextSignature;
+
+  if (needsRebuild) {
+    return rebuildControllerForVideo(
+      video,
+      controller.parent,
+      "DOM/source/site-rule change"
+    );
+  }
+
+  controller.mountParent = expectedMountParent;
+  controller.behaviorSignature = nextSignature;
+  applyControllerLocation(controller, tc.settings.controllerLocation);
+  var controllerEl = getControllerElement(controller);
+  if (controllerEl) {
+    controllerEl.style.opacity = String(tc.settings.controllerOpacity);
+  }
+  updateSubtitleNudgeIndicator(video);
+  return controller;
+}
+
 function captureSiteRuleBase() {
   tc.siteRuleBase = {
     startHidden: tc.settings.startHidden,
@@ -919,8 +1078,8 @@ function applySourceTransitionPolicy(video, forceUpdate) {
     setSpeed(video, desiredSpeed, false, false);
   }
 
-  // Same-tab SPA (e.g. YouTube watch → Shorts): URL can change while remember-speed
-  // already ran on src mutation — re-apply margins / location / opacity for new rules.
+  // Same-tab SPA or DOM-driven player swaps can change the effective rule output
+  // after the media source updates, so refresh or rebuild controllers here too.
   reapplySiteRulesAndControllerGeometry();
 }
 
@@ -1042,8 +1201,14 @@ function hasUsableMediaSource(node) {
 }
 
 function ensureController(node, parent) {
-  if (!isMediaElement(node) || node.vsc) return node && node.vsc;
-  if (!hasUsableMediaSource(node)) {
+  if (!isMediaElement(node)) return node && node.vsc;
+
+  if (!node.isConnected) {
+    removeController(node);
+    return null;
+  }
+
+  if (!node.vsc && !hasUsableMediaSource(node)) {
     log(
       `Deferring controller creation for ${node.tagName}: no usable source yet`,
       5
@@ -1054,9 +1219,13 @@ function ensureController(node, parent) {
   // href selects site rules; re-run on every new/usable media so margins/opacity match current URL.
   var siteDisabled = applySiteRuleOverrides();
   if (!tc.settings.enabled || siteDisabled) {
+    removeController(node);
     return null;
   }
-  refreshAllControllerGeometry();
+
+  if (node.vsc) {
+    return refreshManagedController(node, parent);
+  }
 
   log(
     `Creating controller for ${node.tagName}: ${node.src || node.currentSrc || "no src"}`,
@@ -1487,7 +1656,14 @@ function defineVideoController() {
       return;
     }
 
-    log(`Controller created and attached to DOM. Hidden: ${this.div.classList.contains('vsc-hidden')}`, 4);
+    this.mountParent =
+      this.div.parentNode || getControllerMountParent(target, this.parent);
+    this.behaviorSignature = getControllerBehaviorSignature(target);
+
+    log(
+      `Controller created and attached to DOM. Hidden: ${this.div.classList.contains('vsc-hidden')}`,
+      4
+    );
 
     var mediaEventAction = function (event) {
       if (
@@ -1761,10 +1937,10 @@ function defineVideoController() {
   };
 
   tc.videoController.prototype.setupYouTubeAutoHide = function (wrapper) {
-    if (!wrapper || !isOnYouTube()) return;
+    if (!wrapper) return;
 
     const video = this.video;
-    const ytPlayer = video.closest(".html5-video-player");
+    const ytPlayer = getYouTubeAutoHidePlayer(video);
     if (!ytPlayer) {
       log("YouTube player not found for auto-hide setup", 4);
       return;
@@ -1904,7 +2080,8 @@ function defineVideoController() {
       wrapper.classList.add("vsc-nosource");
     if (tc.settings.startHidden) wrapper.classList.add("vsc-hidden");
     // Use lower z-index for non-YouTube sites to avoid overlapping modals
-    if (!isOnYouTube()) wrapper.classList.add("vsc-non-youtube");
+    if (!getYouTubeAutoHidePlayer(this.video))
+      wrapper.classList.add("vsc-non-youtube");
     var shadow = wrapper.attachShadow({ mode: "open" });
     var shadowStylesheet = doc.createElement("link");
     shadowStylesheet.rel = "stylesheet";
@@ -2020,7 +2197,7 @@ function defineVideoController() {
 
     // Setup auto-hide observers if enabled
     if (tc.settings.hideWithControls) {
-      if (isOnYouTube()) {
+      if (getAutoHideModeForVideo(this.video) === "youtube") {
         this.setupYouTubeAutoHide(wrapper);
       } else {
         this.setupGenericAutoHide(wrapper);
@@ -2092,10 +2269,6 @@ function defineVideoController() {
   };
 }
 
-function escapeStringRegExp(str) {
-  const m = /[|\\{}()[\]^$+*?.]/g;
-  return str.replace(m, "\\$&");
-}
 function applySiteRuleOverrides() {
   resetSettingsFromSiteRuleBase();
   tc.activeSiteRule = null;
@@ -2173,23 +2346,22 @@ function applySiteRuleOverrides() {
   return false;
 }
 
-/** Apply current tc.settings controller layout/opacity to every attached controller (after site rules). */
-function refreshAllControllerGeometry() {
-  tc.mediaElements.forEach(function (video) {
-    if (!video || !video.vsc) return;
-    applyControllerLocation(video.vsc, tc.settings.controllerLocation);
-    var controllerEl = getControllerElement(video.vsc);
-    if (controllerEl) {
-      controllerEl.style.opacity = String(tc.settings.controllerOpacity);
-    }
-  });
-}
-
-/** Re-match site rules for current URL and refresh controller position/opacity on every video. */
+/** Re-match site rules for current URL and refresh or rebuild every controller. */
 function reapplySiteRulesAndControllerGeometry() {
   var siteDisabled = applySiteRuleOverrides();
-  if (!tc.settings.enabled || siteDisabled) return;
-  refreshAllControllerGeometry();
+  var videos = tc.mediaElements.slice();
+
+  if (!tc.settings.enabled || siteDisabled) {
+    videos.forEach(function (video) {
+      removeController(video);
+    });
+    return;
+  }
+
+  videos.forEach(function (video) {
+    if (!video) return;
+    ensureController(video, video.parentElement || video.parentNode);
+  });
 }
 
 function shouldPreserveDesiredSpeed(video, speed) {
@@ -2530,7 +2702,6 @@ function initializeNow(doc, forceReinit = false) {
   if ((!forceReinit && vscInitializedDocuments.has(doc)) || !doc.body) return;
 
   var siteDisabled = applySiteRuleOverrides();
-  if (!tc.settings.enabled || siteDisabled) return;
 
   if (!doc.body.classList.contains("vsc-initialized")) {
     doc.body.classList.add("vsc-initialized");
@@ -2542,7 +2713,9 @@ function initializeNow(doc, forceReinit = false) {
 
   if (forceReinit) {
     log("Force re-initialization requested", 4);
-    refreshAllControllerGeometry();
+    reapplySiteRulesAndControllerGeometry();
+  } else if (!tc.settings.enabled || siteDisabled) {
+    reapplySiteRulesAndControllerGeometry();
   }
 
   vscInitializedDocuments.add(doc);

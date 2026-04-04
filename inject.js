@@ -56,7 +56,7 @@ var vscObservedRoots = new WeakSet();
 var requestIdle =
   typeof window.requestIdleCallback === "function"
     ? window.requestIdleCallback.bind(window)
-    : function (callback, options) {
+    : function(callback, options) {
       return setTimeout(callback, (options && options.timeout) || 1);
     };
 var controllerLocations = [
@@ -115,18 +115,18 @@ var controllerLocationStyles = {
 
 /* `label` fallback only when ui-icons has no path for the action. */
 var controllerButtonDefs = {
-  rewind:   { label: "", className: "rw" },
-  slower:   { label: "", className: "" },
-  faster:   { label: "", className: "" },
-  advance:  { label: "", className: "rw" },
-  display:  { label: "", className: "hideButton" },
-  reset:    { label: "\u21BB", className: "" },
-  fast:     { label: "", className: "" },
+  rewind: { label: "", className: "rw" },
+  slower: { label: "", className: "" },
+  faster: { label: "", className: "" },
+  advance: { label: "", className: "rw" },
+  display: { label: "", className: "hideButton" },
+  reset: { label: "\u21BB", className: "" },
+  fast: { label: "", className: "" },
   settings: { label: "", className: "" },
-  pause:    { label: "", className: "" },
-  muted:    { label: "", className: "" },
-  mark:     { label: "", className: "" },
-  jump:     { label: "", className: "" }
+  pause: { label: "", className: "" },
+  muted: { label: "", className: "" },
+  mark: { label: "", className: "" },
+  jump: { label: "", className: "" }
 };
 
 function createDefaultBinding(action, code, value) {
@@ -388,7 +388,7 @@ function captureSiteRuleBase() {
       ? tc.settings.controllerButtons.slice()
       : tc.settings.controllerButtons,
     keyBindings: Array.isArray(tc.settings.keyBindings)
-      ? tc.settings.keyBindings.map(function (binding) {
+      ? tc.settings.keyBindings.map(function(binding) {
         return Object.assign({}, binding);
       })
       : tc.settings.keyBindings
@@ -414,7 +414,7 @@ function resetSettingsFromSiteRuleBase() {
     ? base.controllerButtons.slice()
     : base.controllerButtons;
   tc.settings.keyBindings = Array.isArray(base.keyBindings)
-    ? base.keyBindings.map(function (binding) {
+    ? base.keyBindings.map(function(binding) {
       return Object.assign({}, binding);
     })
     : base.keyBindings;
@@ -759,7 +759,7 @@ function setSubtitleNudgeEnabledForVideo(video, enabled) {
   if (flashEl) {
     flashEl.classList.add("visible");
     clearTimeout(flashEl._flashTimer);
-    flashEl._flashTimer = setTimeout(function () {
+    flashEl._flashTimer = setTimeout(function() {
       flashEl.classList.remove("visible");
     }, 1500);
   }
@@ -833,7 +833,7 @@ function schedulePersistLastSpeed(speed) {
   tc.pendingLastSpeedValue = speed;
   if (tc.pendingLastSpeedSave !== null) return;
 
-  tc.pendingLastSpeedSave = setTimeout(function () {
+  tc.pendingLastSpeedSave = setTimeout(function() {
     var speedToPersist = tc.pendingLastSpeedValue;
     tc.pendingLastSpeedSave = null;
 
@@ -841,7 +841,8 @@ function schedulePersistLastSpeed(speed) {
       return;
     }
 
-    chrome.storage.sync.set({ lastSpeed: speedToPersist }, function () { });
+    chrome.storage.sync.set({ lastSpeed: speedToPersist }, function() {
+    });
     tc.persistedLastSpeed = speedToPersist;
   }, 250);
 }
@@ -923,7 +924,7 @@ function scheduleSpeedRestore(video, desiredSpeed, reason) {
     clearTimeout(video.vsc.restoreSpeedTimer);
   }
 
-  video.vsc.restoreSpeedTimer = setTimeout(function () {
+  video.vsc.restoreSpeedTimer = setTimeout(function() {
     if (!video.vsc) return;
 
     if (Math.abs(video.playbackRate - desiredSpeed) > 0.01) {
@@ -1006,7 +1007,7 @@ function hasUsableMediaSource(node) {
   }
 
   if (node.querySelectorAll) {
-    return Array.from(node.querySelectorAll("source[src]")).some(function (
+    return Array.from(node.querySelectorAll("source[src]")).some(function(
       source
     ) {
       var src = source.getAttribute("src");
@@ -1145,7 +1146,7 @@ function patchAttachShadow() {
   }
 
   var originalAttachShadow = Element.prototype.attachShadow;
-  Element.prototype.attachShadow = function () {
+  Element.prototype.attachShadow = function() {
     var shadowRoot = originalAttachShadow.apply(this, arguments);
     try {
       if (shadowRoot) {
@@ -1176,7 +1177,7 @@ function log(message, level) {
   }
 }
 
-chrome.storage.sync.get(tc.settings, function (storage) {
+chrome.storage.sync.get(tc.settings, function(storage) {
   var storedBindings = Array.isArray(storage.keyBindings)
     ? storage.keyBindings
     : [];
@@ -1282,7 +1283,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   // We use a global flag to ensure the listener is only attached once.
   if (!window.vscMessageListener) {
     chrome.runtime.onMessage.addListener(
-      function (request, sender, sendResponse) {
+      function(request, sender, sendResponse) {
         if (request.action === "rescan_page") {
           log("Re-scan command received from popup.", 4);
           initializeWhenReady(document, true);
@@ -1323,7 +1324,7 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     // Set the flag to prevent adding the listener again.
     window.vscMessageListener = true;
   }
-  chrome.storage.local.get(["customButtonIcons"], function (loc) {
+  chrome.storage.local.get(["customButtonIcons"], function(loc) {
     tc.settings.customButtonIcons =
       loc &&
       loc.customButtonIcons &&
@@ -1333,18 +1334,18 @@ chrome.storage.sync.get(tc.settings, function (storage) {
 
     if (!window.vscCustomIconListener) {
       window.vscCustomIconListener = true;
-      chrome.storage.onChanged.addListener(function (changes, area) {
+      chrome.storage.onChanged.addListener(function(changes, area) {
         if (area !== "local" || !changes.customButtonIcons) return;
         var nv = changes.customButtonIcons.newValue;
         tc.settings.customButtonIcons =
           nv && typeof nv === "object" ? nv : {};
         if (tc.mediaElements && tc.mediaElements.length) {
-          tc.mediaElements.forEach(function (video) {
+          tc.mediaElements.forEach(function(video) {
             if (!video.vsc || !video.vsc.div) return;
             var doc = video.ownerDocument;
             var shadow = video.vsc.div.shadowRoot;
             if (!shadow) return;
-            shadow.querySelectorAll("button[data-action]").forEach(function (btn) {
+            shadow.querySelectorAll("button[data-action]").forEach(function(btn) {
               var act = btn.dataset.action;
               if (!act) return;
               var svg =
@@ -1389,6 +1390,7 @@ function getKeyBindings(action, what = "value") {
     return false;
   }
 }
+
 function setKeyBindings(action, value) {
   tc.settings.keyBindings.find((item) => item.action === action)["value"] =
     value;
@@ -1425,7 +1427,7 @@ function createControllerButton(doc, action, label, className) {
 }
 
 function defineVideoController() {
-  tc.videoController = function (target, parent) {
+  tc.videoController = function(target, parent) {
     if (target.vsc) return target.vsc;
     tc.mediaElements.push(target);
     target.vsc = this;
@@ -1445,7 +1447,7 @@ function defineVideoController() {
       tc.settings.controllerLocation
     );
 
-    log(`Creating video controller for ${target.tagName} with src: ${target.src || target.currentSrc || 'none'}`, 4);
+    log(`Creating video controller for ${target.tagName} with src: ${target.src || target.currentSrc || "none"}`, 4);
 
     let storedSpeed = sanitizeSpeed(resolveTargetSpeed(target), 1.0);
     this.targetSpeed = storedSpeed;
@@ -1465,9 +1467,9 @@ function defineVideoController() {
       return;
     }
 
-    log(`Controller created and attached to DOM. Hidden: ${this.div.classList.contains('vsc-hidden')}`, 4);
+    log(`Controller created and attached to DOM. Hidden: ${this.div.classList.contains("vsc-hidden")}`, 4);
 
-    var mediaEventAction = function (event) {
+    var mediaEventAction = function(event) {
       if (
         event.type === "loadedmetadata" ||
         event.type === "loadeddata" ||
@@ -1585,7 +1587,7 @@ function defineVideoController() {
       this.startSubtitleNudge();
   };
 
-  tc.videoController.prototype.remove = function () {
+  tc.videoController.prototype.remove = function() {
     this.stopSubtitleNudge();
     if (this.youTubeAutoHideObserver) {
       this.youTubeAutoHideObserver.disconnect();
@@ -1617,7 +1619,7 @@ function defineVideoController() {
     if (idx != -1) tc.mediaElements.splice(idx, 1);
   };
 
-  tc.videoController.prototype.startSubtitleNudge = function () {
+  tc.videoController.prototype.startSubtitleNudge = function() {
     if (
       !isSubtitleNudgeSupported(this.video) ||
       !isSubtitleNudgeEnabledForVideo(this.video) ||
@@ -1690,7 +1692,7 @@ function defineVideoController() {
     log(`Nudge: Starting with interval ${tc.settings.subtitleNudgeInterval}ms.`, 5);
   };
 
-  tc.videoController.prototype.stopSubtitleNudge = function () {
+  tc.videoController.prototype.stopSubtitleNudge = function() {
     if (this.nudgeAnimationId !== null) {
       clearTimeout(this.nudgeAnimationId);
       this.nudgeAnimationId = null;
@@ -1708,7 +1710,7 @@ function defineVideoController() {
     // doesn't lose the user's intended speed if the site hijacks it.
   };
 
-  tc.videoController.prototype.performImmediateNudge = function () {
+  tc.videoController.prototype.performImmediateNudge = function() {
     if (
       !isSubtitleNudgeSupported(this.video) ||
       !isSubtitleNudgeEnabledForVideo(this.video) ||
@@ -1738,7 +1740,7 @@ function defineVideoController() {
     log(`Immediate nudge performed at rate ${targetRate.toFixed(2)}`, 5);
   };
 
-  tc.videoController.prototype.setupYouTubeAutoHide = function (wrapper) {
+  tc.videoController.prototype.setupYouTubeAutoHide = function(wrapper) {
     if (!wrapper || !isOnYouTube()) return;
 
     const video = this.video;
@@ -1754,7 +1756,7 @@ function defineVideoController() {
       // The vsc-hidden class (from V key) takes precedence via CSS specificity
       if (ytPlayer.classList.contains("ytp-autohide")) {
         wrapper.classList.add("ytp-autohide");
-        
+
         // Immediately end any temporary "vsc-show" state to hide with YouTube
         // UNLESS it was forced by a shortcut (vsc-forced-show)
         if (!wrapper.classList.contains("vsc-forced-show")) {
@@ -1764,7 +1766,7 @@ function defineVideoController() {
             wrapper.showTimeOut = undefined;
           }
         }
-        
+
         log("YouTube controls hidden, hiding controller", 5);
       } else {
         wrapper.classList.remove("ytp-autohide");
@@ -1814,7 +1816,7 @@ function defineVideoController() {
     };
   };
 
-  tc.videoController.prototype.setupGenericAutoHide = function (wrapper) {
+  tc.videoController.prototype.setupGenericAutoHide = function(wrapper) {
     if (!wrapper) return;
 
     const video = this.video;
@@ -1873,7 +1875,7 @@ function defineVideoController() {
     log(`Generic auto-hide setup complete with ${tc.settings.hideWithControlsTimer}s timer`, 4);
   };
 
-  tc.videoController.prototype.initializeControls = function () {
+  tc.videoController.prototype.initializeControls = function() {
     const doc = this.video.ownerDocument;
     const speed = this.video.playbackRate.toFixed(2);
     var wrapper = doc.createElement("div");
@@ -1911,7 +1913,7 @@ function defineVideoController() {
 
     var subtitleNudgeIndicator = null;
 
-    buttonConfig.forEach(function (btnId) {
+    buttonConfig.forEach(function(btnId) {
       if (btnId === "nudge") {
         subtitleNudgeIndicator = doc.createElement("span");
         subtitleNudgeIndicator.id = "nudge-indicator";
@@ -1943,20 +1945,22 @@ function defineVideoController() {
     this.subtitleNudgeIndicator = subtitleNudgeIndicator;
     this.nudgeFlashIndicator = nudgeFlashIndicator;
     this.resetButtonEl =
-      shadow.querySelector('button[data-action="reset"]') || null;
+      shadow.querySelector("button[data-action=\"reset\"]") || null;
     this.resetToggleArmed = false;
     if (subtitleNudgeIndicator) {
       updateSubtitleNudgeIndicator(this.video);
     }
+
     function blurAfterPointerTap(target, e) {
       if (!target || typeof target.blur !== "function") return;
       var pt = e.pointerType;
       if (pt === "mouse" || pt === "touch" || (!pt && e.detail > 0)) {
-        requestAnimationFrame(function () {
+        requestAnimationFrame(function() {
           target.blur();
         });
       }
     }
+
     dragHandle.addEventListener(
       "mousedown",
       (e) => {
@@ -2004,7 +2008,7 @@ function defineVideoController() {
         this.setupGenericAutoHide(wrapper);
       }
     }
-    
+
     var fragment = doc.createDocumentFragment();
     fragment.appendChild(wrapper);
     const parentEl = this.parent || this.video.parentElement;
@@ -2074,6 +2078,7 @@ function escapeStringRegExp(str) {
   const m = /[|\\{}()[\]^$+*?.]/g;
   return str.replace(m, "\\$&");
 }
+
 function applySiteRuleOverrides() {
   resetSettingsFromSiteRuleBase();
 
@@ -2152,7 +2157,7 @@ function applySiteRuleOverrides() {
   [
     "controllerMarginTop",
     "controllerMarginBottom"
-  ].forEach(function (key) {
+  ].forEach(function(key) {
     tc.settings[key] = normalizeControllerMarginPx(tc.settings[key], 0);
   });
 
@@ -2183,7 +2188,7 @@ function applySiteRuleOverrides() {
 
 /** Apply current tc.settings controller layout/opacity to every attached controller (after site rules). */
 function refreshAllControllerGeometry() {
-  tc.mediaElements.forEach(function (video) {
+  tc.mediaElements.forEach(function(video) {
     if (!video || !video.vsc) return;
     applyControllerLocation(video.vsc, tc.settings.controllerLocation);
     var controllerEl = getControllerElement(video.vsc);
@@ -2217,6 +2222,7 @@ function shouldPreserveDesiredSpeed(video, speed) {
 function setupListener(root) {
   root = root || document;
   if (root.vscRateListenerAttached) return;
+
   function updateSpeedFromEvent(video, skipResetDisarm) {
     if (!video.vsc || !video.vsc.speedIndicator) return;
     if (!skipResetDisarm) {
@@ -2237,9 +2243,10 @@ function setupListener(root) {
       else video.vsc.startSubtitleNudge();
     }
   }
+
   root.addEventListener(
     "ratechange",
-    function (event) {
+    function(event) {
       if (tc.isNudging) return;
       var video = event.target;
       if (!video || typeof video.playbackRate === "undefined" || !video.vsc)
@@ -2283,6 +2290,7 @@ function setupListener(root) {
 }
 
 var vscInitializedDocuments = new Set();
+
 function clearPendingInitialization(doc) {
   if (!doc || !doc.vscPendingInitializeHandler) return;
 
@@ -2319,7 +2327,7 @@ function initializeWhenReady(doc, forceReinit = false) {
 
   if (doc.vscPendingInitializeHandler) return;
 
-  var pendingInitializeHandler = function () {
+  var pendingInitializeHandler = function() {
     tryInitializeDocument(doc, doc.vscPendingForceReinit === true);
   };
 
@@ -2334,6 +2342,7 @@ function initializeWhenReady(doc, forceReinit = false) {
     setTimeout(pendingInitializeHandler, 0);
   }
 }
+
 function inIframe() {
   try {
     return window.self !== window.top;
@@ -2346,13 +2355,14 @@ function attachKeydownListeners(doc) {
   var docs = [doc];
   try {
     if (inIframe() && window.top.document !== doc) docs.push(window.top.document);
-  } catch (e) { }
+  } catch (e) {
+  }
 
-  docs.forEach(function (keyDoc) {
+  docs.forEach(function(keyDoc) {
     if (keyDoc.vscKeydownListenerAttached) return;
     keyDoc.addEventListener(
       "keydown",
-      function (event) {
+      function(event) {
         if (
           !event.getModifierState ||
           event.getModifierState("Alt") ||
@@ -2375,7 +2385,7 @@ function attachKeydownListeners(doc) {
 
         if (!tc.mediaElements.length) return;
 
-        var item = tc.settings.keyBindings.find(function (binding) {
+        var item = tc.settings.keyBindings.find(function(binding) {
           return matchesKeyBinding(binding, event);
         });
 
@@ -2399,24 +2409,24 @@ function attachMutationObserver(root) {
 
   var pendingMutations = [];
   var mutationProcessingScheduled = false;
-  var observer = new MutationObserver(function (mutations) {
+  var observer = new MutationObserver(function(mutations) {
     pendingMutations.push(...mutations);
     if (mutationProcessingScheduled) return;
 
     mutationProcessingScheduled = true;
     requestIdle(
-      function () {
+      function() {
         var mutationsToProcess = pendingMutations.splice(0);
         mutationProcessingScheduled = false;
 
-        mutationsToProcess.forEach(function (mutation) {
+        mutationsToProcess.forEach(function(mutation) {
           if (mutation.type === "childList") {
-            mutation.addedNodes.forEach(function (node) {
+            mutation.addedNodes.forEach(function(node) {
               // Skip text nodes, comments, etc. — only elements can contain media
               if (node.nodeType !== Node.ELEMENT_NODE) return;
               scanNodeForMedia(node, node.parentNode || mutation.target, true);
             });
-            mutation.removedNodes.forEach(function (node) {
+            mutation.removedNodes.forEach(function(node) {
               if (node.nodeType !== Node.ELEMENT_NODE) return;
               scanNodeForMedia(node, node.parentNode || mutation.target, false);
             });
@@ -2465,7 +2475,7 @@ function attachMutationObserver(root) {
 function attachMediaDetectionListeners(root) {
   if (root.vscMediaEventListenersAttached) return;
 
-  var handleDetectedMedia = function (event) {
+  var handleDetectedMedia = function(event) {
     var target = event.target;
     if (!isMediaElement(target)) return;
     ensureController(target, target.parentElement || target.parentNode);
@@ -2478,21 +2488,22 @@ function attachMediaDetectionListeners(root) {
     "canplay",
     "playing",
     "play"
-  ].forEach(function (eventName) {
+  ].forEach(function(eventName) {
     root.addEventListener(eventName, handleDetectedMedia, true);
   });
   root.vscMediaEventListenersAttached = true;
 }
 
 function attachIframeListeners(doc) {
-  Array.from(doc.getElementsByTagName("iframe")).forEach(function (frame) {
+  Array.from(doc.getElementsByTagName("iframe")).forEach(function(frame) {
     if (!frame.vscLoadListenerAttached) {
-      frame.addEventListener("load", function () {
+      frame.addEventListener("load", function() {
         try {
           if (frame.contentDocument) {
             initializeWhenReady(frame.contentDocument, true);
           }
-        } catch (e) { }
+        } catch (e) {
+        }
       });
       frame.vscLoadListenerAttached = true;
     }
@@ -2501,24 +2512,25 @@ function attachIframeListeners(doc) {
       if (frame.contentDocument) {
         initializeWhenReady(frame.contentDocument);
       }
-    } catch (e) { }
+    } catch (e) {
+    }
   });
 }
 
 function attachNavigationListeners() {
   if (window.vscNavigationListenersAttached) return;
 
-  var scheduleRescan = function () {
+  var scheduleRescan = function() {
     clearTimeout(window.vscNavigationRescanTimer);
-    window.vscNavigationRescanTimer = setTimeout(function () {
+    window.vscNavigationRescanTimer = setTimeout(function() {
       initializeWhenReady(document, true);
     }, 300);
   };
 
-  ["pushState", "replaceState"].forEach(function (method) {
+  ["pushState", "replaceState"].forEach(function(method) {
     if (typeof history[method] !== "function") return;
     var original = history[method];
-    history[method] = function () {
+    history[method] = function() {
       var result = original.apply(this, arguments);
       scheduleRescan();
       return result;
@@ -2665,7 +2677,7 @@ function runAction(action, value, e) {
     );
   }
 
-  mediaTagsToProcess.forEach(function (v) {
+  mediaTagsToProcess.forEach(function(v) {
     if (!v.vsc) return; // Don't process videos without a controller
     var controller = v.vsc.div;
     const userDrivenActionsThatShowController = [
@@ -2854,15 +2866,18 @@ function resetSpeed(v, target, isFastKey = false) {
 function muted(v) {
   v.muted = !v.muted;
 }
+
 function setMark(v) {
   v.vsc.mark = v.currentTime;
 }
+
 function jumpToMark(v) {
   if (v.vsc && typeof v.vsc.mark === "number") {
     extendSpeedRestoreWindow(v);
     v.currentTime = v.vsc.mark;
   }
 }
+
 function handleDrag(video, e) {
   const c = video.vsc.div;
   const sC = convertControllerToManualPosition(video.vsc);
@@ -2872,7 +2887,7 @@ function handleDrag(video, e) {
     pE.parentNode &&
     pE.parentNode.offsetHeight === pE.offsetHeight &&
     pE.parentNode.offsetWidth === pE.offsetWidth
-  )
+    )
     pE = pE.parentNode;
   video.classList.add("vcs-dragging");
   sC.classList.add("dragging");
@@ -2901,6 +2916,7 @@ function handleDrag(video, e) {
   pE.addEventListener("mouseleave", eD);
   pE.addEventListener("mousemove", sD);
 }
+
 function showController(controller, duration = 2000, forced = false) {
   if (!controller || typeof controller.classList === "undefined") return;
   var restoreHidden =
@@ -2918,7 +2934,7 @@ function showController(controller, duration = 2000, forced = false) {
     clearTimeout(controller.showTimeOut);
   }
 
-  controller.showTimeOut = setTimeout(function () {
+  controller.showTimeOut = setTimeout(function() {
     controller.classList.remove("vsc-show");
     controller.classList.remove("vsc-forced-show");
     if (controller.restoreHiddenAfterShow === true) {

@@ -15,7 +15,6 @@ var tc = {
     lastSpeed: 1.0,
     enabled: true,
     speeds: {},
-    displayKeyCode: 86,
     rememberSpeed: false,
     forceLastSavedSpeed: false,
     audioBoolean: false,
@@ -130,60 +129,10 @@ var controllerButtonDefs = {
   jump:     { label: "", className: "" }
 };
 
-var keyCodeToEventKey = {
-  32: " ",
-  37: "ArrowLeft",
-  38: "ArrowUp",
-  39: "ArrowRight",
-  40: "ArrowDown",
-  96: "0",
-  97: "1",
-  98: "2",
-  99: "3",
-  100: "4",
-  101: "5",
-  102: "6",
-  103: "7",
-  104: "8",
-  105: "9",
-  106: "*",
-  107: "+",
-  109: "-",
-  110: ".",
-  111: "/",
-  112: "F1",
-  113: "F2",
-  114: "F3",
-  115: "F4",
-  116: "F5",
-  117: "F6",
-  118: "F7",
-  119: "F8",
-  120: "F9",
-  121: "F10",
-  122: "F11",
-  123: "F12",
-  186: ";",
-  188: "<",
-  189: "-",
-  187: "+",
-  190: ">",
-  191: "/",
-  192: "~",
-  219: "[",
-  220: "\\",
-  221: "]",
-  222: "'",
-  59: ";",
-  61: "+",
-  173: "-"
-};
-
-function createDefaultBinding(action, key, keyCode, value) {
+function createDefaultBinding(action, code, value) {
   return {
     action: action,
-    key: key,
-    keyCode: keyCode,
+    code: code,
     value: value,
     force: false,
     predefined: true
@@ -194,62 +143,54 @@ function defaultKeyBindings(storage) {
   return [
     createDefaultBinding(
       "slower",
-      "S",
-      Number(storage.slowerKeyCode) || 83,
+      "KeyS",
       Number(storage.speedStep) || 0.1
     ),
     createDefaultBinding(
       "faster",
-      "D",
-      Number(storage.fasterKeyCode) || 68,
+      "KeyD",
       Number(storage.speedStep) || 0.1
     ),
     createDefaultBinding(
       "rewind",
-      "Z",
-      Number(storage.rewindKeyCode) || 90,
+      "KeyZ",
       Number(storage.rewindTime) || 10
     ),
     createDefaultBinding(
       "advance",
-      "X",
-      Number(storage.advanceKeyCode) || 88,
+      "KeyX",
       Number(storage.advanceTime) || 10
     ),
     createDefaultBinding(
       "reset",
-      "R",
-      Number(storage.resetKeyCode) || 82,
+      "KeyR",
       1.0
     ),
     createDefaultBinding(
       "fast",
-      "G",
-      Number(storage.fastKeyCode) || 71,
+      "KeyG",
       Number(storage.fastSpeed) || 1.8
     ),
     createDefaultBinding(
       "move",
-      "P",
-      80,
+      "KeyP",
       0
     ),
     createDefaultBinding(
       "toggleSubtitleNudge",
-      "N",
-      78,
+      "KeyN",
       0
     )
   ];
 }
 
-function ensureDefaultKeyBinding(action, key, keyCode, value) {
+function ensureDefaultKeyBinding(action, code, value) {
   if (tc.settings.keyBindings.some((binding) => binding.action === action)) {
     return false;
   }
 
   tc.settings.keyBindings.push(
-    createDefaultBinding(action, key, keyCode, value)
+    createDefaultBinding(action, code, value)
   );
   return true;
 }
@@ -544,37 +485,113 @@ function normalizeBindingKey(key) {
   return key;
 }
 
-function legacyKeyCodeToBinding(keyCode) {
-  if (!Number.isInteger(keyCode)) return null;
-  var key = keyCodeToEventKey[keyCode];
-  if (!key && keyCode >= 48 && keyCode <= 57) {
-    key = String.fromCharCode(keyCode);
-  }
-  if (!key && keyCode >= 65 && keyCode <= 90) {
-    key = String.fromCharCode(keyCode);
-  }
-  return {
-    key: normalizeBindingKey(key),
-    keyCode: keyCode,
-    code: null,
-    disabled: false
+function legacyBindingKeyToCode(key) {
+  var normalizedKey = normalizeBindingKey(key);
+  if (!normalizedKey) return null;
+  if (/^[A-Z]$/.test(normalizedKey)) return "Key" + normalizedKey;
+  if (/^[0-9]$/.test(normalizedKey)) return "Digit" + normalizedKey;
+  if (/^F([1-9]|1[0-2])$/.test(normalizedKey)) return normalizedKey;
+
+  var keyMap = {
+    " ": "Space",
+    ArrowLeft: "ArrowLeft",
+    ArrowUp: "ArrowUp",
+    ArrowRight: "ArrowRight",
+    ArrowDown: "ArrowDown",
+    ";": "Semicolon",
+    "<": "Comma",
+    "-": "Minus",
+    "+": "Equal",
+    ">": "Period",
+    "/": "Slash",
+    "~": "Backquote",
+    "[": "BracketLeft",
+    "\\": "Backslash",
+    "]": "BracketRight",
+    "'": "Quote"
   };
+
+  return keyMap[normalizedKey] || null;
 }
 
-function normalizeStoredBinding(binding, fallbackKeyCode) {
-  var fallbackBinding = legacyKeyCodeToBinding(fallbackKeyCode);
-  if (!binding) return fallbackBinding;
+function legacyKeyCodeToCode(keyCode) {
+  if (!Number.isInteger(keyCode)) return null;
+  if (keyCode >= 48 && keyCode <= 57) return "Digit" + String.fromCharCode(keyCode);
+  if (keyCode >= 65 && keyCode <= 90) return "Key" + String.fromCharCode(keyCode);
+  if (keyCode >= 96 && keyCode <= 105) return "Numpad" + (keyCode - 96);
+  if (keyCode >= 112 && keyCode <= 123) return "F" + (keyCode - 111);
+
+  var keyCodeMap = {
+    32: "Space",
+    37: "ArrowLeft",
+    38: "ArrowUp",
+    39: "ArrowRight",
+    40: "ArrowDown",
+    106: "NumpadMultiply",
+    107: "NumpadAdd",
+    109: "NumpadSubtract",
+    110: "NumpadDecimal",
+    111: "NumpadDivide",
+    186: "Semicolon",
+    188: "Comma",
+    189: "Minus",
+    187: "Equal",
+    190: "Period",
+    191: "Slash",
+    192: "Backquote",
+    219: "BracketLeft",
+    220: "Backslash",
+    221: "BracketRight",
+    222: "Quote",
+    59: "Semicolon",
+    61: "Equal",
+    173: "Minus"
+  };
+
+  return keyCodeMap[keyCode] || null;
+}
+
+function inferBindingCode(binding, fallbackCode) {
+  if (binding && typeof binding.code === "string" && binding.code.length > 0) {
+    return binding.code;
+  }
+
+  if (binding && typeof binding.key === "string") {
+    var codeFromKey = legacyBindingKeyToCode(binding.key);
+    if (codeFromKey) return codeFromKey;
+  }
+
+  var legacyKeyCode = getLegacyKeyCode(binding);
+  if (Number.isInteger(legacyKeyCode)) {
+    var codeFromKeyCode = legacyKeyCodeToCode(legacyKeyCode);
+    if (codeFromKeyCode) return codeFromKeyCode;
+  }
+
+  return typeof fallbackCode === "string" && fallbackCode.length > 0
+    ? fallbackCode
+    : null;
+}
+
+function normalizeStoredBinding(binding, fallbackCode) {
+  if (!binding) {
+    if (!fallbackCode) return null;
+    return {
+      code: fallbackCode,
+      disabled: false,
+      value: 0,
+      force: "false",
+      predefined: false
+    };
+  }
 
   if (
     binding.disabled === true ||
-    (binding.key === null &&
-      binding.keyCode === null &&
-      binding.code === null)
+    (binding.code === null &&
+      binding.key === null &&
+      binding.keyCode === null)
   ) {
     return {
       action: binding.action,
-      key: null,
-      keyCode: null,
       code: null,
       disabled: true,
       value: Number(binding.value),
@@ -583,45 +600,19 @@ function normalizeStoredBinding(binding, fallbackKeyCode) {
     };
   }
 
+  var normalizedCode = inferBindingCode(binding, fallbackCode);
+  if (!normalizedCode) {
+    return null;
+  }
+
   var normalized = {
     action: binding.action,
-    key: null,
-    keyCode: null,
-    code:
-      typeof binding.code === "string" && binding.code.length > 0
-        ? binding.code
-        : null,
+    code: normalizedCode,
     disabled: false,
     value: Number(binding.value),
     force: String(binding.force) === "true" ? "true" : "false",
     predefined: Boolean(binding.predefined)
   };
-
-  if (typeof binding.key === "string") {
-    normalized.key = normalizeBindingKey(binding.key);
-  }
-
-  var legacyKeyCode = getLegacyKeyCode(binding);
-  if (Number.isInteger(legacyKeyCode)) {
-    var legacyBinding = legacyKeyCodeToBinding(legacyKeyCode);
-    if (legacyBinding) {
-      normalized.key = normalized.key || legacyBinding.key;
-      normalized.keyCode = legacyKeyCode;
-    }
-  }
-
-  if (Number.isInteger(binding.keyCode)) {
-    normalized.keyCode = binding.keyCode;
-  }
-
-  if (!normalized.key && fallbackBinding) {
-    normalized.key = fallbackBinding.key;
-    if (normalized.keyCode === null) normalized.keyCode = fallbackBinding.keyCode;
-  }
-
-  if (!normalized.key && !normalized.code && normalized.keyCode === null) {
-    return null;
-  }
 
   return normalized;
 }
@@ -979,19 +970,13 @@ function takePendingRateChange(video, currentSpeed) {
 }
 
 function matchesKeyBinding(binding, event) {
-  if (!binding || binding.disabled) return false;
-
-  var normalizedEventKey = normalizeBindingKey(event.key);
-  if (binding.key && normalizedEventKey) {
-    return binding.key === normalizedEventKey;
-  }
-
-  if (binding.code && event.code) {
-    return binding.code === event.code;
-  }
-
-  var legacyKeyCode = getLegacyKeyCode(binding);
-  return Number.isInteger(legacyKeyCode) && legacyKeyCode === event.keyCode;
+  return Boolean(
+    binding &&
+    binding.disabled !== true &&
+    typeof binding.code === "string" &&
+    binding.code.length > 0 &&
+    binding.code === event.code
+  );
 }
 
 function mediaSelector() {
@@ -1206,7 +1191,6 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     chrome.storage.sync.set({
       keyBindings: tc.settings.keyBindings,
       version: tc.settings.version,
-      displayKeyCode: tc.settings.displayKeyCode,
       rememberSpeed: tc.settings.rememberSpeed,
       forceLastSavedSpeed: tc.settings.forceLastSavedSpeed,
       audioBoolean: tc.settings.audioBoolean,
@@ -1226,7 +1210,6 @@ chrome.storage.sync.get(tc.settings, function (storage) {
     tc.settings.lastSpeed = 1.0;
   }
   tc.persistedLastSpeed = tc.settings.lastSpeed;
-  tc.settings.displayKeyCode = Number(storage.displayKeyCode);
   tc.settings.rememberSpeed = Boolean(storage.rememberSpeed);
   tc.settings.forceLastSavedSpeed = Boolean(storage.forceLastSavedSpeed);
   tc.settings.audioBoolean = Boolean(storage.audioBoolean);
@@ -1281,14 +1264,13 @@ chrome.storage.sync.get(tc.settings, function (storage) {
   addedDefaultBinding =
     ensureDefaultKeyBinding(
       "display",
-      "V",
-      Number(storage.displayKeyCode) || 86,
+      "KeyV",
       0
     ) || addedDefaultBinding;
   addedDefaultBinding =
-    ensureDefaultKeyBinding("move", "P", 80, 0) || addedDefaultBinding;
+    ensureDefaultKeyBinding("move", "KeyP", 0) || addedDefaultBinding;
   addedDefaultBinding =
-    ensureDefaultKeyBinding("toggleSubtitleNudge", "N", 78, 0) ||
+    ensureDefaultKeyBinding("toggleSubtitleNudge", "KeyN", 0) ||
     addedDefaultBinding;
 
   if (addedDefaultBinding) {

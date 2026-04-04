@@ -2,105 +2,38 @@ var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
 
 var keyBindings = [];
 
-var keyCodeAliases = {
-  0: "null",
-  null: "null",
-  undefined: "null",
-  32: "Space",
-  37: "Left",
-  38: "Up",
-  39: "Right",
-  40: "Down",
-  96: "Num 0",
-  97: "Num 1",
-  98: "Num 2",
-  99: "Num 3",
-  100: "Num 4",
-  101: "Num 5",
-  102: "Num 6",
-  103: "Num 7",
-  104: "Num 8",
-  105: "Num 9",
-  106: "Num *",
-  107: "Num +",
-  109: "Num -",
-  110: "Num .",
-  111: "Num /",
-  112: "F1",
-  113: "F2",
-  114: "F3",
-  115: "F4",
-  116: "F5",
-  117: "F6",
-  118: "F7",
-  119: "F8",
-  120: "F9",
-  121: "F10",
-  122: "F11",
-  123: "F12",
-  186: ";",
-  188: "<",
-  189: "-",
-  187: "+",
-  190: ">",
-  191: "/",
-  192: "~",
-  219: "[",
-  220: "\\",
-  221: "]",
-  222: "'",
-  59: ";",
-  61: "+",
-  173: "-"
-};
-
-var keyCodeToKey = {
-  32: " ",
-  37: "ArrowLeft",
-  38: "ArrowUp",
-  39: "ArrowRight",
-  40: "ArrowDown",
-  96: "0",
-  97: "1",
-  98: "2",
-  99: "3",
-  100: "4",
-  101: "5",
-  102: "6",
-  103: "7",
-  104: "8",
-  105: "9",
-  106: "*",
-  107: "+",
-  109: "-",
-  110: ".",
-  111: "/",
-  112: "F1",
-  113: "F2",
-  114: "F3",
-  115: "F4",
-  116: "F5",
-  117: "F6",
-  118: "F7",
-  119: "F8",
-  120: "F9",
-  121: "F10",
-  122: "F11",
-  123: "F12",
-  186: ";",
-  188: "<",
-  189: "-",
-  187: "+",
-  190: ">",
-  191: "/",
-  192: "~",
-  219: "[",
-  220: "\\",
-  221: "]",
-  222: "'",
-  59: ";",
-  61: "+",
-  173: "-"
+var bindingCodeAliases = {
+  Space: "Space",
+  ArrowLeft: "Left",
+  ArrowUp: "Up",
+  ArrowRight: "Right",
+  ArrowDown: "Down",
+  Numpad0: "Num 0",
+  Numpad1: "Num 1",
+  Numpad2: "Num 2",
+  Numpad3: "Num 3",
+  Numpad4: "Num 4",
+  Numpad5: "Num 5",
+  Numpad6: "Num 6",
+  Numpad7: "Num 7",
+  Numpad8: "Num 8",
+  Numpad9: "Num 9",
+  NumpadMultiply: "Num *",
+  NumpadAdd: "Num +",
+  NumpadSubtract: "Num -",
+  NumpadDecimal: "Num .",
+  NumpadDivide: "Num /",
+  Backquote: "`",
+  Minus: "-",
+  Equal: "=",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Semicolon: ";",
+  Quote: "'",
+  Comma: ",",
+  Period: ".",
+  Slash: "/"
 };
 
 var modifierKeys = new Set([
@@ -114,13 +47,6 @@ var modifierKeys = new Set([
   "Shift"
 ]);
 
-var displayKeyAliases = {
-  " ": "Space",
-  ArrowLeft: "Left",
-  ArrowUp: "Up",
-  ArrowRight: "Right",
-  ArrowDown: "Down"
-};
 var controllerLocations = [
   "top-left",
   "top-center",
@@ -221,11 +147,10 @@ function fillControlBarIconElement(icon, buttonId) {
   icon.textContent = (def && def.icon) || "?";
 }
 
-function createDefaultBinding(action, key, keyCode, value) {
+function createDefaultBinding(action, code, value) {
   return {
     action: action,
-    key: key,
-    keyCode: keyCode,
+    code: code,
     value: value,
     force: false,
     predefined: true
@@ -235,7 +160,6 @@ function createDefaultBinding(action, key, keyCode, value) {
 var tcDefaults = {
   speed: 1.0,
   lastSpeed: 1.0,
-  displayKeyCode: 86,
   rememberSpeed: false,
   audioBoolean: false,
   startHidden: false,
@@ -251,15 +175,15 @@ var tcDefaults = {
   controllerMarginBottom: 65,
   controllerMarginLeft: 0,
   keyBindings: [
-    createDefaultBinding("display", "V", 86, 0),
-    createDefaultBinding("move", "P", 80, 0),
-    createDefaultBinding("slower", "S", 83, 0.1),
-    createDefaultBinding("faster", "D", 68, 0.1),
-    createDefaultBinding("rewind", "Z", 90, 10),
-    createDefaultBinding("advance", "X", 88, 10),
-    createDefaultBinding("reset", "R", 82, 1),
-    createDefaultBinding("fast", "G", 71, 1.8),
-    createDefaultBinding("toggleSubtitleNudge", "N", 78, 0)
+    createDefaultBinding("display", "KeyV", 0),
+    createDefaultBinding("move", "KeyP", 0),
+    createDefaultBinding("slower", "KeyS", 0.1),
+    createDefaultBinding("faster", "KeyD", 0.1),
+    createDefaultBinding("rewind", "KeyZ", 10),
+    createDefaultBinding("advance", "KeyX", 10),
+    createDefaultBinding("reset", "KeyR", 1),
+    createDefaultBinding("fast", "KeyG", 1.8),
+    createDefaultBinding("toggleSubtitleNudge", "KeyN", 0)
   ],
   siteRules: [
     {
@@ -363,10 +287,10 @@ function refreshAddShortcutSelector() {
   }
 }
 
-function ensureDefaultBinding(storage, action, key, keyCode, value) {
+function ensureDefaultBinding(storage, action, code, value) {
   if (storage.keyBindings.some((item) => item.action === action)) return;
 
-  storage.keyBindings.push(createDefaultBinding(action, key, keyCode, value));
+  storage.keyBindings.push(createDefaultBinding(action, code, value));
 }
 
 function normalizeControllerLocation(location) {
@@ -413,112 +337,156 @@ function getLegacyKeyCode(binding) {
   return null;
 }
 
-function legacyKeyCodeToBinding(keyCode) {
-  if (!Number.isInteger(keyCode)) return null;
-  var normalizedKey = keyCodeToKey[keyCode];
-  if (!normalizedKey && keyCode >= 48 && keyCode <= 57) {
-    normalizedKey = String.fromCharCode(keyCode);
-  }
-  if (!normalizedKey && keyCode >= 65 && keyCode <= 90) {
-    normalizedKey = String.fromCharCode(keyCode);
-  }
-  return {
-    key: normalizeBindingKey(normalizedKey),
-    keyCode: keyCode,
-    code: null,
-    disabled: false
+function legacyBindingKeyToCode(key) {
+  var normalizedKey = normalizeBindingKey(key);
+  if (!normalizedKey) return null;
+  if (/^[A-Z]$/.test(normalizedKey)) return "Key" + normalizedKey;
+  if (/^[0-9]$/.test(normalizedKey)) return "Digit" + normalizedKey;
+  if (/^F([1-9]|1[0-2])$/.test(normalizedKey)) return normalizedKey;
+
+  var keyMap = {
+    " ": "Space",
+    ArrowLeft: "ArrowLeft",
+    ArrowUp: "ArrowUp",
+    ArrowRight: "ArrowRight",
+    ArrowDown: "ArrowDown",
+    ";": "Semicolon",
+    "<": "Comma",
+    "-": "Minus",
+    "+": "Equal",
+    ">": "Period",
+    "/": "Slash",
+    "~": "Backquote",
+    "[": "BracketLeft",
+    "\\": "Backslash",
+    "]": "BracketRight",
+    "'": "Quote"
   };
+
+  return keyMap[normalizedKey] || null;
+}
+
+function legacyKeyCodeToCode(keyCode) {
+  if (!Number.isInteger(keyCode)) return null;
+  if (keyCode >= 48 && keyCode <= 57) return "Digit" + String.fromCharCode(keyCode);
+  if (keyCode >= 65 && keyCode <= 90) return "Key" + String.fromCharCode(keyCode);
+  if (keyCode >= 96 && keyCode <= 105) return "Numpad" + (keyCode - 96);
+  if (keyCode >= 112 && keyCode <= 123) return "F" + (keyCode - 111);
+
+  var keyCodeMap = {
+    32: "Space",
+    37: "ArrowLeft",
+    38: "ArrowUp",
+    39: "ArrowRight",
+    40: "ArrowDown",
+    106: "NumpadMultiply",
+    107: "NumpadAdd",
+    109: "NumpadSubtract",
+    110: "NumpadDecimal",
+    111: "NumpadDivide",
+    186: "Semicolon",
+    188: "Comma",
+    189: "Minus",
+    187: "Equal",
+    190: "Period",
+    191: "Slash",
+    192: "Backquote",
+    219: "BracketLeft",
+    220: "Backslash",
+    221: "BracketRight",
+    222: "Quote",
+    59: "Semicolon",
+    61: "Equal",
+    173: "Minus"
+  };
+
+  return keyCodeMap[keyCode] || null;
+}
+
+function inferBindingCode(binding, fallbackCode) {
+  if (binding && typeof binding.code === "string" && binding.code.length > 0) {
+    return binding.code;
+  }
+
+  if (binding && typeof binding.key === "string") {
+    var codeFromKey = legacyBindingKeyToCode(binding.key);
+    if (codeFromKey) return codeFromKey;
+  }
+
+  var legacyKeyCode = getLegacyKeyCode(binding);
+  if (Number.isInteger(legacyKeyCode)) {
+    var codeFromKeyCode = legacyKeyCodeToCode(legacyKeyCode);
+    if (codeFromKeyCode) return codeFromKeyCode;
+  }
+
+  return typeof fallbackCode === "string" && fallbackCode.length > 0
+    ? fallbackCode
+    : null;
 }
 
 function createDisabledBinding() {
   return {
-    key: null,
-    keyCode: null,
     code: null,
     disabled: true
   };
 }
 
-function normalizeStoredBinding(binding, fallbackKeyCode) {
-  var fallbackBinding = legacyKeyCodeToBinding(fallbackKeyCode);
+function normalizeStoredBinding(binding, fallbackCode) {
   if (!binding) {
-    return fallbackBinding;
+    if (!fallbackCode) return null;
+    return {
+      code: fallbackCode,
+      disabled: false
+    };
   }
 
   if (
     binding.disabled === true ||
-    (binding.key === null &&
-      binding.keyCode === null &&
-      binding.code === null)
+    (binding.code === null &&
+      binding.key === null &&
+      binding.keyCode === null)
   ) {
     return createDisabledBinding();
   }
 
-  var normalized = {
-    key: null,
-    keyCode: null,
-    code:
-      typeof binding.code === "string" && binding.code.length > 0
-        ? binding.code
-        : null,
-    disabled: false
-  };
-
-  if (typeof binding.key === "string") {
-    normalized.key = normalizeBindingKey(binding.key);
-  }
-
-  var legacyKeyCode = getLegacyKeyCode(binding);
-  if (Number.isInteger(legacyKeyCode)) {
-    var legacyBinding = legacyKeyCodeToBinding(legacyKeyCode);
-    if (legacyBinding) {
-      normalized.key = normalized.key || legacyBinding.key;
-      normalized.keyCode = legacyKeyCode;
-    }
-  }
-
-  if (Number.isInteger(binding.keyCode)) {
-    normalized.keyCode = binding.keyCode;
-  }
-
-  if (!normalized.key && fallbackBinding) {
-    normalized.key = fallbackBinding.key;
-    if (normalized.keyCode === null) normalized.keyCode = fallbackBinding.keyCode;
-  }
-
-  if (!normalized.key && !normalized.code && normalized.keyCode === null) {
+  var normalizedCode = inferBindingCode(binding, fallbackCode);
+  if (!normalizedCode) {
     return null;
   }
 
+  var normalized = {
+    code: normalizedCode,
+    disabled: false
+  };
+
   return normalized;
+}
+
+function formatBindingCode(code) {
+  if (typeof code !== "string" || code.length === 0) return "";
+  if (bindingCodeAliases[code]) return bindingCodeAliases[code];
+  if (/^Key[A-Z]$/.test(code)) return code.substring(3);
+  if (/^Digit[0-9]$/.test(code)) return code.substring(5);
+  if (/^F([1-9]|1[0-2])$/.test(code)) return code;
+  return code;
 }
 
 function getBindingLabel(binding) {
   if (!binding) return "";
   if (binding.disabled) return "";
-  if (binding.key) {
-    return displayKeyAliases[binding.key] || binding.key;
-  }
-  var legacyKeyCode = getLegacyKeyCode(binding);
-  if (keyCodeAliases[legacyKeyCode]) return keyCodeAliases[legacyKeyCode];
-  if (Number.isInteger(legacyKeyCode)) return String.fromCharCode(legacyKeyCode);
-  return "";
+  return formatBindingCode(binding.code);
 }
 
 function setShortcutInputBinding(input, binding) {
   input.vscBinding = binding ? Object.assign({}, binding) : null;
-  input.keyCode =
-    binding && Number.isInteger(binding.keyCode) ? binding.keyCode : null;
   input.value = getBindingLabel(binding);
 }
 
 function captureBindingFromEvent(event) {
-  var normalizedKey = normalizeBindingKey(event.key);
-  if (!normalizedKey || modifierKeys.has(normalizedKey)) return null;
+  if (modifierKeys.has(event.key)) return null;
+  if (typeof event.code !== "string" || event.code.length === 0) return null;
   return {
-    key: normalizedKey,
-    keyCode: Number.isInteger(event.keyCode) ? event.keyCode : null,
-    code: event.code || null,
+    code: event.code,
     disabled: false
   };
 }
@@ -549,8 +517,10 @@ function recordKeyPress(event) {
 }
 
 function inputFilterNumbersOnly(event) {
-  var char = String.fromCharCode(event.keyCode);
+  var char = event.key;
   if (
+    typeof char !== "string" ||
+    char.length !== 1 ||
     !/[\d\.]$/.test(char) ||
     !/^\d+(\.\d*)?$/.test(event.target.value + char)
   ) {
@@ -577,7 +547,15 @@ function updateCustomShortcutInputText(inputItem, bindingOrKeyCode) {
     return;
   }
 
-  setShortcutInputBinding(inputItem, legacyKeyCodeToBinding(bindingOrKeyCode));
+  if (typeof bindingOrKeyCode === "string") {
+    setShortcutInputBinding(inputItem, { code: bindingOrKeyCode, disabled: false });
+    return;
+  }
+
+  setShortcutInputBinding(
+    inputItem,
+    normalizeStoredBinding({ keyCode: bindingOrKeyCode })
+  );
 }
 
 function appendSelectOptions(select, options) {
@@ -637,11 +615,7 @@ function createKeyBindings(item) {
   var input = item.querySelector(".customKey");
   var valueInput = item.querySelector(".customValue");
   var predefined = !!item.id;
-  var fallbackKeyCode =
-    predefined && action === "display"
-      ? tcDefaults.displayKeyCode
-      : undefined;
-  var binding = normalizeStoredBinding(input.vscBinding, fallbackKeyCode);
+  var binding = normalizeStoredBinding(input.vscBinding);
 
   if (!binding) {
     return {
@@ -652,8 +626,6 @@ function createKeyBindings(item) {
 
   keyBindings.push({
     action: action,
-    key: binding.key,
-    keyCode: binding.keyCode,
     code: binding.code,
     disabled: binding.disabled === true,
     value: customActionsNoValues.includes(action)
@@ -872,8 +844,6 @@ function save_options() {
         if (binding) {
           shortcuts.push({
             action: action,
-            key: binding.key,
-            keyCode: binding.keyCode,
             code: binding.code,
             disabled: binding.disabled === true,
             value: customActionsNoValues.includes(action)
@@ -908,18 +878,7 @@ function save_options() {
 
 function ensureAllDefaultBindings(storage) {
   tcDefaults.keyBindings.forEach((binding) => {
-    // Special case for "display" to support legacy displayKeyCode
-    if (binding.action === "display" && storage.displayKeyCode) {
-      ensureDefaultBinding(storage, "display", "V", storage.displayKeyCode, 0);
-    } else {
-      ensureDefaultBinding(
-        storage,
-        binding.action,
-        binding.key,
-        binding.keyCode,
-        binding.value
-      );
-    }
+    ensureDefaultBinding(storage, binding.action, binding.code, binding.value);
   });
 }
 

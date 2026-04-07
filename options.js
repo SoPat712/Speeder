@@ -74,11 +74,13 @@ var controllerButtonDefs = {
   reset:    { icon: "\u21BB", name: "Reset speed" },
   fast:     { icon: "\u2605", name: "Preferred speed" },
   nudge:    { icon: "\u2713", name: "Subtitle nudge" },
-  settings: { icon: "\u2699", name: "Settings" },
-  pause:    { icon: "\u23EF", name: "Pause / Play" },
+  pause:    { icon: "\u23EF", name: "Play / Pause" },
   muted:    { icon: "M",      name: "Mute / Unmute" },
+  louder:   { icon: "+",      name: "Increase volume" },
+  softer:   { icon: "\u2212", name: "Decrease volume" },
   mark:     { icon: "\u2691", name: "Set marker" },
-  jump:     { icon: "\u21E5", name: "Jump to marker" }
+  jump:     { icon: "\u21E5", name: "Jump to marker" },
+  settings: { icon: "\u2699", name: "Settings" },
 };
 var popupExcludedButtonIds = new Set(["settings"]);
 
@@ -221,14 +223,16 @@ const actionLabels = {
   advance: "Advance",
   reset: "Reset speed",
   fast: "Preferred speed",
-  muted: "Mute",
-  pause: "Pause",
+  toggleSubtitleNudge: "Toggle subtitle nudge",
+  pause: "Play / Pause",
+  muted: "Mute / Unmute",
+  louder: "Increase volume",
+  softer: "Decrease volume",
   mark: "Set marker",
-  jump: "Jump to marker",
-  toggleSubtitleNudge: "Toggle subtitle nudge"
+  jump: "Jump to marker"
 };
 
-const speedBindingActions = ["slower", "faster", "fast"];
+const speedBindingActions = ["slower", "faster", "fast", "softer", "louder"];
 const requiredShortcutActions = new Set(["display", "slower", "faster"]);
 
 function formatSpeedBindingDisplay(action, value) {
@@ -240,6 +244,30 @@ function formatSpeedBindingDisplay(action, value) {
     return value;
   }
   return n.toFixed(2);
+}
+
+function getDefaultShortcutValue(action) {
+  if (action === "louder" || action === "softer") {
+    return 0.1;
+  }
+  var defaultBinding = tcDefaults.keyBindings.find(function (binding) {
+    return binding.action === action;
+  });
+  if (defaultBinding && Number.isFinite(Number(defaultBinding.value))) {
+    return Number(defaultBinding.value);
+  }
+  return 0;
+}
+
+function resolveShortcutValue(action, value) {
+  if (value === undefined || value === null) {
+    return getDefaultShortcutValue(action);
+  }
+  var numericValue = Number(value);
+  if (Number.isFinite(numericValue)) {
+    return numericValue;
+  }
+  return 0;
 }
 
 const customActionsNoValues = [
@@ -581,7 +609,10 @@ function add_shortcut(action, value) {
     valueInput.value = "N/A";
     valueInput.disabled = true;
   } else {
-    valueInput.value = formatSpeedBindingDisplay(action, value || 0);
+    valueInput.value = formatSpeedBindingDisplay(
+      action,
+      resolveShortcutValue(action, value)
+    );
   }
 
   var removeButton = document.createElement("button");
@@ -927,11 +958,13 @@ function addSiteRuleShortcut(container, action, binding, value, force) {
     advance: "Advance",
     reset: "Reset speed",
     fast: "Preferred speed",
-    muted: "Mute",
-    pause: "Pause",
+    toggleSubtitleNudge: "Toggle subtitle nudge",
+    pause: "Play / Pause",
+    muted: "Mute / Unmute",
+    louder: "Increase volume",
+    softer: "Decrease volume",
     mark: "Set marker",
-    jump: "Jump to marker",
-    toggleSubtitleNudge: "Toggle subtitle nudge"
+    jump: "Jump to marker"
   };
   var actionLabelText = actionLabels[action] || action;
   if (action === "toggleSubtitleNudge") {
@@ -959,7 +992,10 @@ function addSiteRuleShortcut(container, action, binding, value, force) {
     valueInput.value = "N/A";
     valueInput.disabled = true;
   } else {
-    valueInput.value = formatSpeedBindingDisplay(action, value || 0);
+    valueInput.value = formatSpeedBindingDisplay(
+      action,
+      resolveShortcutValue(action, value)
+    );
   }
 
   var forceLabel = document.createElement("label");

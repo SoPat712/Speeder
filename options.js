@@ -229,6 +229,7 @@ const actionLabels = {
 };
 
 const speedBindingActions = ["slower", "faster", "fast"];
+const requiredShortcutActions = new Set(["display", "slower", "faster"]);
 
 function formatSpeedBindingDisplay(action, value) {
   if (!speedBindingActions.includes(action)) {
@@ -607,9 +608,25 @@ function createKeyBindings(item) {
   var binding = normalizeStoredBinding(input.vscBinding);
 
   if (!binding) {
+    if (requiredShortcutActions.has(action)) {
+      return {
+        valid: false,
+        message:
+          "Error: Shortcut for " +
+          (actionLabels[action] || action) +
+          " cannot be empty. Unable to save"
+      };
+    }
+    binding = createDisabledBinding();
+  }
+
+  if (binding.disabled === true && requiredShortcutActions.has(action)) {
     return {
       valid: false,
-      message: "Error: Shortcut for " + action + " is invalid. Unable to save"
+      message:
+        "Error: Shortcut for " +
+        (actionLabels[action] || action) +
+        " cannot be empty. Unable to save"
     };
   }
 
@@ -828,24 +845,43 @@ function save_options() {
     if (ruleEl.querySelector(".override-shortcuts").checked) {
       var shortcuts = [];
       ruleEl.querySelectorAll(".site-shortcuts-container .customs").forEach((shortcutRow) => {
+        if (saveError) return;
         var action = shortcutRow.dataset.action;
         var keyInput = shortcutRow.querySelector(".customKey");
         var valueInput = shortcutRow.querySelector(".customValue");
         var forceCheckbox = shortcutRow.querySelector(".customForce");
         var binding = normalizeStoredBinding(keyInput.vscBinding);
 
-        if (binding) {
-          shortcuts.push({
-            action: action,
-            code: binding.code,
-            disabled: binding.disabled === true,
-            value: customActionsNoValues.includes(action)
-              ? 0
-              : Number(valueInput.value),
-            force: forceCheckbox ? forceCheckbox.checked : false
-          });
+        if (!binding) {
+          if (requiredShortcutActions.has(action)) {
+            saveError =
+              "Error: Site rule shortcut for " +
+              (actionLabels[action] || action) +
+              " cannot be empty. Unable to save";
+            return;
+          }
+          binding = createDisabledBinding();
         }
+
+        if (binding.disabled === true && requiredShortcutActions.has(action)) {
+          saveError =
+            "Error: Site rule shortcut for " +
+            (actionLabels[action] || action) +
+            " cannot be empty. Unable to save";
+          return;
+        }
+
+        shortcuts.push({
+          action: action,
+          code: binding.code,
+          disabled: binding.disabled === true,
+          value: customActionsNoValues.includes(action)
+            ? 0
+            : Number(valueInput.value),
+          force: forceCheckbox ? forceCheckbox.checked : false
+        });
       });
+      if (saveError) return;
       if (shortcuts.length > 0) rule.shortcuts = shortcuts;
     }
 

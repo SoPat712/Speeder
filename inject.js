@@ -130,11 +130,14 @@ var controllerButtonDefs = {
   display: { label: "", className: "hideButton" },
   reset: { label: "\u21BB", className: "" },
   fast: { label: "", className: "" },
-  settings: { label: "", className: "" },
+  nudge: { label: "", className: "" },
   pause: { label: "", className: "" },
   muted: { label: "", className: "" },
+  louder: { label: "", className: "" },
+  softer: { label: "", className: "" },
   mark: { label: "", className: "" },
-  jump: { label: "", className: "" }
+  jump: { label: "", className: "" },
+  settings: { label: "", className: "" }
 };
 
 function createDefaultBinding(action, code, value) {
@@ -2586,6 +2589,8 @@ function runAction(action, value, e) {
       "advance",
       "faster",
       "slower",
+      "louder",
+      "softer",
       "reset",
       "fast",
       "move",
@@ -2708,6 +2713,12 @@ function runAction(action, value, e) {
       case "muted":
         muted(v);
         break;
+      case "louder":
+        volumeUp(v, Number.isFinite(numValue) ? numValue : 0.1);
+        break;
+      case "softer":
+        volumeDown(v, Number.isFinite(numValue) ? numValue : 0.1);
+        break;
       case "mark":
         setMark(v);
         break;
@@ -2772,7 +2783,49 @@ function resetSpeed(v, target, isFastKey = false) {
 }
 
 function muted(v) {
-  v.muted = !v.muted;
+  var nextMuted = !v.muted;
+  v.muted = nextMuted;
+  if (!isOnYouTube()) return;
+  var ytApi = getYouTubePlayerApi(v);
+  if (!ytApi) return;
+  if (nextMuted && typeof ytApi.mute === "function") ytApi.mute();
+  if (!nextMuted && typeof ytApi.unMute === "function") ytApi.unMute();
+}
+
+function getYouTubePlayerApi(video) {
+  if (!isOnYouTube()) return null;
+  var playerEl =
+    (video && video.closest ? video.closest(".html5-video-player") : null) ||
+    document.getElementById("movie_player") ||
+    document.querySelector(".html5-video-player");
+  if (!playerEl) return null;
+  return playerEl.wrappedJSObject || playerEl;
+}
+
+function syncYouTubePlayerVolume(video, volume) {
+  var ytApi = getYouTubePlayerApi(video);
+  if (!ytApi || typeof ytApi.setVolume !== "function") return;
+  ytApi.setVolume(Math.round(volume * 100));
+  if (volume > 0 && typeof ytApi.unMute === "function") {
+    ytApi.unMute();
+  }
+}
+
+function setVideoVolume(video, targetVolume) {
+  var nextVolume = Math.max(0, Math.min(1, Number(targetVolume.toFixed(2))));
+  video.volume = nextVolume;
+  if (nextVolume > 0 && video.muted) {
+    video.muted = false;
+  }
+  syncYouTubePlayerVolume(video, nextVolume);
+}
+
+function volumeUp(v, value) {
+  setVideoVolume(v, v.volume + value);
+}
+
+function volumeDown(v, value) {
+  setVideoVolume(v, v.volume - value);
 }
 
 function setMark(v) {

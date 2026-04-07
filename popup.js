@@ -14,11 +14,13 @@ document.addEventListener("DOMContentLoaded", function () {
     reset:    { label: "\u21BB", className: "" },
     fast:     { label: "", className: "" },
     nudge:    { label: "", className: "" },
-    settings: { label: "", className: "" },
     pause:    { label: "", className: "" },
     muted:    { label: "", className: "" },
+    louder:   { label: "", className: "" },
+    softer:   { label: "", className: "" },
     mark:     { label: "", className: "" },
-    jump:     { label: "", className: "" }
+    jump:     { label: "", className: "" },
+    settings: { label: "", className: "" }
   };
 
   var defaultButtons = ["rewind", "slower", "faster", "advance", "display"];

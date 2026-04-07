@@ -140,6 +140,14 @@ describe("shared helpers", () => {
 
     expect(
       importExportUtils.extractImportSettings({ enabled: true })
-    ).toBeNull();
+    ).toEqual({
+      isWrappedBackup: false,
+      settings: { enabled: true },
+      localSettings: null
+    });
+
+    expect(importExportUtils.isRecognizedRawSettingsObject({ wat: true })).toBe(
+      false
+    );
   });
 });

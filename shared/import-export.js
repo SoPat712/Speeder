@@ -8,6 +8,44 @@
   root.SpeederShared = root.SpeederShared || {};
   root.SpeederShared.importExport = exports;
 })(typeof globalThis !== "undefined" ? globalThis : this, function() {
+  var rawSettingsKeys = new Set([
+    "audioBoolean",
+    "controllerButtons",
+    "controllerLocation",
+    "controllerMarginBottom",
+    "controllerMarginLeft",
+    "controllerMarginRight",
+    "controllerMarginTop",
+    "controllerOpacity",
+    "enableSubtitleNudge",
+    "enabled",
+    "forceLastSavedSpeed",
+    "hideWithControls",
+    "hideWithControlsTimer",
+    "hideWithYouTubeControls",
+    "keyBindings",
+    "lastSpeed",
+    "popupControllerButtons",
+    "popupMatchHoverControls",
+    "rememberSpeed",
+    "showPopupControlBar",
+    "siteRules",
+    "speed",
+    "startHidden",
+    "subtitleNudgeAmount",
+    "subtitleNudgeInterval"
+  ]);
+
+  function isRecognizedRawSettingsObject(backup) {
+    if (!backup || typeof backup !== "object" || Array.isArray(backup)) {
+      return false;
+    }
+
+    return Object.keys(backup).some(function(key) {
+      return rawSettingsKeys.has(key);
+    });
+  }
+
   function generateBackupFilename(now) {
     var date = now instanceof Date ? now : new Date(now || Date.now());
     var year = date.getFullYear();
@@ -53,7 +91,7 @@
     } else if (
       backup &&
       typeof backup === "object" &&
-      (backup.keyBindings || backup.rememberSpeed !== undefined)
+      isRecognizedRawSettingsObject(backup)
     ) {
       settingsToImport = backup;
     }
@@ -80,6 +118,7 @@
     buildBackupPayload: buildBackupPayload,
     extractImportSettings: extractImportSettings,
     generateBackupFilename: generateBackupFilename,
+    isRecognizedRawSettingsObject: isRecognizedRawSettingsObject,
     parseImportText: parseImportText
   };
 });

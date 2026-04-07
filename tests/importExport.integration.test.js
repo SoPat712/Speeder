@@ -128,6 +128,58 @@ describe("import/export flows", () => {
     expect(globalThis.restore_options).toHaveBeenCalled();
   });
 
+  it("imports raw settings objects without touching local storage", async () => {
+    vi.useFakeTimers();
+    const chrome = await setupImportExport({
+      local: { customButtonIcons: { faster: { slug: "rocket" } } }
+    });
+
+    const originalCreateElement = document.createElement.bind(document);
+    let createdInput = null;
+    vi.spyOn(document, "createElement").mockImplementation((tagName) => {
+      const el = originalCreateElement(tagName);
+      if (tagName === "input") {
+        createdInput = el;
+        el.click = vi.fn();
+      }
+      return el;
+    });
+
+    globalThis.FileReader = class MockFileReader {
+      readAsText(file) {
+        this.onload({
+          target: {
+            result: file.__text
+          }
+        });
+      }
+    };
+
+    globalThis.importSettings();
+    createdInput.onchange({
+      target: {
+        files: [
+          {
+            __text: JSON.stringify({
+              enabled: false,
+              siteRules: [{ pattern: "example.com", enabled: false }]
+            })
+          }
+        ]
+      }
+    });
+
+    expect(chrome.storage.local.clear).not.toHaveBeenCalled();
+    expect(chrome.storage.local.set).not.toHaveBeenCalled();
+    expect(chrome.storage.sync.set).toHaveBeenCalledWith(
+      {
+        enabled: false,
+        siteRules: [{ pattern: "example.com", enabled: false }]
+      },
+      expect.any(Function)
+    );
+  });
+
   it("clears stale local data when a wrapped backup has empty local settings", async () => {
     vi.useFakeTimers();
     const chrome = await setupImportExport({
@@ -210,7 +262,7 @@ describe("import/export flows", () => {
       target: {
         files: [
           {
-            __text: JSON.stringify({ enabled: true })
+            __text: JSON.stringify({ wat: true })
           }
         ]
       }

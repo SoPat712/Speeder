@@ -1,25 +1,20 @@
 // Import/Export functionality for Video Speed Controller settings
+var speederShared =
+  typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
+var importExportUtils = speederShared.importExport || {};
 
 function generateBackupFilename() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
-  return `speeder-backup_${year}-${month}-${day}_${hours}.${minutes}.${seconds}.json`;
+  return importExportUtils.generateBackupFilename(new Date());
 }
 
 function exportSettings() {
   chrome.storage.sync.get(null, function (storage) {
     chrome.storage.local.get(null, function (localStorage) {
-      const backup = {
-        version: "1.1",
-        exportDate: new Date().toISOString(),
-        settings: storage,
-        localSettings: localStorage || {}
-      };
+      const backup = importExportUtils.buildBackupPayload(
+        storage,
+        localStorage,
+        new Date()
+      );
 
       const dataStr = JSON.stringify(backup, null, 2);
       const blob = new Blob([dataStr], { type: "application/json" });
@@ -50,25 +45,50 @@ function importSettings() {
     const reader = new FileReader();
     reader.onload = function (e) {
       try {
-        const backup = JSON.parse(e.target.result);
-        let settingsToImport = null;
+        const parsedBackup = importExportUtils.parseImportText(e.target.result);
 
-        // Detect backup format: check for 'settings' wrapper or raw storage keys
-        if (backup.settings && typeof backup.settings === "object") {
-          settingsToImport = backup.settings;
-        } else if (typeof backup === "object" && (backup.keyBindings || backup.rememberSpeed !== undefined)) {
-          settingsToImport = backup; // Raw storage object
-        }
-
-        if (!settingsToImport) {
+        if (!parsedBackup) {
           showStatus("Error: Invalid backup file format", true);
           return;
         }
 
-        var localToImport =
-          backup.localSettings && typeof backup.localSettings === "object"
-            ? backup.localSettings
-            : null;
+        var settingsToImport = parsedBackup.settings;
+        var localToImport = parsedBackup.localSettings;
+
+        function importLocalSettings(callback) {
+          if (parsedBackup.isWrappedBackup !== true) {
+            callback();
+            return;
+          }
+
+          chrome.storage.local.clear(function () {
+            if (chrome.runtime.lastError) {
+              showStatus(
+                "Error: Failed to clear local extension data - " +
+                  chrome.runtime.lastError.message,
+                true
+              );
+              return;
+            }
+
+            if (localToImport && Object.keys(localToImport).length > 0) {
+              chrome.storage.local.set(localToImport, function () {
+                if (chrome.runtime.lastError) {
+                  showStatus(
+                    "Error: Failed to save local extension data - " +
+                      chrome.runtime.lastError.message,
+                    true
+                  );
+                  return;
+                }
+                callback();
+              });
+              return;
+            }
+
+            callback();
+          });
+        }
 
         function afterLocalImport() {
           chrome.storage.sync.clear(function () {
@@ -93,21 +113,7 @@ function importSettings() {
           });
         }
 
-        if (localToImport && Object.keys(localToImport).length > 0) {
-          chrome.storage.local.set(localToImport, function () {
-            if (chrome.runtime.lastError) {
-              showStatus(
-                "Error: Failed to save local extension data - " +
-                  chrome.runtime.lastError.message,
-                true
-              );
-              return;
-            }
-            afterLocalImport();
-          });
-        } else {
-          afterLocalImport();
-        }
+        importLocalSettings(afterLocalImport);
       } catch (err) {
         showStatus("Error: Failed to parse backup file - " + err.message, true);
       }

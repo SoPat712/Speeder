@@ -1,5 +1,8 @@
 document.addEventListener("DOMContentLoaded", function () {
-  var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
+  var speederShared =
+    typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
+  var siteRuleUtils = speederShared.siteRules || {};
+  var popupControlUtils = speederShared.popupControls || {};
 
   /* `label` is only used if ui-icons.js has no path for this action (fallback). */
   var controllerButtonDefs = {
@@ -30,73 +33,20 @@ document.addEventListener("DOMContentLoaded", function () {
   };
   var renderToken = 0;
 
-  function escapeStringRegExp(str) {
-    const m = /[|\\{}()[\]^$+*?.]/g;
-    return str.replace(m, "\\$&");
-  }
-
   function matchSiteRule(url, siteRules) {
-    if (!url || !Array.isArray(siteRules)) return null;
-    for (var i = 0; i < siteRules.length; i++) {
-      var rule = siteRules[i];
-      if (!rule || !rule.pattern) continue;
-      var pattern = rule.pattern.replace(regStrip, "");
-      if (pattern.length === 0) continue;
-      var re;
-      if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
-        try {
-          var ls = pattern.lastIndexOf("/");
-          re = new RegExp(pattern.substring(1, ls), pattern.substring(ls + 1));
-        } catch (e) {
-          continue;
-        }
-      } else {
-        re = new RegExp(escapeStringRegExp(pattern));
-      }
-      if (re && re.test(url)) return rule;
-    }
-    return null;
+    return siteRuleUtils.matchSiteRule(url, siteRules);
   }
 
   function isSiteRuleDisabled(rule) {
-    return Boolean(
-      rule &&
-      (rule.enabled === false || rule.disableExtension === true)
-    );
+    return siteRuleUtils.isSiteRuleDisabled(rule);
   }
 
   function resolvePopupButtons(storage, siteRule) {
-    function sanitize(buttons) {
-      if (!Array.isArray(buttons)) return [];
-      var seen = new Set();
-      return buttons.filter(function (id) {
-        if (!controllerButtonDefs[id] || popupExcludedButtonIds.has(id) || seen.has(id)) {
-          return false;
-        }
-        seen.add(id);
-        return true;
-      });
-    }
-
-    if (siteRule && Array.isArray(siteRule.popupControllerButtons)) {
-      return sanitize(siteRule.popupControllerButtons);
-    }
-
-    if (storage.popupMatchHoverControls) {
-      if (siteRule && Array.isArray(siteRule.controllerButtons)) {
-        return sanitize(siteRule.controllerButtons);
-      }
-
-      if (Array.isArray(storage.controllerButtons)) {
-        return sanitize(storage.controllerButtons);
-      }
-    }
-
-    if (Array.isArray(storage.popupControllerButtons)) {
-      return sanitize(storage.popupControllerButtons);
-    }
-
-    return sanitize(defaultButtons);
+    return popupControlUtils.resolvePopupButtons(storage, siteRule, {
+      controllerButtonDefs: controllerButtonDefs,
+      defaultButtons: defaultButtons,
+      excludedIds: popupExcludedButtonIds
+    });
   }
 
   function setControlBarVisible(visible) {
@@ -165,23 +115,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function pickBestFrameSpeedResult(results) {
-    if (!results || !results.length) return null;
-    var i;
-    var r;
-    var fallback = null;
-    for (i = 0; i < results.length; i++) {
-      r = results[i];
-      if (!r || typeof r.speed !== "number") {
-        continue;
-      }
-      if (r.preferred) {
-        return { speed: r.speed };
-      }
-      if (!fallback) {
-        fallback = { speed: r.speed };
-      }
-    }
-    return fallback;
+    return popupControlUtils.pickBestFrameSpeedResult(results);
   }
 
   function querySpeed() {

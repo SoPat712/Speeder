@@ -1,5 +1,10 @@
 var isUserSeek = false; // Track if seek was user-initiated
 var lastToggleSpeed = {}; // Store last toggle speeds per video
+var speederShared =
+  typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
+var controllerUtils = speederShared.controllerUtils || {};
+var keyBindingUtils = speederShared.keyBindings || {};
+var siteRuleUtils = speederShared.siteRules || {};
 
 function getPrimaryVideoElement() {
   if (!tc.mediaElements || tc.mediaElements.length === 0) return null;
@@ -59,17 +64,20 @@ var requestIdle =
     : function(callback, options) {
       return setTimeout(callback, (options && options.timeout) || 1);
     };
-var controllerLocations = [
-  "top-left",
-  "top-center",
-  "top-right",
-  "middle-right",
-  "bottom-right",
-  "bottom-center",
-  "bottom-left",
-  "middle-left"
-];
-var defaultControllerLocation = controllerLocations[0];
+var controllerLocations = Array.isArray(controllerUtils.controllerLocations)
+  ? controllerUtils.controllerLocations.slice()
+  : [
+    "top-left",
+    "top-center",
+    "top-right",
+    "middle-right",
+    "bottom-right",
+    "bottom-center",
+    "bottom-left",
+    "middle-left"
+  ];
+var defaultControllerLocation =
+  controllerUtils.defaultControllerLocation || controllerLocations[0];
 var controllerLocationStyles = {
   "top-left": {
     top: "10px",
@@ -196,28 +204,20 @@ function ensureDefaultKeyBinding(action, code, value) {
 }
 
 function getLegacyKeyCode(binding) {
-  if (!binding) return null;
-  if (Number.isInteger(binding.keyCode)) return binding.keyCode;
-  if (typeof binding.key === "number" && Number.isInteger(binding.key)) {
-    return binding.key;
-  }
-  return null;
+  return keyBindingUtils.getLegacyKeyCode(binding);
 }
 
 function normalizeControllerLocation(location) {
-  if (controllerLocations.includes(location)) return location;
-  return defaultControllerLocation;
+  return controllerUtils.normalizeControllerLocation(
+    location,
+    defaultControllerLocation
+  );
 }
 
 var CONTROLLER_MARGIN_MAX_PX = 200;
 
 function normalizeControllerMarginPx(value, fallback) {
-  var n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(
-    CONTROLLER_MARGIN_MAX_PX,
-    Math.max(0, Math.round(n))
-  );
+  return controllerUtils.clampControllerMarginPx(value, fallback);
 }
 
 function applyControllerMargins(controller) {
@@ -256,9 +256,7 @@ function applyControllerMargins(controller) {
 }
 
 function getNextControllerLocation(location) {
-  var normalizedLocation = normalizeControllerLocation(location);
-  var currentIndex = controllerLocations.indexOf(normalizedLocation);
-  return controllerLocations[(currentIndex + 1) % controllerLocations.length];
+  return controllerUtils.getNextControllerLocation(location);
 }
 
 function getControllerElement(videoOrController) {
@@ -478,98 +476,19 @@ function cycleControllerLocation(video) {
 }
 
 function normalizeBindingKey(key) {
-  if (typeof key !== "string" || key.length === 0) return null;
-  if (key === "Spacebar") return " ";
-  if (key === "Esc") return "Escape";
-  if (key.length === 1 && /[a-z]/i.test(key)) return key.toUpperCase();
-  return key;
+  return keyBindingUtils.normalizeBindingKey(key);
 }
 
 function legacyBindingKeyToCode(key) {
-  var normalizedKey = normalizeBindingKey(key);
-  if (!normalizedKey) return null;
-  if (/^[A-Z]$/.test(normalizedKey)) return "Key" + normalizedKey;
-  if (/^[0-9]$/.test(normalizedKey)) return "Digit" + normalizedKey;
-  if (/^F([1-9]|1[0-2])$/.test(normalizedKey)) return normalizedKey;
-
-  var keyMap = {
-    " ": "Space",
-    ArrowLeft: "ArrowLeft",
-    ArrowUp: "ArrowUp",
-    ArrowRight: "ArrowRight",
-    ArrowDown: "ArrowDown",
-    ";": "Semicolon",
-    "<": "Comma",
-    "-": "Minus",
-    "+": "Equal",
-    ">": "Period",
-    "/": "Slash",
-    "~": "Backquote",
-    "[": "BracketLeft",
-    "\\": "Backslash",
-    "]": "BracketRight",
-    "'": "Quote"
-  };
-
-  return keyMap[normalizedKey] || null;
+  return keyBindingUtils.legacyBindingKeyToCode(key);
 }
 
 function legacyKeyCodeToCode(keyCode) {
-  if (!Number.isInteger(keyCode)) return null;
-  if (keyCode >= 48 && keyCode <= 57) return "Digit" + String.fromCharCode(keyCode);
-  if (keyCode >= 65 && keyCode <= 90) return "Key" + String.fromCharCode(keyCode);
-  if (keyCode >= 96 && keyCode <= 105) return "Numpad" + (keyCode - 96);
-  if (keyCode >= 112 && keyCode <= 123) return "F" + (keyCode - 111);
-
-  var keyCodeMap = {
-    32: "Space",
-    37: "ArrowLeft",
-    38: "ArrowUp",
-    39: "ArrowRight",
-    40: "ArrowDown",
-    106: "NumpadMultiply",
-    107: "NumpadAdd",
-    109: "NumpadSubtract",
-    110: "NumpadDecimal",
-    111: "NumpadDivide",
-    186: "Semicolon",
-    188: "Comma",
-    189: "Minus",
-    187: "Equal",
-    190: "Period",
-    191: "Slash",
-    192: "Backquote",
-    219: "BracketLeft",
-    220: "Backslash",
-    221: "BracketRight",
-    222: "Quote",
-    59: "Semicolon",
-    61: "Equal",
-    173: "Minus"
-  };
-
-  return keyCodeMap[keyCode] || null;
+  return keyBindingUtils.legacyKeyCodeToCode(keyCode);
 }
 
 function inferBindingCode(binding, fallbackCode) {
-  if (binding && typeof binding.code === "string" && binding.code.length > 0) {
-    return binding.code;
-  }
-
-  if (binding && typeof binding.key === "string") {
-    var codeFromKey = legacyBindingKeyToCode(binding.key);
-    if (codeFromKey) return codeFromKey;
-  }
-
-  var legacyKeyCode = getLegacyKeyCode(binding);
-  if (Number.isInteger(legacyKeyCode)) {
-    var codeFromKeyCode = legacyKeyCodeToCode(legacyKeyCode);
-    if (codeFromKeyCode) return codeFromKeyCode;
-  }
-
-  return typeof fallbackCode === "string" && fallbackCode.length > 0
-    ? fallbackCode
-    : null;
+  return keyBindingUtils.inferBindingCode(binding, fallbackCode);
 }
 
 function normalizeStoredBinding(binding, fallbackCode) {
@@ -2074,11 +1993,6 @@ function defineVideoController() {
   };
 }
 
-function escapeStringRegExp(str) {
-  const m = /[|\\{}()[\]^$+*?.]/g;
-  return str.replace(m, "\\$&");
-}
-
 function applySiteRuleOverrides() {
   resetSettingsFromSiteRuleBase();
 
@@ -2087,34 +2001,7 @@ function applySiteRuleOverrides() {
   }
 
   var currentUrl = location.href;
-  var matchedRule = null;
-
-  for (var i = 0; i < tc.settings.siteRules.length; i++) {
-    var rule = tc.settings.siteRules[i];
-    var pattern = rule.pattern;
-    if (!pattern || pattern.length === 0) continue;
-
-    var regex;
-    if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
-      try {
-        var lastSlash = pattern.lastIndexOf("/");
-        regex = new RegExp(
-          pattern.substring(1, lastSlash),
-          pattern.substring(lastSlash + 1)
-        );
-      } catch (e) {
-        log(`Invalid site rule regex: ${pattern}. ${e.message}`, 2);
-        continue;
-      }
-    } else {
-      regex = new RegExp(escapeStringRegExp(pattern));
-    }
-
-    if (regex && regex.test(currentUrl)) {
-      matchedRule = rule;
-      break;
-    }
-  }
+  var matchedRule = siteRuleUtils.matchSiteRule(currentUrl, tc.settings.siteRules);
 
   if (!matchedRule) return false;
 
@@ -2122,12 +2009,8 @@ function applySiteRuleOverrides() {
   log(`Matched site rule: ${matchedRule.pattern}`, 4);
 
   // Check if extension should be enabled/disabled on this site
-  if (matchedRule.enabled === false) {
+  if (siteRuleUtils.isSiteRuleDisabled(matchedRule)) {
     log(`Extension disabled for site: ${currentUrl}`, 4);
-    return true;
-  } else if (matchedRule.disableExtension === true) {
-    // Handle old format
-    log(`Extension disabled (legacy) for site: ${currentUrl}`, 4);
     return true;
   }
 

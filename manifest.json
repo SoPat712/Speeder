@@ -59,6 +59,9 @@
         "inject.css"
       ],
       "js": [
+        "shared/controller-utils.js",
+        "shared/key-bindings.js",
+        "shared/site-rules.js",
         "ui-icons.js",
         "inject.js"
       ]

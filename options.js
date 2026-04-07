@@ -312,6 +312,71 @@ function parseFiniteNumberOrFallback(value, fallback) {
   return Number.isFinite(numericValue) ? numericValue : fallback;
 }
 
+function updateSiteRuleToggleIcon(toggleButton, action) {
+  if (!toggleButton) return;
+  var iconEl = toggleButton.querySelector(".site-rule-toggle-icon");
+  if (!iconEl) return;
+
+  if (typeof vscIconSvgString === "function" && typeof vscSetSvgContent === "function") {
+    var svgHtml = vscIconSvgString(action, 16);
+    if (svgHtml && vscSetSvgContent(iconEl, svgHtml)) {
+      return;
+    }
+  }
+
+  iconEl.textContent = action === "chevronUp" ? "\u2212" : "\u2026";
+}
+
+function setSiteRuleExpandedState(ruleEl, expanded) {
+  if (!ruleEl) return;
+
+  var ruleBody = ruleEl.querySelector(".site-rule-body");
+  var toggleButton = ruleEl.querySelector(".toggle-site-rule");
+  if (ruleBody) {
+    ruleBody.style.display = expanded ? "block" : "none";
+  }
+
+  ruleEl.classList.toggle("collapsed", !expanded);
+
+  if (!toggleButton) return;
+  var label = expanded ? "Collapse site rule" : "Expand site rule";
+  toggleButton.title = label;
+  toggleButton.setAttribute("aria-label", label);
+  toggleButton.setAttribute("aria-expanded", expanded ? "true" : "false");
+  updateSiteRuleToggleIcon(toggleButton, expanded ? "chevronUp" : "moreHorizontal");
+}
+
+function setSiteOverrideContainerState(container, enabled) {
+  if (!container) return;
+
+  container.classList.toggle("site-override-disabled", !enabled);
+  container.setAttribute("aria-disabled", enabled ? "false" : "true");
+
+  Array.prototype.forEach.call(
+    container.querySelectorAll("input, select, textarea, button"),
+    function (control) {
+      control.disabled = !enabled;
+    }
+  );
+
+  Array.prototype.forEach.call(
+    container.querySelectorAll(".cb-block"),
+    function (block) {
+      block.draggable = enabled;
+    }
+  );
+}
+
+function applySiteRuleOverrideState(ruleEl, checkboxClass, containerClass) {
+  if (!ruleEl) return;
+  var checkbox = ruleEl.querySelector("." + checkboxClass);
+  var container = ruleEl.querySelector("." + containerClass);
+  if (!container) return;
+
+  container.style.display = "block";
+  setSiteOverrideContainerState(container, checkbox ? checkbox.checked : false);
+}
+
 function syncSiteRuleField(ruleEl, rule, key, isCheckbox) {
   var input = ruleEl.querySelector(".site-" + key);
   if (!input) return;
@@ -894,9 +959,7 @@ function createSiteRule(rule) {
   ruleEl.querySelector(".site-pattern").value = pattern;
 
   // Make the rule body collapsed by default
-  var ruleBody = ruleEl.querySelector(".site-rule-body");
-  ruleBody.style.display = "none";
-  ruleEl.classList.add("collapsed");
+  setSiteRuleExpandedState(ruleEl, false);
 
   var enabledCheckbox = ruleEl.querySelector(".site-enabled");
   var contentEl = ruleEl.querySelector(".site-rule-content");
@@ -931,114 +994,99 @@ function createSiteRule(rule) {
   ];
   var hasPlacementOverride =
     rule && placementKeys.some(function (k) { return rule[k] !== undefined; });
-  if (hasPlacementOverride) {
-    ruleEl.querySelector(".override-placement").checked = true;
-    ruleEl.querySelector(".site-placement-container").style.display = "block";
-  }
+  ruleEl.querySelector(".override-placement").checked = Boolean(hasPlacementOverride);
   syncSiteRuleField(ruleEl, rule, "controllerLocation", false);
   syncSiteRuleField(ruleEl, rule, "controllerMarginTop", false);
   syncSiteRuleField(ruleEl, rule, "controllerMarginBottom", false);
+  applySiteRuleOverrideState(ruleEl, "override-placement", "site-placement-container");
 
-  if (rule && rule.startHidden !== undefined) {
-    ruleEl.querySelector(".override-visibility").checked = true;
-    ruleEl.querySelector(".site-visibility-container").style.display = "block";
-  }
+  ruleEl.querySelector(".override-visibility").checked = Boolean(
+    rule && rule.startHidden !== undefined
+  );
   syncSiteRuleField(ruleEl, rule, "startHidden", true);
+  applySiteRuleOverrideState(ruleEl, "override-visibility", "site-visibility-container");
 
-  if (
+  var hasAutohideOverride = Boolean(
     rule &&
     (rule.hideWithControls !== undefined ||
       rule.hideWithControlsTimer !== undefined)
-  ) {
-    ruleEl.querySelector(".override-autohide").checked = true;
-    ruleEl.querySelector(".site-autohide-container").style.display = "block";
-  }
+  );
+  ruleEl.querySelector(".override-autohide").checked = hasAutohideOverride;
   syncSiteRuleField(ruleEl, rule, "hideWithControls", true);
   syncSiteRuleField(ruleEl, rule, "hideWithControlsTimer", false);
+  applySiteRuleOverrideState(ruleEl, "override-autohide", "site-autohide-container");
 
-  if (
+  var hasPlaybackOverride = Boolean(
     rule &&
     (rule.rememberSpeed !== undefined ||
       rule.forceLastSavedSpeed !== undefined ||
       rule.audioBoolean !== undefined)
-  ) {
-    ruleEl.querySelector(".override-playback").checked = true;
-    ruleEl.querySelector(".site-playback-container").style.display = "block";
-  }
+  );
+  ruleEl.querySelector(".override-playback").checked = hasPlaybackOverride;
   syncSiteRuleField(ruleEl, rule, "rememberSpeed", true);
   syncSiteRuleField(ruleEl, rule, "forceLastSavedSpeed", true);
   syncSiteRuleField(ruleEl, rule, "audioBoolean", true);
+  applySiteRuleOverrideState(ruleEl, "override-playback", "site-playback-container");
 
-  if (rule && rule.controllerOpacity !== undefined) {
-    ruleEl.querySelector(".override-opacity").checked = true;
-    ruleEl.querySelector(".site-opacity-container").style.display = "block";
-  }
+  ruleEl.querySelector(".override-opacity").checked = Boolean(
+    rule && rule.controllerOpacity !== undefined
+  );
   syncSiteRuleField(ruleEl, rule, "controllerOpacity", false);
+  applySiteRuleOverrideState(ruleEl, "override-opacity", "site-opacity-container");
 
-  if (
+  var hasSubtitleNudgeOverride = Boolean(
     rule &&
     (rule.enableSubtitleNudge !== undefined ||
       rule.subtitleNudgeInterval !== undefined)
-  ) {
-    ruleEl.querySelector(".override-subtitleNudge").checked = true;
-    ruleEl.querySelector(".site-subtitleNudge-container").style.display =
-      "block";
-  }
+  );
+  ruleEl.querySelector(".override-subtitleNudge").checked = hasSubtitleNudgeOverride;
   syncSiteRuleField(ruleEl, rule, "enableSubtitleNudge", true);
   syncSiteRuleField(ruleEl, rule, "subtitleNudgeInterval", false);
+  applySiteRuleOverrideState(
+    ruleEl,
+    "override-subtitleNudge",
+    "site-subtitleNudge-container"
+  );
 
-  if (rule && Array.isArray(rule.controllerButtons)) {
-    ruleEl.querySelector(".override-controlbar").checked = true;
-    var cbContainer = ruleEl.querySelector(".site-controlbar-container");
-    cbContainer.style.display = "block";
-    populateControlBarZones(
-      ruleEl.querySelector(".site-cb-active"),
-      ruleEl.querySelector(".site-cb-available"),
-      rule.controllerButtons
-    );
-  }
+  var hasControlbarOverride = Boolean(rule && Array.isArray(rule.controllerButtons));
+  ruleEl.querySelector(".override-controlbar").checked = hasControlbarOverride;
+  populateControlBarZones(
+    ruleEl.querySelector(".site-cb-active"),
+    ruleEl.querySelector(".site-cb-available"),
+    hasControlbarOverride ? rule.controllerButtons : getControlBarOrder()
+  );
+  applySiteRuleOverrideState(ruleEl, "override-controlbar", "site-controlbar-container");
 
-  if (
+  var hasPopupControlbarOverride = Boolean(
     rule &&
     (rule.showPopupControlBar !== undefined ||
       Array.isArray(rule.popupControllerButtons))
-  ) {
-    ruleEl.querySelector(".override-popup-controlbar").checked = true;
-    var popupCbContainer = ruleEl.querySelector(".site-popup-controlbar-container");
-    popupCbContainer.style.display = "block";
-    var sitePopupActive = ruleEl.querySelector(".site-popup-cb-active");
-    var sitePopupAvailable = ruleEl.querySelector(".site-popup-cb-available");
-    if (Array.isArray(rule.popupControllerButtons)) {
-      populateControlBarZones(
-        sitePopupActive,
-        sitePopupAvailable,
-        sanitizePopupButtonOrder(rule.popupControllerButtons),
-        function (id) {
-          return !popupExcludedButtonIds.has(id);
-        }
-      );
-    } else if (
-      sitePopupActive &&
-      sitePopupAvailable &&
-      sitePopupActive.children.length === 0
-    ) {
-      populateControlBarZones(
-        sitePopupActive,
-        sitePopupAvailable,
-        getPopupControlBarOrder(),
-        function (id) {
-          return !popupExcludedButtonIds.has(id);
-        }
-      );
+  );
+  ruleEl.querySelector(".override-popup-controlbar").checked =
+    hasPopupControlbarOverride;
+  populateControlBarZones(
+    ruleEl.querySelector(".site-popup-cb-active"),
+    ruleEl.querySelector(".site-popup-cb-available"),
+    hasPopupControlbarOverride && Array.isArray(rule.popupControllerButtons)
+      ? sanitizePopupButtonOrder(rule.popupControllerButtons)
+      : getPopupControlBarOrder(),
+    function (id) {
+      return !popupExcludedButtonIds.has(id);
     }
-  }
+  );
   syncSiteRuleField(ruleEl, rule, "showPopupControlBar", true);
+  applySiteRuleOverrideState(
+    ruleEl,
+    "override-popup-controlbar",
+    "site-popup-controlbar-container"
+  );
 
-  if (rule && Array.isArray(rule.shortcuts) && rule.shortcuts.length > 0) {
-    ruleEl.querySelector(".override-shortcuts").checked = true;
-    var container = ruleEl.querySelector(".site-shortcuts-container");
-    container.style.display = "block";
-
+  var hasShortcutOverride = Boolean(
+    rule && Array.isArray(rule.shortcuts) && rule.shortcuts.length > 0
+  );
+  ruleEl.querySelector(".override-shortcuts").checked = hasShortcutOverride;
+  var container = ruleEl.querySelector(".site-shortcuts-container");
+  if (hasShortcutOverride) {
     rule.shortcuts.forEach((shortcut) => {
       addSiteRuleShortcut(
         container,
@@ -1048,13 +1096,41 @@ function createSiteRule(rule) {
         shortcut.force
       );
     });
+  } else {
+    populateDefaultSiteShortcuts(container);
   }
+  applySiteRuleOverrideState(ruleEl, "override-shortcuts", "site-shortcuts-container");
 
   document.getElementById("siteRulesContainer").appendChild(ruleEl);
 }
 
 function populateDefaultSiteShortcuts(container) {
-  tcDefaults.keyBindings.forEach((binding) => {
+  var bindings = [];
+  document.querySelectorAll("#customs .shortcut-row").forEach((row) => {
+    var action = row.dataset.action;
+    if (!action) return;
+
+    var keyInput = row.querySelector(".customKey");
+    var binding = normalizeStoredBinding(keyInput && keyInput.vscBinding);
+    if (!binding) return;
+
+    var valueInput = row.querySelector(".customValue");
+    bindings.push({
+      action: action,
+      code: binding.code,
+      disabled: binding.disabled === true,
+      value: customActionsNoValues.includes(action)
+        ? 0
+        : Number(valueInput && valueInput.value),
+      force: false
+    });
+  });
+
+  if (bindings.length === 0) {
+    bindings = tcDefaults.keyBindings.slice();
+  }
+
+  bindings.forEach((binding) => {
     addSiteRuleShortcut(container, binding.action, binding, binding.value, false);
   });
 }
@@ -1626,29 +1702,26 @@ document.addEventListener("DOMContentLoaded", function () {
     eventCaller(event, "customKey", recordKeyPress)
   );
   document.addEventListener("click", (event) => {
-    if (event.target.classList.contains("removeParent")) {
-      event.target.parentNode.remove();
+    var target = event.target;
+    var targetEl = target && target.closest ? target : target.parentElement;
+    if (!targetEl) return;
+
+    var removeParentButton = targetEl.closest(".removeParent");
+    if (removeParentButton) {
+      removeParentButton.parentNode.remove();
       refreshAddShortcutSelector();
       return;
     }
-    if (event.target.classList.contains("remove-site-rule")) {
-      event.target.closest(".site-rule").remove();
+    var removeSiteRuleButton = targetEl.closest(".remove-site-rule");
+    if (removeSiteRuleButton) {
+      removeSiteRuleButton.closest(".site-rule").remove();
       return;
     }
-    if (event.target.classList.contains("toggle-site-rule")) {
-      var ruleEl = event.target.closest(".site-rule");
-      var ruleBody = ruleEl.querySelector(".site-rule-body");
+    var toggleButton = targetEl.closest(".toggle-site-rule");
+    if (toggleButton) {
+      var ruleEl = toggleButton.closest(".site-rule");
       var isCollapsed = ruleEl.classList.contains("collapsed");
-      
-      if (isCollapsed) {
-        ruleBody.style.display = "block";
-        ruleEl.classList.remove("collapsed");
-        event.target.textContent = "\u2212";
-      } else {
-        ruleBody.style.display = "none";
-        ruleEl.classList.add("collapsed");
-        event.target.textContent = "\u002b";
-      }
+      setSiteRuleExpandedState(ruleEl, isCollapsed);
       return;
     }
   });
@@ -1670,7 +1743,10 @@ document.addEventListener("DOMContentLoaded", function () {
       "override-autohide": "site-autohide-container",
       "override-playback": "site-playback-container",
       "override-opacity": "site-opacity-container",
-      "override-subtitleNudge": "site-subtitleNudge-container"
+      "override-subtitleNudge": "site-subtitleNudge-container",
+      "override-controlbar": "site-controlbar-container",
+      "override-popup-controlbar": "site-popup-controlbar-container",
+      "override-shortcuts": "site-shortcuts-container"
     };
     for (var ocb in siteOverrideContainers) {
       if (event.target.classList.contains(ocb)) {
@@ -1679,77 +1755,9 @@ document.addEventListener("DOMContentLoaded", function () {
           "." + siteOverrideContainers[ocb]
         );
         if (targetBox) {
-          targetBox.style.display = event.target.checked ? "block" : "none";
+          setSiteOverrideContainerState(targetBox, event.target.checked);
         }
         return;
-      }
-    }
-
-    // Handle site rule override checkboxes
-    if (event.target.classList.contains("override-shortcuts")) {
-      var container = event.target
-        .closest(".site-rule-shortcuts")
-        .querySelector(".site-shortcuts-container");
-      if (event.target.checked) {
-        container.style.display = "block";
-        if (container.children.length === 0) {
-          populateDefaultSiteShortcuts(container);
-        }
-      } else {
-        container.style.display = "none";
-      }
-    }
-
-    if (event.target.classList.contains("override-controlbar")) {
-      var cbContainer = event.target
-        .closest(".site-rule-controlbar")
-        .querySelector(".site-controlbar-container");
-      if (event.target.checked) {
-        cbContainer.style.display = "block";
-        var activeZone = cbContainer.querySelector(".site-cb-active");
-        var availableZone = cbContainer.querySelector(".site-cb-available");
-        if (
-          activeZone &&
-          availableZone &&
-          activeZone.children.length === 0 &&
-          availableZone.children.length === 0
-        ) {
-          populateControlBarZones(
-            activeZone,
-            availableZone,
-            getControlBarOrder()
-          );
-        }
-      } else {
-        cbContainer.style.display = "none";
-      }
-    }
-
-    if (event.target.classList.contains("override-popup-controlbar")) {
-      var popupCbContainer = event.target
-        .closest(".site-rule-controlbar")
-        .querySelector(".site-popup-controlbar-container");
-      if (event.target.checked) {
-        popupCbContainer.style.display = "block";
-        var popupActiveZone = popupCbContainer.querySelector(".site-popup-cb-active");
-        var popupAvailableZone = popupCbContainer.querySelector(".site-popup-cb-available");
-        if (
-          popupActiveZone &&
-          popupAvailableZone &&
-          popupActiveZone.children.length === 0 &&
-          popupAvailableZone.children.length === 0
-        ) {
-          populateControlBarZones(
-            popupActiveZone,
-            popupAvailableZone,
-            getPopupControlBarOrder(),
-            function (id) {
-              return !popupExcludedButtonIds.has(id);
-            }
-          );
-        }
-      } else {
-        popupCbContainer.style.display = "none";
       }
     }
   });

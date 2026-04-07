@@ -73,6 +73,57 @@ describe("options page", () => {
     expect(chrome.storage.sync.set).not.toHaveBeenCalled();
   });
 
+  it("shows a more-menu trigger for collapsed site rules and a collapse trigger when open", async () => {
+    await setupOptions({ sync: { siteRules: [] } });
+
+    globalThis.createSiteRule({ pattern: "youtube.com" });
+
+    const rule = document.getElementById("siteRulesContainer").lastElementChild;
+    const toggle = rule.querySelector(".toggle-site-rule");
+    const body = rule.querySelector(".site-rule-body");
+
+    expect(rule.classList.contains("collapsed")).toBe(true);
+    expect(body.style.display).toBe("none");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-label")).toBe("Expand site rule");
+    expect(toggle.querySelector("svg")).not.toBeNull();
+
+    globalThis.setSiteRuleExpandedState(rule, true);
+
+    expect(rule.classList.contains("collapsed")).toBe(false);
+    expect(body.style.display).toBe("block");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.getAttribute("aria-label")).toBe("Collapse site rule");
+  });
+
+  it("keeps site override settings visible but disabled until enabled", async () => {
+    await setupOptions({ sync: { siteRules: [] } });
+
+    globalThis.createSiteRule({ pattern: "youtube.com" });
+
+    const rule = document.getElementById("siteRulesContainer").lastElementChild;
+    const playbackOverride = rule.querySelector(".override-playback");
+    const playbackContainer = rule.querySelector(".site-playback-container");
+    const rememberSpeed = rule.querySelector(".site-rememberSpeed");
+
+    expect(playbackContainer.classList.contains("site-override-disabled")).toBe(
+      true
+    );
+    expect(rememberSpeed.disabled).toBe(true);
+
+    playbackOverride.checked = true;
+    playbackOverride.dispatchEvent(
+      new Event("change", {
+        bubbles: true
+      })
+    );
+
+    expect(playbackContainer.classList.contains("site-override-disabled")).toBe(
+      false
+    );
+    expect(rememberSpeed.disabled).toBe(false);
+  });
+
   it("saves normalized settings and sanitized popup/site-rule controls", async () => {
     const chrome = await setupOptions();
 

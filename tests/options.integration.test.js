@@ -78,7 +78,7 @@ describe("options page", () => {
 
     document.getElementById("rememberSpeed").checked = true;
     document.getElementById("hideWithControlsTimer").value = "20";
-    document.getElementById("controllerOpacity").value = "0.55";
+    document.getElementById("controllerOpacity").value = "0";
     document.getElementById("controllerMarginTop").value = "250";
     document.getElementById("controllerMarginBottom").value = "-4";
     document.getElementById("enableSubtitleNudge").checked = true;
@@ -98,6 +98,8 @@ describe("options page", () => {
     rule.querySelector(".site-pattern").value = "youtube.com";
     rule.querySelector(".override-playback").checked = true;
     rule.querySelector(".site-rememberSpeed").checked = true;
+    rule.querySelector(".override-opacity").checked = true;
+    rule.querySelector(".site-controllerOpacity").value = "0";
     rule.querySelector(".override-popup-controlbar").checked = true;
     rule.querySelector(".site-showPopupControlBar").checked = false;
     globalThis.populateControlBarZones(
@@ -119,7 +121,7 @@ describe("options page", () => {
 
     expect(savedSettings.rememberSpeed).toBe(true);
     expect(savedSettings.hideWithControlsTimer).toBe(15);
-    expect(savedSettings.controllerOpacity).toBe(0.55);
+    expect(savedSettings.controllerOpacity).toBe(0);
     expect(savedSettings.controllerMarginTop).toBe(200);
     expect(savedSettings.controllerMarginBottom).toBe(0);
     expect(savedSettings.subtitleNudgeInterval).toBe(10);
@@ -129,11 +131,12 @@ describe("options page", () => {
     expect(savedSettings.siteRules).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          pattern: "youtube.com",
-          rememberSpeed: true,
-          showPopupControlBar: false,
-          popupControllerButtons: ["advance"]
-        })
+        pattern: "youtube.com",
+        rememberSpeed: true,
+        controllerOpacity: 0,
+        showPopupControlBar: false,
+        popupControllerButtons: ["advance"]
+      })
       ])
     );
   });

@@ -307,6 +307,11 @@ function clampMarginPxInput(el, fallback) {
   return controllerUtils.clampControllerMarginPx(el && el.value, fallback);
 }
 
+function parseFiniteNumberOrFallback(value, fallback) {
+  var numericValue = parseFloat(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
 function syncSiteRuleField(ruleEl, rule, key, isCheckbox) {
   var input = ruleEl.querySelector(".site-" + key);
   if (!input) return;
@@ -624,8 +629,10 @@ function save_options() {
     document.getElementById("controllerLocation").value
   );
   settings.controllerOpacity =
-    parseFloat(document.getElementById("controllerOpacity").value) ||
-    tcDefaults.controllerOpacity;
+    parseFiniteNumberOrFallback(
+      document.getElementById("controllerOpacity").value,
+      tcDefaults.controllerOpacity
+    );
 
   settings.controllerMarginTop = clampMarginPxInput(
     document.getElementById("controllerMarginTop"),
@@ -713,8 +720,10 @@ function save_options() {
 
     if (ruleEl.querySelector(".override-opacity").checked) {
       rule.controllerOpacity =
-        parseFloat(ruleEl.querySelector(".site-controllerOpacity").value) ||
-        settings.controllerOpacity;
+        parseFiniteNumberOrFallback(
+          ruleEl.querySelector(".site-controllerOpacity").value,
+          settings.controllerOpacity
+        );
     }
 
     if (ruleEl.querySelector(".override-subtitleNudge").checked) {

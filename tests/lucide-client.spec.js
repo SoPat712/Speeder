@@ -49,7 +49,7 @@ describe("lucide-client.js", () => {
     const results = window.searchLucideSlugs(
       {
         alarm: ["clock", "time"],
-        badge-alert: ["alert", "warning"],
+        "badge-alert": ["alert", "warning"],
         calendar: ["date", "time"]
       },
       "al",

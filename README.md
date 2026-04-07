@@ -1,5 +1,5 @@
 # Available for Firefox  
-[![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org//firefox/addon/speeder/)
+[![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org/firefox/addon/speeder/)
 
 
 # The science of accelerated playback

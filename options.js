@@ -1,106 +1,44 @@
 var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
+var speederShared =
+  typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
+var controllerUtils = speederShared.controllerUtils || {};
+var keyBindingUtils = speederShared.keyBindings || {};
+var popupControlUtils = speederShared.popupControls || {};
 
 var keyBindings = [];
 
-var keyCodeAliases = {
-  0: "null",
-  null: "null",
-  undefined: "null",
-  32: "Space",
-  37: "Left",
-  38: "Up",
-  39: "Right",
-  40: "Down",
-  96: "Num 0",
-  97: "Num 1",
-  98: "Num 2",
-  99: "Num 3",
-  100: "Num 4",
-  101: "Num 5",
-  102: "Num 6",
-  103: "Num 7",
-  104: "Num 8",
-  105: "Num 9",
-  106: "Num *",
-  107: "Num +",
-  109: "Num -",
-  110: "Num .",
-  111: "Num /",
-  112: "F1",
-  113: "F2",
-  114: "F3",
-  115: "F4",
-  116: "F5",
-  117: "F6",
-  118: "F7",
-  119: "F8",
-  120: "F9",
-  121: "F10",
-  122: "F11",
-  123: "F12",
-  186: ";",
-  188: "<",
-  189: "-",
-  187: "+",
-  190: ">",
-  191: "/",
-  192: "~",
-  219: "[",
-  220: "\\",
-  221: "]",
-  222: "'",
-  59: ";",
-  61: "+",
-  173: "-"
-};
-
-var keyCodeToKey = {
-  32: " ",
-  37: "ArrowLeft",
-  38: "ArrowUp",
-  39: "ArrowRight",
-  40: "ArrowDown",
-  96: "0",
-  97: "1",
-  98: "2",
-  99: "3",
-  100: "4",
-  101: "5",
-  102: "6",
-  103: "7",
-  104: "8",
-  105: "9",
-  106: "*",
-  107: "+",
-  109: "-",
-  110: ".",
-  111: "/",
-  112: "F1",
-  113: "F2",
-  114: "F3",
-  115: "F4",
-  116: "F5",
-  117: "F6",
-  118: "F7",
-  119: "F8",
-  120: "F9",
-  121: "F10",
-  122: "F11",
-  123: "F12",
-  186: ";",
-  188: "<",
-  189: "-",
-  187: "+",
-  190: ">",
-  191: "/",
-  192: "~",
-  219: "[",
-  220: "\\",
-  221: "]",
-  222: "'",
-  59: ";",
-  61: "+",
-  173: "-"
+var bindingCodeAliases = {
+  Space: "Space",
+  ArrowLeft: "Left",
+  ArrowUp: "Up",
+  ArrowRight: "Right",
+  ArrowDown: "Down",
+  Numpad0: "Num 0",
+  Numpad1: "Num 1",
+  Numpad2: "Num 2",
+  Numpad3: "Num 3",
+  Numpad4: "Num 4",
+  Numpad5: "Num 5",
+  Numpad6: "Num 6",
+  Numpad7: "Num 7",
+  Numpad8: "Num 8",
+  Numpad9: "Num 9",
+  NumpadMultiply: "Num *",
+  NumpadAdd: "Num +",
+  NumpadSubtract: "Num -",
+  NumpadDecimal: "Num .",
+  NumpadDivide: "Num /",
+  Backquote: "`",
+  Minus: "-",
+  Equal: "=",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Semicolon: ";",
+  Quote: "'",
+  Comma: ",",
+  Period: ".",
+  Slash: "/"
 };
 
 var modifierKeys = new Set([
@@ -114,23 +52,18 @@ var modifierKeys = new Set([
   "Shift"
 ]);
 
-var displayKeyAliases = {
-  " ": "Space",
-  ArrowLeft: "Left",
-  ArrowUp: "Up",
-  ArrowRight: "Right",
-  ArrowDown: "Down"
-};
-var controllerLocations = [
-  "top-left",
-  "top-center",
-  "top-right",
-  "middle-right",
-  "bottom-right",
-  "bottom-center",
-  "bottom-left",
-  "middle-left"
-];
+var controllerLocations = Array.isArray(controllerUtils.controllerLocations)
+  ? controllerUtils.controllerLocations.slice()
+  : [
+    "top-left",
+    "top-center",
+    "top-right",
+    "middle-right",
+    "bottom-right",
+    "bottom-center",
+    "bottom-left",
+    "middle-left"
+  ];
 
 var controllerButtonDefs = {
   rewind:   { icon: "\u00AB", name: "Rewind" },
@@ -156,15 +89,11 @@ var lucideSubtitleNudgeActionLabels = {
 };
 
 function sanitizePopupButtonOrder(buttonIds) {
-  if (!Array.isArray(buttonIds)) return [];
-  var seen = new Set();
-  return buttonIds.filter(function (id) {
-    if (!controllerButtonDefs[id] || popupExcludedButtonIds.has(id) || seen.has(id)) {
-      return false;
-    }
-    seen.add(id);
-    return true;
-  });
+  return popupControlUtils.sanitizeButtonOrder(
+    buttonIds,
+    controllerButtonDefs,
+    popupExcludedButtonIds
+  );
 }
 
 /** Cached custom Lucide SVGs (mirrors chrome.storage.local customButtonIcons). */
@@ -221,53 +150,67 @@ function fillControlBarIconElement(icon, buttonId) {
   icon.textContent = (def && def.icon) || "?";
 }
 
-function createDefaultBinding(action, key, keyCode, value) {
+function createDefaultBinding(action, code, value) {
   return {
     action: action,
-    key: key,
-    keyCode: keyCode,
-    code: null,
-    disabled: false,
+    code: code,
     value: value,
     force: false,
     predefined: true
   };
 }
 
-var tcDefaults = vscGetSettingsDefaults();
-var legacySyncKeys = [
-  "resetSpeed",
-  "speedStep",
-  "fastSpeed",
-  "rewindTime",
-  "advanceTime",
-  "resetKeyCode",
-  "slowerKeyCode",
-  "fasterKeyCode",
-  "rewindKeyCode",
-  "advanceKeyCode",
-  "fastKeyCode",
-  "blacklist"
-];
-
-function persistManagedSyncSettings(settings, callback) {
-  var nextSettings = vscBuildStoredSettingsDiff(settings);
-  chrome.storage.sync.remove(vscGetManagedSyncKeys(), function () {
-    if (chrome.runtime.lastError) {
-      callback(chrome.runtime.lastError);
-      return;
+var tcDefaults = {
+  speed: 1.0,
+  lastSpeed: 1.0,
+  rememberSpeed: false,
+  audioBoolean: false,
+  startHidden: false,
+  hideWithYouTubeControls: false,
+  hideWithControls: false,
+  hideWithControlsTimer: 2.0,
+  controllerLocation: "top-left",
+  forceLastSavedSpeed: false,
+  enabled: true,
+  controllerOpacity: 0.3,
+  controllerMarginTop: 0,
+  controllerMarginRight: 0,
+  controllerMarginBottom: 65,
+  controllerMarginLeft: 0,
+  keyBindings: [
+    createDefaultBinding("display", "KeyV", 0),
+    createDefaultBinding("move", "KeyP", 0),
+    createDefaultBinding("slower", "KeyS", 0.1),
+    createDefaultBinding("faster", "KeyD", 0.1),
+    createDefaultBinding("rewind", "KeyZ", 10),
+    createDefaultBinding("advance", "KeyX", 10),
+    createDefaultBinding("reset", "KeyR", 1),
+    createDefaultBinding("fast", "KeyG", 1.8),
+    createDefaultBinding("toggleSubtitleNudge", "KeyN", 0)
+  ],
+  siteRules: [
+    {
+      pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/(?!shorts\\/).*/",
+      enabled: true,
+      enableSubtitleNudge: true,
+      subtitleNudgeInterval: 50
+    },
+    {
+      pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/shorts\\/.*/",
+      enabled: true,
+      rememberSpeed: true,
+      controllerMarginTop: 60,
+      controllerMarginBottom: 85
     }
-
-    if (Object.keys(nextSettings).length === 0) {
-      callback(null);
-      return;
-    }
-
-    chrome.storage.sync.set(nextSettings, function () {
-      callback(chrome.runtime.lastError || null);
-    });
-  });
-}
+  ],
+  controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
+  showPopupControlBar: true,
+  popupMatchHoverControls: true,
+  popupControllerButtons: ["rewind", "slower", "faster", "advance", "display"],
+  enableSubtitleNudge: false,
+  subtitleNudgeInterval: 50,
+  subtitleNudgeAmount: 0.001
+};
 
 const actionLabels = {
   display: "Show/hide controller",
@@ -347,21 +290,91 @@ function refreshAddShortcutSelector() {
   }
 }
 
-function ensureDefaultBinding(storage, action, key, keyCode, value) {
+function ensureDefaultBinding(storage, action, code, value) {
   if (storage.keyBindings.some((item) => item.action === action)) return;
 
-  storage.keyBindings.push(createDefaultBinding(action, key, keyCode, value));
+  storage.keyBindings.push(createDefaultBinding(action, code, value));
 }
 
 function normalizeControllerLocation(location) {
-  if (controllerLocations.includes(location)) return location;
-  return tcDefaults.controllerLocation;
+  return controllerUtils.normalizeControllerLocation(
+    location,
+    tcDefaults.controllerLocation
+  );
 }
 
 function clampMarginPxInput(el, fallback) {
-  var n = parseInt(el && el.value, 10);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(200, Math.max(0, n));
+  return controllerUtils.clampControllerMarginPx(el && el.value, fallback);
+}
+
+function parseFiniteNumberOrFallback(value, fallback) {
+  var numericValue = parseFloat(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function updateSiteRuleToggleIcon(toggleButton, action) {
+  if (!toggleButton) return;
+  var iconEl = toggleButton.querySelector(".site-rule-toggle-icon");
+  if (!iconEl) return;
+
+  if (typeof vscIconSvgString === "function" && typeof vscSetSvgContent === "function") {
+    var svgHtml = vscIconSvgString(action, 16);
+    if (svgHtml && vscSetSvgContent(iconEl, svgHtml)) {
+      return;
+    }
+  }
+
+  iconEl.textContent = action === "chevronUp" ? "\u2212" : "\u2026";
+}
+
+function setSiteRuleExpandedState(ruleEl, expanded) {
+  if (!ruleEl) return;
+
+  var ruleBody = ruleEl.querySelector(".site-rule-body");
+  var toggleButton = ruleEl.querySelector(".toggle-site-rule");
+  if (ruleBody) {
+    ruleBody.style.display = expanded ? "block" : "none";
+  }
+
+  ruleEl.classList.toggle("collapsed", !expanded);
+
+  if (!toggleButton) return;
+  var label = expanded ? "Collapse site rule" : "Expand site rule";
+  toggleButton.title = label;
+  toggleButton.setAttribute("aria-label", label);
+  toggleButton.setAttribute("aria-expanded", expanded ? "true" : "false");
+  updateSiteRuleToggleIcon(toggleButton, expanded ? "chevronUp" : "moreHorizontal");
+}
+
+function setSiteOverrideContainerState(container, enabled) {
+  if (!container) return;
+
+  container.classList.toggle("site-override-disabled", !enabled);
+  container.setAttribute("aria-disabled", enabled ? "false" : "true");
+
+  Array.prototype.forEach.call(
+    container.querySelectorAll("input, select, textarea, button"),
+    function (control) {
+      control.disabled = !enabled;
+    }
+  );
+
+  Array.prototype.forEach.call(
+    container.querySelectorAll(".cb-block"),
+    function (block) {
+      block.draggable = enabled;
+    }
+  );
+}
+
+function applySiteRuleOverrideState(ruleEl, checkboxClass, containerClass) {
+  if (!ruleEl) return;
+  var checkbox = ruleEl.querySelector("." + checkboxClass);
+  var container = ruleEl.querySelector("." + containerClass);
+  if (!container) return;
+
+  container.style.display = "block";
+  setSiteOverrideContainerState(container, checkbox ? checkbox.checked : false);
 }
 
 function syncSiteRuleField(ruleEl, rule, key, isCheckbox) {
@@ -381,128 +394,88 @@ function syncSiteRuleField(ruleEl, rule, key, isCheckbox) {
 }
 
 function normalizeBindingKey(key) {
-  if (typeof key !== "string" || key.length === 0) return null;
-  if (key === "Spacebar") return " ";
-  if (key === "Esc") return "Escape";
-  if (key.length === 1 && /[a-z]/i.test(key)) return key.toUpperCase();
-  return key;
+  return keyBindingUtils.normalizeBindingKey(key);
 }
 
 function getLegacyKeyCode(binding) {
-  if (!binding) return null;
-  if (Number.isInteger(binding.keyCode)) return binding.keyCode;
-  if (typeof binding.key === "number" && Number.isInteger(binding.key)) {
-    return binding.key;
-  }
-  return null;
+  return keyBindingUtils.getLegacyKeyCode(binding);
 }
 
-function legacyKeyCodeToBinding(keyCode) {
-  if (!Number.isInteger(keyCode)) return null;
-  var normalizedKey = keyCodeToKey[keyCode];
-  if (!normalizedKey && keyCode >= 48 && keyCode <= 57) {
-    normalizedKey = String.fromCharCode(keyCode);
-  }
-  if (!normalizedKey && keyCode >= 65 && keyCode <= 90) {
-    normalizedKey = String.fromCharCode(keyCode);
-  }
-  return {
-    key: normalizeBindingKey(normalizedKey),
-    keyCode: keyCode,
-    code: null,
-    disabled: false
-  };
+function legacyBindingKeyToCode(key) {
+  return keyBindingUtils.legacyBindingKeyToCode(key);
+}
+
+function legacyKeyCodeToCode(keyCode) {
+  return keyBindingUtils.legacyKeyCodeToCode(keyCode);
+}
+
+function inferBindingCode(binding, fallbackCode) {
+  return keyBindingUtils.inferBindingCode(binding, fallbackCode);
 }
 
 function createDisabledBinding() {
   return {
-    key: null,
-    keyCode: null,
     code: null,
     disabled: true
   };
 }
 
-function normalizeStoredBinding(binding, fallbackKeyCode) {
-  var fallbackBinding = legacyKeyCodeToBinding(fallbackKeyCode);
+function normalizeStoredBinding(binding, fallbackCode) {
   if (!binding) {
-    return fallbackBinding;
+    if (!fallbackCode) return null;
+    return {
+      code: fallbackCode,
+      disabled: false
+    };
   }
 
   if (
     binding.disabled === true ||
-    (binding.key === null &&
-      binding.keyCode === null &&
-      binding.code === null)
+    (binding.code === null &&
+      binding.key === null &&
+      binding.keyCode === null)
   ) {
     return createDisabledBinding();
   }
 
-  var normalized = {
-    key: null,
-    keyCode: null,
-    code:
-      typeof binding.code === "string" && binding.code.length > 0
-        ? binding.code
-        : null,
-    disabled: false
-  };
-
-  if (typeof binding.key === "string") {
-    normalized.key = normalizeBindingKey(binding.key);
-  }
-
-  var legacyKeyCode = getLegacyKeyCode(binding);
-  if (Number.isInteger(legacyKeyCode)) {
-    var legacyBinding = legacyKeyCodeToBinding(legacyKeyCode);
-    if (legacyBinding) {
-      normalized.key = normalized.key || legacyBinding.key;
-      normalized.keyCode = legacyKeyCode;
-    }
-  }
-
-  if (Number.isInteger(binding.keyCode)) {
-    normalized.keyCode = binding.keyCode;
-  }
-
-  if (!normalized.key && fallbackBinding) {
-    normalized.key = fallbackBinding.key;
-    if (normalized.keyCode === null) normalized.keyCode = fallbackBinding.keyCode;
-  }
-
-  if (!normalized.key && !normalized.code && normalized.keyCode === null) {
+  var normalizedCode = inferBindingCode(binding, fallbackCode);
+  if (!normalizedCode) {
     return null;
   }
 
+  var normalized = {
+    code: normalizedCode,
+    disabled: false
+  };
+
   return normalized;
+}
+
+function formatBindingCode(code) {
+  if (typeof code !== "string" || code.length === 0) return "";
+  if (bindingCodeAliases[code]) return bindingCodeAliases[code];
+  if (/^Key[A-Z]$/.test(code)) return code.substring(3);
+  if (/^Digit[0-9]$/.test(code)) return code.substring(5);
+  if (/^F([1-9]|1[0-2])$/.test(code)) return code;
+  return code;
 }
 
 function getBindingLabel(binding) {
   if (!binding) return "";
   if (binding.disabled) return "";
-  if (binding.key) {
-    return displayKeyAliases[binding.key] || binding.key;
-  }
-  var legacyKeyCode = getLegacyKeyCode(binding);
-  if (keyCodeAliases[legacyKeyCode]) return keyCodeAliases[legacyKeyCode];
-  if (Number.isInteger(legacyKeyCode)) return String.fromCharCode(legacyKeyCode);
-  return "";
+  return formatBindingCode(binding.code);
 }
 
 function setShortcutInputBinding(input, binding) {
   input.vscBinding = binding ? Object.assign({}, binding) : null;
-  input.keyCode =
-    binding && Number.isInteger(binding.keyCode) ? binding.keyCode : null;
   input.value = getBindingLabel(binding);
 }
 
 function captureBindingFromEvent(event) {
-  var normalizedKey = normalizeBindingKey(event.key);
-  if (!normalizedKey || modifierKeys.has(normalizedKey)) return null;
+  if (modifierKeys.has(event.key)) return null;
+  if (typeof event.code !== "string" || event.code.length === 0) return null;
   return {
-    key: normalizedKey,
-    keyCode: Number.isInteger(event.keyCode) ? event.keyCode : null,
-    code: event.code || null,
+    code: event.code,
     disabled: false
   };
 }
@@ -533,8 +506,10 @@ function recordKeyPress(event) {
 }
 
 function inputFilterNumbersOnly(event) {
-  var char = String.fromCharCode(event.keyCode);
+  var char = event.key;
   if (
+    typeof char !== "string" ||
+    char.length !== 1 ||
     !/[\d\.]$/.test(char) ||
     !/^\d+(\.\d*)?$/.test(event.target.value + char)
   ) {
@@ -561,7 +536,15 @@ function updateCustomShortcutInputText(inputItem, bindingOrKeyCode) {
     return;
   }
 
-  setShortcutInputBinding(inputItem, legacyKeyCodeToBinding(bindingOrKeyCode));
+  if (typeof bindingOrKeyCode === "string") {
+    setShortcutInputBinding(inputItem, { code: bindingOrKeyCode, disabled: false });
+    return;
+  }
+
+  setShortcutInputBinding(
+    inputItem,
+    normalizeStoredBinding({ keyCode: bindingOrKeyCode })
+  );
 }
 
 function appendSelectOptions(select, options) {
@@ -621,11 +604,7 @@ function createKeyBindings(item) {
   var input = item.querySelector(".customKey");
   var valueInput = item.querySelector(".customValue");
   var predefined = !!item.id;
-  var fallbackKeyCode =
-    predefined && action === "display"
-      ? tcDefaults.displayKeyCode
-      : undefined;
-  var binding = normalizeStoredBinding(input.vscBinding, fallbackKeyCode);
+  var binding = normalizeStoredBinding(input.vscBinding);
 
   if (!binding) {
     return {
@@ -636,8 +615,6 @@ function createKeyBindings(item) {
 
   keyBindings.push({
     action: action,
-    key: binding.key,
-    keyCode: binding.keyCode,
     code: binding.code,
     disabled: binding.disabled === true,
     value: customActionsNoValues.includes(action)
@@ -717,8 +694,10 @@ function save_options() {
     document.getElementById("controllerLocation").value
   );
   settings.controllerOpacity =
-    parseFloat(document.getElementById("controllerOpacity").value) ||
-    tcDefaults.controllerOpacity;
+    parseFiniteNumberOrFallback(
+      document.getElementById("controllerOpacity").value,
+      tcDefaults.controllerOpacity
+    );
 
   settings.controllerMarginTop = clampMarginPxInput(
     document.getElementById("controllerMarginTop"),
@@ -806,8 +785,10 @@ function save_options() {
 
     if (ruleEl.querySelector(".override-opacity").checked) {
       rule.controllerOpacity =
-        parseFloat(ruleEl.querySelector(".site-controllerOpacity").value) ||
-        settings.controllerOpacity;
+        parseFiniteNumberOrFallback(
+          ruleEl.querySelector(".site-controllerOpacity").value,
+          settings.controllerOpacity
+        );
     }
 
     if (ruleEl.querySelector(".override-subtitleNudge").checked) {
@@ -856,8 +837,6 @@ function save_options() {
         if (binding) {
           shortcuts.push({
             action: action,
-            key: binding.key,
-            keyCode: binding.keyCode,
             code: binding.code,
             disabled: binding.disabled === true,
             value: customActionsNoValues.includes(action)
@@ -873,20 +852,15 @@ function save_options() {
     settings.siteRules.push(rule);
   });
 
-  chrome.storage.sync.remove(legacySyncKeys, function () {
-    if (chrome.runtime.lastError) {
-      status.textContent =
-        "Error: Failed to clear legacy settings - " +
-        chrome.runtime.lastError.message;
-      return;
-    }
+  // Legacy keys to remove
+  const legacyKeys = [
+    "resetSpeed", "speedStep", "fastSpeed", "rewindTime", "advanceTime",
+    "resetKeyCode", "slowerKeyCode", "fasterKeyCode", "rewindKeyCode",
+    "advanceKeyCode", "fastKeyCode", "blacklist"
+  ];
 
-    persistManagedSyncSettings(settings, function (error) {
-      if (error) {
-        status.textContent =
-          "Error: Failed to save settings - " + error.message;
-        return;
-      }
+  chrome.storage.sync.remove(legacyKeys, function () {
+    chrome.storage.sync.set(settings, function () {
       status.textContent = "Options saved";
       setTimeout(function () {
         status.textContent = "";
@@ -897,18 +871,7 @@ function save_options() {
 
 function ensureAllDefaultBindings(storage) {
   tcDefaults.keyBindings.forEach((binding) => {
-    // Special case for "display" to support legacy displayKeyCode
-    if (binding.action === "display" && storage.displayKeyCode) {
-      ensureDefaultBinding(storage, "display", "V", storage.displayKeyCode, 0);
-    } else {
-      ensureDefaultBinding(
-        storage,
-        binding.action,
-        binding.key,
-        binding.keyCode,
-        binding.value
-      );
-    }
+    ensureDefaultBinding(storage, binding.action, binding.code, binding.value);
   });
 }
 
@@ -996,9 +959,7 @@ function createSiteRule(rule) {
   ruleEl.querySelector(".site-pattern").value = pattern;
 
   // Make the rule body collapsed by default
-  var ruleBody = ruleEl.querySelector(".site-rule-body");
-  ruleBody.style.display = "none";
-  ruleEl.classList.add("collapsed");
+  setSiteRuleExpandedState(ruleEl, false);
 
   var enabledCheckbox = ruleEl.querySelector(".site-enabled");
   var contentEl = ruleEl.querySelector(".site-rule-content");
@@ -1033,114 +994,99 @@ function createSiteRule(rule) {
   ];
   var hasPlacementOverride =
     rule && placementKeys.some(function (k) { return rule[k] !== undefined; });
-  if (hasPlacementOverride) {
-    ruleEl.querySelector(".override-placement").checked = true;
-    ruleEl.querySelector(".site-placement-container").style.display = "block";
-  }
+  ruleEl.querySelector(".override-placement").checked = Boolean(hasPlacementOverride);
   syncSiteRuleField(ruleEl, rule, "controllerLocation", false);
   syncSiteRuleField(ruleEl, rule, "controllerMarginTop", false);
   syncSiteRuleField(ruleEl, rule, "controllerMarginBottom", false);
+  applySiteRuleOverrideState(ruleEl, "override-placement", "site-placement-container");
 
-  if (rule && rule.startHidden !== undefined) {
-    ruleEl.querySelector(".override-visibility").checked = true;
-    ruleEl.querySelector(".site-visibility-container").style.display = "block";
-  }
+  ruleEl.querySelector(".override-visibility").checked = Boolean(
+    rule && rule.startHidden !== undefined
+  );
   syncSiteRuleField(ruleEl, rule, "startHidden", true);
+  applySiteRuleOverrideState(ruleEl, "override-visibility", "site-visibility-container");
 
-  if (
+  var hasAutohideOverride = Boolean(
     rule &&
     (rule.hideWithControls !== undefined ||
       rule.hideWithControlsTimer !== undefined)
-  ) {
-    ruleEl.querySelector(".override-autohide").checked = true;
-    ruleEl.querySelector(".site-autohide-container").style.display = "block";
-  }
+  );
+  ruleEl.querySelector(".override-autohide").checked = hasAutohideOverride;
   syncSiteRuleField(ruleEl, rule, "hideWithControls", true);
   syncSiteRuleField(ruleEl, rule, "hideWithControlsTimer", false);
+  applySiteRuleOverrideState(ruleEl, "override-autohide", "site-autohide-container");
 
-  if (
+  var hasPlaybackOverride = Boolean(
     rule &&
     (rule.rememberSpeed !== undefined ||
       rule.forceLastSavedSpeed !== undefined ||
       rule.audioBoolean !== undefined)
-  ) {
-    ruleEl.querySelector(".override-playback").checked = true;
-    ruleEl.querySelector(".site-playback-container").style.display = "block";
-  }
+  );
+  ruleEl.querySelector(".override-playback").checked = hasPlaybackOverride;
   syncSiteRuleField(ruleEl, rule, "rememberSpeed", true);
   syncSiteRuleField(ruleEl, rule, "forceLastSavedSpeed", true);
   syncSiteRuleField(ruleEl, rule, "audioBoolean", true);
+  applySiteRuleOverrideState(ruleEl, "override-playback", "site-playback-container");
 
-  if (rule && rule.controllerOpacity !== undefined) {
-    ruleEl.querySelector(".override-opacity").checked = true;
-    ruleEl.querySelector(".site-opacity-container").style.display = "block";
-  }
+  ruleEl.querySelector(".override-opacity").checked = Boolean(
+    rule && rule.controllerOpacity !== undefined
+  );
   syncSiteRuleField(ruleEl, rule, "controllerOpacity", false);
+  applySiteRuleOverrideState(ruleEl, "override-opacity", "site-opacity-container");
 
-  if (
+  var hasSubtitleNudgeOverride = Boolean(
     rule &&
     (rule.enableSubtitleNudge !== undefined ||
       rule.subtitleNudgeInterval !== undefined)
-  ) {
-    ruleEl.querySelector(".override-subtitleNudge").checked = true;
-    ruleEl.querySelector(".site-subtitleNudge-container").style.display =
-      "block";
-  }
+  );
+  ruleEl.querySelector(".override-subtitleNudge").checked = hasSubtitleNudgeOverride;
   syncSiteRuleField(ruleEl, rule, "enableSubtitleNudge", true);
   syncSiteRuleField(ruleEl, rule, "subtitleNudgeInterval", false);
+  applySiteRuleOverrideState(
+    ruleEl,
+    "override-subtitleNudge",
+    "site-subtitleNudge-container"
+  );
 
-  if (rule && Array.isArray(rule.controllerButtons)) {
-    ruleEl.querySelector(".override-controlbar").checked = true;
-    var cbContainer = ruleEl.querySelector(".site-controlbar-container");
-    cbContainer.style.display = "block";
-    populateControlBarZones(
-      ruleEl.querySelector(".site-cb-active"),
-      ruleEl.querySelector(".site-cb-available"),
-      rule.controllerButtons
-    );
-  }
+  var hasControlbarOverride = Boolean(rule && Array.isArray(rule.controllerButtons));
+  ruleEl.querySelector(".override-controlbar").checked = hasControlbarOverride;
+  populateControlBarZones(
+    ruleEl.querySelector(".site-cb-active"),
+    ruleEl.querySelector(".site-cb-available"),
+    hasControlbarOverride ? rule.controllerButtons : getControlBarOrder()
+  );
+  applySiteRuleOverrideState(ruleEl, "override-controlbar", "site-controlbar-container");
 
-  if (
+  var hasPopupControlbarOverride = Boolean(
     rule &&
     (rule.showPopupControlBar !== undefined ||
       Array.isArray(rule.popupControllerButtons))
-  ) {
-    ruleEl.querySelector(".override-popup-controlbar").checked = true;
-    var popupCbContainer = ruleEl.querySelector(".site-popup-controlbar-container");
-    popupCbContainer.style.display = "block";
-    var sitePopupActive = ruleEl.querySelector(".site-popup-cb-active");
-    var sitePopupAvailable = ruleEl.querySelector(".site-popup-cb-available");
-    if (Array.isArray(rule.popupControllerButtons)) {
-      populateControlBarZones(
-        sitePopupActive,
-        sitePopupAvailable,
-        sanitizePopupButtonOrder(rule.popupControllerButtons),
-        function (id) {
-          return !popupExcludedButtonIds.has(id);
-        }
-      );
-    } else if (
-      sitePopupActive &&
-      sitePopupAvailable &&
-      sitePopupActive.children.length === 0
-    ) {
-      populateControlBarZones(
-        sitePopupActive,
-        sitePopupAvailable,
-        getPopupControlBarOrder(),
-        function (id) {
-          return !popupExcludedButtonIds.has(id);
-        }
-      );
+  );
+  ruleEl.querySelector(".override-popup-controlbar").checked =
+    hasPopupControlbarOverride;
+  populateControlBarZones(
+    ruleEl.querySelector(".site-popup-cb-active"),
+    ruleEl.querySelector(".site-popup-cb-available"),
+    hasPopupControlbarOverride && Array.isArray(rule.popupControllerButtons)
+      ? sanitizePopupButtonOrder(rule.popupControllerButtons)
+      : getPopupControlBarOrder(),
+    function (id) {
+      return !popupExcludedButtonIds.has(id);
     }
-  }
+  );
   syncSiteRuleField(ruleEl, rule, "showPopupControlBar", true);
+  applySiteRuleOverrideState(
+    ruleEl,
+    "override-popup-controlbar",
+    "site-popup-controlbar-container"
+  );
 
-  if (rule && Array.isArray(rule.shortcuts) && rule.shortcuts.length > 0) {
-    ruleEl.querySelector(".override-shortcuts").checked = true;
-    var container = ruleEl.querySelector(".site-shortcuts-container");
-    container.style.display = "block";
-
+  var hasShortcutOverride = Boolean(
+    rule && Array.isArray(rule.shortcuts) && rule.shortcuts.length > 0
+  );
+  ruleEl.querySelector(".override-shortcuts").checked = hasShortcutOverride;
+  var container = ruleEl.querySelector(".site-shortcuts-container");
+  if (hasShortcutOverride) {
     rule.shortcuts.forEach((shortcut) => {
       addSiteRuleShortcut(
         container,
@@ -1150,13 +1096,41 @@ function createSiteRule(rule) {
         shortcut.force
       );
     });
+  } else {
+    populateDefaultSiteShortcuts(container);
   }
+  applySiteRuleOverrideState(ruleEl, "override-shortcuts", "site-shortcuts-container");
 
   document.getElementById("siteRulesContainer").appendChild(ruleEl);
 }
 
 function populateDefaultSiteShortcuts(container) {
-  tcDefaults.keyBindings.forEach((binding) => {
+  var bindings = [];
+  document.querySelectorAll("#customs .shortcut-row").forEach((row) => {
+    var action = row.dataset.action;
+    if (!action) return;
+
+    var keyInput = row.querySelector(".customKey");
+    var binding = normalizeStoredBinding(keyInput && keyInput.vscBinding);
+    if (!binding) return;
+
+    var valueInput = row.querySelector(".customValue");
+    bindings.push({
+      action: action,
+      code: binding.code,
+      disabled: binding.disabled === true,
+      value: customActionsNoValues.includes(action)
+        ? 0
+        : Number(valueInput && valueInput.value),
+      force: false
+    });
+  });
+
+  if (bindings.length === 0) {
+    bindings = tcDefaults.keyBindings.slice();
+  }
+
+  bindings.forEach((binding) => {
     addSiteRuleShortcut(container, binding.action, binding, binding.value, false);
   });
 }
@@ -1548,49 +1522,53 @@ function initLucideButtonIconsUI() {
 }
 
 function restore_options() {
-  chrome.storage.sync.get(null, function (storage) {
-    var settings = vscExpandStoredSettings(storage);
+  chrome.storage.sync.get(tcDefaults, function (storage) {
     chrome.storage.local.get(["customButtonIcons"], function (loc) {
       customButtonIconsLive =
         loc && loc.customButtonIcons && typeof loc.customButtonIcons === "object"
           ? loc.customButtonIcons
           : {};
 
-    document.getElementById("rememberSpeed").checked = settings.rememberSpeed;
+    document.getElementById("rememberSpeed").checked = storage.rememberSpeed;
     document.getElementById("forceLastSavedSpeed").checked =
-      settings.forceLastSavedSpeed;
-    document.getElementById("audioBoolean").checked = settings.audioBoolean;
-    document.getElementById("enabled").checked = settings.enabled;
-    document.getElementById("startHidden").checked = settings.startHidden;
-    document.getElementById("hideWithControls").checked =
-      settings.hideWithControls;
+      storage.forceLastSavedSpeed;
+    document.getElementById("audioBoolean").checked = storage.audioBoolean;
+    document.getElementById("enabled").checked = storage.enabled;
+    document.getElementById("startHidden").checked = storage.startHidden;
+
+    // Migration/Normalization for hideWithControls
+    const hideWithControls = typeof storage.hideWithControls !== "undefined"
+      ? storage.hideWithControls
+      : storage.hideWithYouTubeControls;
+    
+    document.getElementById("hideWithControls").checked = hideWithControls;
     document.getElementById("hideWithControlsTimer").value = 
-      settings.hideWithControlsTimer || tcDefaults.hideWithControlsTimer;
+      storage.hideWithControlsTimer || tcDefaults.hideWithControlsTimer;
 
     document.getElementById("controllerLocation").value =
-      normalizeControllerLocation(settings.controllerLocation);
+      normalizeControllerLocation(storage.controllerLocation);
     document.getElementById("controllerOpacity").value =
-      settings.controllerOpacity;
+      storage.controllerOpacity;
     document.getElementById("controllerMarginTop").value =
-      settings.controllerMarginTop ?? tcDefaults.controllerMarginTop;
+      storage.controllerMarginTop ?? tcDefaults.controllerMarginTop;
     document.getElementById("controllerMarginBottom").value =
-      settings.controllerMarginBottom ?? tcDefaults.controllerMarginBottom;
+      storage.controllerMarginBottom ?? tcDefaults.controllerMarginBottom;
     document.getElementById("showPopupControlBar").checked =
-      settings.showPopupControlBar !== false;
+      storage.showPopupControlBar !== false;
     document.getElementById("enableSubtitleNudge").checked =
-      settings.enableSubtitleNudge;
+      storage.enableSubtitleNudge;
     document.getElementById("subtitleNudgeInterval").value =
-      settings.subtitleNudgeInterval;
+      storage.subtitleNudgeInterval;
 
-    if (!Array.isArray(settings.keyBindings) || settings.keyBindings.length === 0) {
-      settings.keyBindings = tcDefaults.keyBindings.slice();
+    if (!Array.isArray(storage.keyBindings) || storage.keyBindings.length === 0) {
+      storage.keyBindings = tcDefaults.keyBindings.slice();
     }
 
-    ensureAllDefaultBindings(settings);
+    ensureAllDefaultBindings(storage);
 
     document.querySelectorAll(".customs:not([id])").forEach((row) => row.remove());
 
-    settings.keyBindings.forEach((item) => {
+    storage.keyBindings.forEach((item) => {
       var row = document.getElementById(item.action);
       var normalizedBinding = normalizeStoredBinding(item);
 
@@ -1619,9 +1597,11 @@ function restore_options() {
 
     refreshAddShortcutSelector();
 
-    var siteRules = Array.isArray(settings.siteRules)
-      ? settings.siteRules
-      : tcDefaults.siteRules || [];
+    // Load site rules (use defaults if none in storage or empty array)
+    var siteRules =
+      Array.isArray(storage.siteRules) && storage.siteRules.length > 0
+        ? storage.siteRules
+        : tcDefaults.siteRules || [];
 
     vscClearElement(document.getElementById("siteRulesContainer"));
     if (siteRules.length > 0) {
@@ -1632,16 +1612,16 @@ function restore_options() {
       });
     }
 
-    var controllerButtons = Array.isArray(settings.controllerButtons)
-      ? settings.controllerButtons
+    var controllerButtons = Array.isArray(storage.controllerButtons)
+      ? storage.controllerButtons
       : tcDefaults.controllerButtons;
     populateControlBarEditor(controllerButtons);
 
     document.getElementById("popupMatchHoverControls").checked =
-      settings.popupMatchHoverControls !== false;
+      storage.popupMatchHoverControls !== false;
 
-    var popupButtons = Array.isArray(settings.popupControllerButtons)
-      ? settings.popupControllerButtons
+    var popupButtons = Array.isArray(storage.popupControllerButtons)
+      ? storage.popupControllerButtons
       : tcDefaults.popupControllerButtons;
     populatePopupControlBarEditor(popupButtons);
     updatePopupEditorDisabledState();
@@ -1659,30 +1639,13 @@ function restore_defaults() {
     function () {}
   );
 
-  chrome.storage.sync.remove(legacySyncKeys, function () {
-    if (chrome.runtime.lastError) {
-      var errorStatus = document.getElementById("status");
-      errorStatus.textContent =
-        "Error: Failed to clear legacy settings - " +
-        chrome.runtime.lastError.message;
-      return;
-    }
-
-    persistManagedSyncSettings(tcDefaults, function (error) {
-      if (error) {
-        var errorStatus = document.getElementById("status");
-        errorStatus.textContent =
-          "Error: Failed to restore defaults - " + error.message;
-        return;
-      }
-
-      restore_options();
-      var status = document.getElementById("status");
-      status.textContent = "Default options restored";
-      setTimeout(function () {
-        status.textContent = "";
-      }, 1000);
-    });
+  chrome.storage.sync.set(tcDefaults, function () {
+    restore_options();
+    var status = document.getElementById("status");
+    status.textContent = "Default options restored";
+    setTimeout(function () {
+      status.textContent = "";
+    }, 1000);
   });
 }
 
@@ -1739,29 +1702,26 @@ document.addEventListener("DOMContentLoaded", function () {
     eventCaller(event, "customKey", recordKeyPress)
   );
   document.addEventListener("click", (event) => {
-    if (event.target.classList.contains("removeParent")) {
-      event.target.parentNode.remove();
+    var target = event.target;
+    var targetEl = target && target.closest ? target : target.parentElement;
+    if (!targetEl) return;
+
+    var removeParentButton = targetEl.closest(".removeParent");
+    if (removeParentButton) {
+      removeParentButton.parentNode.remove();
       refreshAddShortcutSelector();
       return;
     }
-    if (event.target.classList.contains("remove-site-rule")) {
-      event.target.closest(".site-rule").remove();
+    var removeSiteRuleButton = targetEl.closest(".remove-site-rule");
+    if (removeSiteRuleButton) {
+      removeSiteRuleButton.closest(".site-rule").remove();
       return;
     }
-    if (event.target.classList.contains("toggle-site-rule")) {
-      var ruleEl = event.target.closest(".site-rule");
-      var ruleBody = ruleEl.querySelector(".site-rule-body");
+    var toggleButton = targetEl.closest(".toggle-site-rule");
+    if (toggleButton) {
+      var ruleEl = toggleButton.closest(".site-rule");
       var isCollapsed = ruleEl.classList.contains("collapsed");
-      
-      if (isCollapsed) {
-        ruleBody.style.display = "block";
-        ruleEl.classList.remove("collapsed");
-        event.target.textContent = "\u2212";
-      } else {
-        ruleBody.style.display = "none";
-        ruleEl.classList.add("collapsed");
-        event.target.textContent = "\u002b";
-      }
+      setSiteRuleExpandedState(ruleEl, isCollapsed);
       return;
     }
   });
@@ -1783,7 +1743,10 @@ document.addEventListener("DOMContentLoaded", function () {
       "override-autohide": "site-autohide-container",
       "override-playback": "site-playback-container",
       "override-opacity": "site-opacity-container",
-      "override-subtitleNudge": "site-subtitleNudge-container"
+      "override-subtitleNudge": "site-subtitleNudge-container",
+      "override-controlbar": "site-controlbar-container",
+      "override-popup-controlbar": "site-popup-controlbar-container",
+      "override-shortcuts": "site-shortcuts-container"
     };
     for (var ocb in siteOverrideContainers) {
       if (event.target.classList.contains(ocb)) {
@@ -1792,77 +1755,9 @@ document.addEventListener("DOMContentLoaded", function () {
           "." + siteOverrideContainers[ocb]
         );
         if (targetBox) {
-          targetBox.style.display = event.target.checked ? "block" : "none";
+          setSiteOverrideContainerState(targetBox, event.target.checked);
         }
         return;
-      }
-    }
-
-    // Handle site rule override checkboxes
-    if (event.target.classList.contains("override-shortcuts")) {
-      var container = event.target
-        .closest(".site-rule-shortcuts")
-        .querySelector(".site-shortcuts-container");
-      if (event.target.checked) {
-        container.style.display = "block";
-        if (container.children.length === 0) {
-          populateDefaultSiteShortcuts(container);
-        }
-      } else {
-        container.style.display = "none";
-      }
-    }
-
-    if (event.target.classList.contains("override-controlbar")) {
-      var cbContainer = event.target
-        .closest(".site-rule-controlbar")
-        .querySelector(".site-controlbar-container");
-      if (event.target.checked) {
-        cbContainer.style.display = "block";
-        var activeZone = cbContainer.querySelector(".site-cb-active");
-        var availableZone = cbContainer.querySelector(".site-cb-available");
-        if (
-          activeZone &&
-          availableZone &&
-          activeZone.children.length === 0 &&
-          availableZone.children.length === 0
-        ) {
-          populateControlBarZones(
-            activeZone,
-            availableZone,
-            getControlBarOrder()
-          );
-        }
-      } else {
-        cbContainer.style.display = "none";
-      }
-    }
-
-    if (event.target.classList.contains("override-popup-controlbar")) {
-      var popupCbContainer = event.target
-        .closest(".site-rule-controlbar")
-        .querySelector(".site-popup-controlbar-container");
-      if (event.target.checked) {
-        popupCbContainer.style.display = "block";
-        var popupActiveZone = popupCbContainer.querySelector(".site-popup-cb-active");
-        var popupAvailableZone = popupCbContainer.querySelector(".site-popup-cb-available");
-        if (
-          popupActiveZone &&
-          popupAvailableZone &&
-          popupActiveZone.children.length === 0 &&
-          popupAvailableZone.children.length === 0
-        ) {
-          populateControlBarZones(
-            popupActiveZone,
-            popupAvailableZone,
-            getPopupControlBarOrder(),
-            function (id) {
-              return !popupExcludedButtonIds.has(id);
-            }
-          );
-        }
-      } else {
-        popupCbContainer.style.display = "none";
       }
     }
   });

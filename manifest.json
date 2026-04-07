@@ -1,7 +1,7 @@
 {
   "name": "Speeder",
   "short_name": "Speeder",
-  "version": "5.1.7.0",
+  "version": "5.1.8.0",
   "manifest_version": 2,
   "description": "Speed up, slow down, advance and rewind HTML5 audio/video with shortcuts (New and improved version of \"Video Speed Controller\")",
   "homepage_url": "https://github.com/SoPat712/speeder",
@@ -59,7 +59,9 @@
         "inject.css"
       ],
       "js": [
-        "settings-core.js",
+        "shared/controller-utils.js",
+        "shared/key-bindings.js",
+        "shared/site-rules.js",
         "ui-icons.js",
         "inject.js"
       ]

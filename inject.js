@@ -38,7 +38,7 @@ var tc = {
     controllerButtons: ["rewind", "slower", "faster", "advance", "display"],
     defaultLogLevel: 3,
     logLevel: 3,
-    enableSubtitleNudge: true, // Enabled by default, but only activates on YouTube
+    enableSubtitleNudge: false,
     subtitleNudgeInterval: 50, // Default 50ms balances subtitle tracking with CPU cost
     subtitleNudgeAmount: 0.001,
     customButtonIcons: {}
@@ -649,18 +649,31 @@ function isSubtitleNudgeSupported(video) {
   return Boolean(video);
 }
 
+function isSubtitleNudgeAvailableForVideo(video) {
+  return isSubtitleNudgeSupported(video) && Boolean(tc.settings.enableSubtitleNudge);
+}
+
 function isSubtitleNudgeEnabledForVideo(video) {
-  if (!video || !video.vsc) return tc.settings.enableSubtitleNudge;
+  if (!isSubtitleNudgeAvailableForVideo(video)) return false;
+
+  if (!video || !video.vsc) return true;
 
   if (typeof video.vsc.subtitleNudgeEnabledOverride === "boolean") {
     return video.vsc.subtitleNudgeEnabledOverride;
   }
 
-  return tc.settings.enableSubtitleNudge;
+  return true;
 }
 
 function setSubtitleNudgeEnabledForVideo(video, enabled) {
   if (!video || !video.vsc) return false;
+
+  if (!isSubtitleNudgeAvailableForVideo(video)) {
+    video.vsc.subtitleNudgeEnabledOverride = null;
+    video.vsc.stopSubtitleNudge();
+    updateSubtitleNudgeIndicator(video);
+    return false;
+  }
 
   var normalizedEnabled = Boolean(enabled);
   video.vsc.subtitleNudgeEnabledOverride = normalizedEnabled;
@@ -725,14 +738,19 @@ function renderSubtitleNudgeIndicatorContent(target, isEnabled) {
 function updateSubtitleNudgeIndicator(video) {
   if (!video || !video.vsc) return;
 
+  var isAvailable = isSubtitleNudgeAvailableForVideo(video);
   var isEnabled = isSubtitleNudgeEnabledForVideo(video);
-  var title = isEnabled ? "Subtitle nudge enabled" : "Subtitle nudge disabled";
+  var title = !isAvailable
+    ? "Subtitle nudge unavailable on this site"
+    : isEnabled
+      ? "Subtitle nudge enabled"
+      : "Subtitle nudge disabled";
 
   var indicator = video.vsc.subtitleNudgeIndicator;
   if (indicator) {
     renderSubtitleNudgeIndicatorContent(indicator, isEnabled);
     indicator.dataset.enabled = isEnabled ? "true" : "false";
-    indicator.dataset.supported = "true";
+    indicator.dataset.supported = isAvailable ? "true" : "false";
     indicator.title = title;
     indicator.setAttribute("aria-label", title);
   }
@@ -741,7 +759,7 @@ function updateSubtitleNudgeIndicator(video) {
   if (flashEl) {
     renderSubtitleNudgeIndicatorContent(flashEl, isEnabled);
     flashEl.dataset.enabled = isEnabled ? "true" : "false";
-    flashEl.dataset.supported = "true";
+    flashEl.dataset.supported = isAvailable ? "true" : "false";
     flashEl.setAttribute("aria-label", title);
   }
 }
@@ -2580,7 +2598,14 @@ function runAction(action, value, e) {
       "toggleSubtitleNudge",
       "display"
     ];
-    if (userDrivenActionsThatShowController.includes(action) && action !== "display") {
+    var subtitleNudgeActionBlocked =
+      (action === "toggleSubtitleNudge" || action === "nudge") &&
+      !isSubtitleNudgeAvailableForVideo(v);
+    if (
+      userDrivenActionsThatShowController.includes(action) &&
+      action !== "display" &&
+      !subtitleNudgeActionBlocked
+    ) {
       showController(controller, 2000, true);
     }
     if (v.classList.contains("vsc-cancelled")) return;

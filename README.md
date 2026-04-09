@@ -1,5 +1,5 @@
 # Available for Firefox  
-[![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org//firefox/addon/speeder/)
+[![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org/firefox/addon/speeder/)
 
 
 # The science of accelerated playback
@@ -33,7 +33,7 @@ last point to listen to it a few more times.
 
 ![Player](https://cloud.githubusercontent.com/assets/2400185/24076745/5723e6ae-0c41-11e7-820c-1d8e814a2888.png)
 
-#### *Install [Chrome](https://chrome.google.com/webstore/detail/video-speed-controller/nffaoalbilbmmfgbnbgppjihopabppdk) or [Firefox](https://addons.mozilla.org/en-us/firefox/addon/videospeed/) Extension*
+#### *Install [Chrome](https://chrome.google.com/webstore/detail/video-speed-controller/nffaoalbilbmmfgbnbgppjihopabppdk) or [Firefox](https://addons.mozilla.org/en-us/firefox/addon/speeder/) Extension*
 
 \*\* Once the extension is installed simply navigate to any page that offers
 HTML5 video ([example](https://www.youtube.com/watch?v=E9FxNzv1Tr8)), and you'll
@@ -56,7 +56,7 @@ shortcuts with different values, which will allow you to quickly toggle between
 your most commonly used speeds. To add a new shortcut, open extension settings
 and click "Add New".
 
-![settings Add New shortcut](https://user-images.githubusercontent.com/121805/50726471-50242200-1172-11e9-902f-0e5958387617.jpg)
+<img width="1760" height="1330" alt="image" src="https://github.com/user-attachments/assets/32e814dd-93ea-4943-8ec9-3eca735447ac" />
 
 Some sites may assign other functionality to one of the assigned shortcut keys —
 these collisions are inevitable, unfortunately. As a workaround, the extension

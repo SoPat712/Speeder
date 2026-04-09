@@ -1,5 +1,8 @@
 document.addEventListener("DOMContentLoaded", function () {
-  var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
+  var speederShared =
+    typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
+  var siteRuleUtils = speederShared.siteRules || {};
+  var popupControlUtils = speederShared.popupControls || {};
 
   /* `label` is only used if ui-icons.js has no path for this action (fallback). */
   var controllerButtonDefs = {
@@ -11,58 +14,41 @@ document.addEventListener("DOMContentLoaded", function () {
     reset:    { label: "\u21BB", className: "" },
     fast:     { label: "", className: "" },
     nudge:    { label: "", className: "" },
-    settings: { label: "", className: "" },
     pause:    { label: "", className: "" },
     muted:    { label: "", className: "" },
+    louder:   { label: "", className: "" },
+    softer:   { label: "", className: "" },
     mark:     { label: "", className: "" },
-    jump:     { label: "", className: "" }
+    jump:     { label: "", className: "" },
+    settings: { label: "", className: "" }
   };
 
   var defaultButtons = ["rewind", "slower", "faster", "advance", "display"];
   var popupExcludedButtonIds = new Set(["settings"]);
+  var storageDefaults = {
+    enabled: true,
+    showPopupControlBar: true,
+    controllerButtons: defaultButtons,
+    popupMatchHoverControls: true,
+    popupControllerButtons: defaultButtons,
+    siteRules: []
+  };
   var renderToken = 0;
 
   function matchSiteRule(url, siteRules) {
-    if (!url || !Array.isArray(siteRules)) return null;
-    return vscMatchSiteRule(url, siteRules);
+    return siteRuleUtils.matchSiteRule(url, siteRules);
   }
 
   function isSiteRuleDisabled(rule) {
-    return vscIsSiteRuleDisabled(rule);
+    return siteRuleUtils.isSiteRuleDisabled(rule);
   }
 
   function resolvePopupButtons(storage, siteRule) {
-    function sanitize(buttons) {
-      if (!Array.isArray(buttons)) return [];
-      var seen = new Set();
-      return buttons.filter(function (id) {
-        if (!controllerButtonDefs[id] || popupExcludedButtonIds.has(id) || seen.has(id)) {
-          return false;
-        }
-        seen.add(id);
-        return true;
-      });
-    }
-
-    if (siteRule && Array.isArray(siteRule.popupControllerButtons)) {
-      return sanitize(siteRule.popupControllerButtons);
-    }
-
-    if (storage.popupMatchHoverControls) {
-      if (siteRule && Array.isArray(siteRule.controllerButtons)) {
-        return sanitize(siteRule.controllerButtons);
-      }
-
-      if (Array.isArray(storage.controllerButtons)) {
-        return sanitize(storage.controllerButtons);
-      }
-    }
-
-    if (Array.isArray(storage.popupControllerButtons)) {
-      return sanitize(storage.popupControllerButtons);
-    }
-
-    return sanitize(defaultButtons);
+    return popupControlUtils.resolvePopupButtons(storage, siteRule, {
+      controllerButtonDefs: controllerButtonDefs,
+      defaultButtons: defaultButtons,
+      excludedIds: popupExcludedButtonIds
+    });
   }
 
   function setControlBarVisible(visible) {
@@ -131,23 +117,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function pickBestFrameSpeedResult(results) {
-    if (!results || !results.length) return null;
-    var i;
-    var r;
-    var fallback = null;
-    for (i = 0; i < results.length; i++) {
-      r = results[i];
-      if (!r || typeof r.speed !== "number") {
-        continue;
-      }
-      if (r.preferred) {
-        return { speed: r.speed };
-      }
-      if (!fallback) {
-        fallback = { speed: r.speed };
-      }
-    }
-    return fallback;
+    return popupControlUtils.pickBestFrameSpeedResult(results);
   }
 
   function querySpeed() {
@@ -300,9 +270,8 @@ document.addEventListener("DOMContentLoaded", function () {
           ? loc.customButtonIcons
           : {};
 
-      chrome.storage.sync.get(null, function (storage) {
+      chrome.storage.sync.get(storageDefaults, function (storage) {
         if (currentRenderToken !== renderToken) return;
-        storage = vscExpandStoredSettings(storage);
 
       getActiveTabContext(function (context) {
         if (currentRenderToken !== renderToken) return;
@@ -364,9 +333,7 @@ document.addEventListener("DOMContentLoaded", function () {
       changes.controllerButtons ||
       changes.popupMatchHoverControls ||
       changes.popupControllerButtons ||
-      changes.siteRules ||
-      changes.siteRulesMeta ||
-      changes.siteRulesFormat
+      changes.siteRules
     ) {
       renderForActiveTab();
     }
@@ -375,37 +342,9 @@ document.addEventListener("DOMContentLoaded", function () {
   renderForActiveTab();
 
   function toggleEnabled(enabled, callback) {
-    chrome.storage.sync.get(null, function (storage) {
-      var nextSettings = vscExpandStoredSettings(storage);
-      nextSettings.enabled = enabled;
-      var storedSettings = vscBuildStoredSettingsDiff(nextSettings);
-
-      chrome.storage.sync.remove(vscGetManagedSyncKeys(), function () {
-        if (chrome.runtime.lastError) {
-          setStatusMessage(
-            "Failed to update settings: " + chrome.runtime.lastError.message
-          );
-          return;
-        }
-
-        if (Object.keys(storedSettings).length === 0) {
-          toggleEnabledUI(enabled);
-          if (callback) callback(enabled);
-          return;
-        }
-
-        chrome.storage.sync.set(storedSettings, function () {
-          if (chrome.runtime.lastError) {
-            setStatusMessage(
-              "Failed to update settings: " + chrome.runtime.lastError.message
-            );
-            return;
-          }
-
-          toggleEnabledUI(enabled);
-          if (callback) callback(enabled);
-        });
-      });
+    chrome.storage.sync.set({ enabled: enabled }, function () {
+      toggleEnabledUI(enabled);
+      if (callback) callback(enabled);
     });
   }
 

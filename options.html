@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Speeder Settings</title>
     <link rel="stylesheet" href="options.css" />
-    <script src="settings-core.js"></script>
+    <script src="shared/controller-utils.js"></script>
+    <script src="shared/key-bindings.js"></script>
+    <script src="shared/popup-controls.js"></script>
     <script src="ui-icons.js"></script>
     <script src="lucide-client.js"></script>
     <script src="options.js"></script>
+    <script src="shared/import-export.js"></script>
     <script src="importExport.js"></script>
   </head>
   <body>
@@ -480,7 +483,15 @@
         <template id="siteRuleTemplate">
           <div class="site-rule">
             <div class="site-rule-header">
-              <button type="button" class="toggle-site-rule" title="Expand/Collapse">&plus;</button>
+              <button
+                type="button"
+                class="toggle-site-rule"
+                title="Expand site rule"
+                aria-label="Expand site rule"
+                aria-expanded="false"
+              >
+                <span class="site-rule-toggle-icon" aria-hidden="true">&hellip;</span>
+              </button>
               <input
                 type="text"
                 class="site-pattern"
@@ -501,7 +512,7 @@
                     <span>Override placement for this site</span>
                     <input type="checkbox" class="override-placement" />
                   </label>
-                  <div class="site-placement-container" style="display: none">
+                  <div class="site-placement-container">
                     <div class="site-rule-option site-rule-option-field">
                       <label>Default controller location:</label>
                       <select class="site-controllerLocation">
@@ -539,7 +550,7 @@
                     <span>Override hide-by-default for this site</span>
                     <input type="checkbox" class="override-visibility" />
                   </label>
-                  <div class="site-visibility-container" style="display: none">
+                  <div class="site-visibility-container">
                     <div class="site-rule-option site-rule-option-checkbox">
                       <label>Hide controller by default:</label>
                       <input type="checkbox" class="site-startHidden" />
@@ -551,36 +562,25 @@
                     <span>Override auto-hide for this site</span>
                     <input type="checkbox" class="override-autohide" />
                   </label>
-                    <div class="site-autohide-container" style="display: none">
-                      <div class="site-rule-option site-rule-option-checkbox">
-                        <label class="site-rule-split-label">
-                          <span
-                            >Hide with controls<br /><em
-                              >Fade the controller in and out with the video
-                              interface: perfect sync on YouTube, idle-based
-                              elsewhere.</em
-                            ></span
-                          >
-                          <input type="checkbox" class="site-hideWithControls" />
-                        </label>
-                      </div>
-                      <div class="site-rule-option site-rule-option-field">
-                        <label
-                          >Auto-hide timer (seconds)<br /><em
-                            >Seconds of inactivity before hiding: 0.1&ndash;15
-                            for non-YouTube sites.</em
-                          ></label
-                        >
-                        <input type="text" class="site-hideWithControlsTimer" />
-                      </div>
+                  <div class="site-autohide-container">
+                    <div class="site-rule-option site-rule-option-checkbox">
+                      <label class="site-rule-split-label">
+                        <span>Hide with controls (idle-based)</span>
+                        <input type="checkbox" class="site-hideWithControls" />
+                      </label>
                     </div>
+                    <div class="site-rule-option site-rule-option-field">
+                      <label>Auto-hide timer (0.1&ndash;15s):</label>
+                      <input type="text" class="site-hideWithControlsTimer" />
+                    </div>
+                  </div>
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
                     <span>Override playback for this site</span>
                     <input type="checkbox" class="override-playback" />
                   </label>
-                  <div class="site-playback-container" style="display: none">
+                  <div class="site-playback-container">
                     <div class="site-rule-option site-rule-option-checkbox">
                       <label>Remember playback speed:</label>
                       <input type="checkbox" class="site-rememberSpeed" />
@@ -600,7 +600,7 @@
                     <span>Override opacity for this site</span>
                     <input type="checkbox" class="override-opacity" />
                   </label>
-                  <div class="site-opacity-container" style="display: none">
+                  <div class="site-opacity-container">
                     <div class="site-rule-option site-rule-option-field">
                       <label>Controller opacity:</label>
                       <input type="text" class="site-controllerOpacity" />
@@ -612,7 +612,7 @@
                     <span>Override subtitle nudge for this site</span>
                     <input type="checkbox" class="override-subtitleNudge" />
                   </label>
-                  <div class="site-subtitleNudge-container" style="display: none">
+                  <div class="site-subtitleNudge-container">
                     <div class="site-rule-option site-rule-option-checkbox">
                       <label>Enable subtitle nudge:</label>
                       <input type="checkbox" class="site-enableSubtitleNudge" />
@@ -628,7 +628,7 @@
                     <span>Override in-player control bar for this site</span>
                     <input type="checkbox" class="override-controlbar" />
                   </label>
-                  <div class="site-controlbar-container" style="display: none">
+                  <div class="site-controlbar-container">
                     <div class="cb-editor">
                       <div class="cb-zone">
                         <div class="cb-zone-label">Active</div>
@@ -646,7 +646,7 @@
                     <span>Override extension popup for this site</span>
                     <input type="checkbox" class="override-popup-controlbar" />
                   </label>
-                  <div class="site-popup-controlbar-container" style="display: none">
+                  <div class="site-popup-controlbar-container">
                     <div class="site-rule-option site-rule-option-checkbox">
                       <label>Show popup control bar</label>
                       <input type="checkbox" class="site-showPopupControlBar" />
@@ -668,7 +668,7 @@
                     <span>Override shortcuts for this site</span>
                     <input type="checkbox" class="override-shortcuts" />
                   </label>
-                  <div class="site-shortcuts-container" style="display: none"></div>
+                  <div class="site-shortcuts-container"></div>
                 </div>
               </div>
             </div>

@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { JSDOM } = require("jsdom");
 const { vi } = require("vitest");
 
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -18,22 +19,90 @@ function readWorkspaceFile(relPath) {
 }
 
 function loadHtmlFile(relPath) {
-  document.open();
-  document.write(readWorkspaceFile(relPath));
-  document.close();
+  loadHtmlString(readWorkspaceFile(relPath));
+}
+
+function applyJSDOMWindow(win) {
+  globalThis.window = win;
+  globalThis.document = win.document;
+  globalThis.navigator = win.navigator;
+  globalThis.customElements = win.customElements;
+  globalThis.HTMLElement = win.HTMLElement;
+  globalThis.Element = win.Element;
+  globalThis.Node = win.Node;
+  globalThis.Text = win.Text;
+  globalThis.DocumentFragment = win.DocumentFragment;
+  globalThis.Event = win.Event;
+  globalThis.MouseEvent = win.MouseEvent;
+  globalThis.KeyboardEvent = win.KeyboardEvent;
+  globalThis.DOMParser = win.DOMParser;
+  globalThis.URL = win.URL;
+  globalThis.Blob = win.Blob;
+  globalThis.FileReader = win.FileReader;
+  win.Date = globalThis.Date;
+  win.open = vi.fn();
+  win.close = vi.fn();
 }
 
 function loadHtmlString(html) {
-  document.open();
-  document.write(html);
-  document.close();
+  const dom = new JSDOM(html, {
+    url: "https://example.org/",
+    pretendToBeVisual: true,
+    runScripts: "dangerously"
+  });
+  applyJSDOMWindow(dom.window);
+}
+
+const WINDOW_GLOBAL_SKIP = new Set([
+  "alert",
+  "atob",
+  "blur",
+  "btoa",
+  "cancelAnimationFrame",
+  "captureEvents",
+  "clearInterval",
+  "clearTimeout",
+  "close",
+  "confirm",
+  "fetch",
+  "focus",
+  "getComputedStyle",
+  "matchMedia",
+  "open",
+  "prompt",
+  "queueMicrotask",
+  "releaseEvents",
+  "requestAnimationFrame",
+  "setInterval",
+  "setTimeout",
+  "stop"
+]);
+
+function mirrorExtensionGlobalsFromWindow(win) {
+  if (!win) return;
+  if (win.tc) {
+    globalThis.tc = win.tc;
+  }
+  for (const key of Object.keys(win)) {
+    if (WINDOW_GLOBAL_SKIP.has(key)) continue;
+    if (/^[A-Z]/.test(key)) continue;
+    const val = win[key];
+    if (typeof val === "function") {
+      globalThis[key] = val;
+    }
+  }
 }
 
 function evaluateScript(relPath) {
-  const source = readWorkspaceFile(relPath);
-  window.eval(
-    `${source}\n//# sourceURL=${workspacePath(relPath).replace(/\\/g, "/")}`
-  );
+  const absPath = workspacePath(relPath);
+  const source =
+    "var chrome = window.chrome || globalThis.chrome;\n" +
+    readWorkspaceFile(relPath) +
+    `\n//# sourceURL=${absPath.replace(/\\/g, "/")}`;
+  const el = document.createElement("script");
+  el.textContent = source;
+  document.head.appendChild(el);
+  mirrorExtensionGlobalsFromWindow(window);
 }
 
 function fireDOMContentLoaded() {

@@ -16,7 +16,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   delete globalThis.SpeederShared;
-  delete globalThis.restore_options;
+  try {
+    delete globalThis.restore_options;
+  } catch {
+    globalThis.restore_options = undefined;
+  }
   if (typeof document !== "undefined") {
     document.head.innerHTML = "";
     document.body.innerHTML = "";

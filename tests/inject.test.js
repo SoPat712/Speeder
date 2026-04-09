@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { createChromeMock, flushAsyncWork, loadScript } from "./helpers/browser.js";
+import {
+  createChromeMock,
+  flushAsyncWork,
+  loadHtmlString,
+  loadScript
+} from "./helpers/browser.js";
 
 function loadBlankDocument() {
-  document.open();
-  document.write("<!doctype html><html><body></body></html>");
-  document.close();
+  loadHtmlString("<!doctype html><html><body></body></html>");
 }
 
 async function bootInject({ sync = {}, local = {} } = {}) {

@@ -9,7 +9,9 @@ async function setupImportExport(overrides = {}) {
   loadHtml("options.html");
   globalThis.chrome = createChromeMock(overrides);
   window.chrome = globalThis.chrome;
-  globalThis.restore_options = vi.fn();
+  const restoreSpy = vi.fn();
+  globalThis.restore_options = restoreSpy;
+  window.restore_options = restoreSpy;
   loadScript("shared/import-export.js");
   loadScript("importExport.js");
   await flushAsyncWork();
@@ -24,8 +26,8 @@ describe("import/export flows", () => {
       sync: { rememberSpeed: true },
       local: { customButtonIcons: { faster: { slug: "rocket" } } }
     });
-    const OriginalBlob = globalThis.Blob;
-    globalThis.Blob = class TestBlob {
+    const OriginalBlob = window.Blob;
+    class TestBlob {
       constructor(parts, options) {
         this.parts = parts;
         this.options = options;
@@ -34,24 +36,28 @@ describe("import/export flows", () => {
       async text() {
         return this.parts.join("");
       }
-    };
+    }
+    globalThis.Blob = TestBlob;
+    window.Blob = TestBlob;
 
     let capturedBlob = null;
     let clickedDownload = null;
-    Object.defineProperty(URL, "createObjectURL", {
+    Object.defineProperty(window.URL, "createObjectURL", {
       configurable: true,
       value: vi.fn((blob) => {
         capturedBlob = blob;
         return "blob:test";
       })
     });
-    Object.defineProperty(URL, "revokeObjectURL", {
+    Object.defineProperty(window.URL, "revokeObjectURL", {
       configurable: true,
       value: vi.fn(() => {})
     });
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () {
-      clickedDownload = this.download;
-    });
+    vi.spyOn(window.HTMLAnchorElement.prototype, "click").mockImplementation(
+      function () {
+        clickedDownload = this.download;
+      }
+    );
 
     document.getElementById("exportSettings").click();
 
@@ -70,6 +76,7 @@ describe("import/export flows", () => {
     expect(chrome.storage.sync.get).toHaveBeenCalled();
     expect(chrome.storage.local.get).toHaveBeenCalled();
     globalThis.Blob = OriginalBlob;
+    window.Blob = OriginalBlob;
   });
 
   it("imports wrapped backup payloads and refreshes options", async () => {
@@ -87,7 +94,7 @@ describe("import/export flows", () => {
       return el;
     });
 
-    globalThis.FileReader = class MockFileReader {
+    class MockFileReader {
       readAsText(file) {
         this.onload({
           target: {
@@ -95,7 +102,9 @@ describe("import/export flows", () => {
           }
         });
       }
-    };
+    }
+    globalThis.FileReader = MockFileReader;
+    window.FileReader = MockFileReader;
 
     globalThis.importSettings();
     createdInput.onchange({
@@ -145,7 +154,7 @@ describe("import/export flows", () => {
       return el;
     });
 
-    globalThis.FileReader = class MockFileReader {
+    class MockFileReader {
       readAsText(file) {
         this.onload({
           target: {
@@ -153,7 +162,9 @@ describe("import/export flows", () => {
           }
         });
       }
-    };
+    }
+    globalThis.FileReader = MockFileReader;
+    window.FileReader = MockFileReader;
 
     globalThis.importSettings();
     createdInput.onchange({
@@ -200,7 +211,7 @@ describe("import/export flows", () => {
       return el;
     });
 
-    globalThis.FileReader = class MockFileReader {
+    class MockFileReader {
       readAsText(file) {
         this.onload({
           target: {
@@ -208,7 +219,9 @@ describe("import/export flows", () => {
           }
         });
       }
-    };
+    }
+    globalThis.FileReader = MockFileReader;
+    window.FileReader = MockFileReader;
 
     globalThis.importSettings();
     createdInput.onchange({
@@ -247,7 +260,7 @@ describe("import/export flows", () => {
       return el;
     });
 
-    globalThis.FileReader = class MockFileReader {
+    class MockFileReader {
       readAsText(file) {
         this.onload({
           target: {
@@ -255,7 +268,9 @@ describe("import/export flows", () => {
           }
         });
       }
-    };
+    }
+    globalThis.FileReader = MockFileReader;
+    window.FileReader = MockFileReader;
 
     globalThis.importSettings();
     createdInput.onchange({

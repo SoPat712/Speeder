@@ -79,6 +79,54 @@ describe("import/export flows", () => {
     window.Blob = OriginalBlob;
   });
 
+  it("export strips lucideTagsCacheV1 from localSettings", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 4, 8, 9, 10));
+    await setupImportExport({
+      sync: { rememberSpeed: true },
+      local: {
+        customButtonIcons: { faster: { slug: "rocket", svg: "<svg/>" } },
+        lucideTagsCacheV1: { "a-arrow-down": ["letter"] },
+        lucideTagsCacheV1At: 42
+      }
+    });
+    const OriginalBlob = window.Blob;
+    class TestBlob {
+      constructor(parts) {
+        this.parts = parts;
+      }
+      async text() {
+        return this.parts.join("");
+      }
+    }
+    globalThis.Blob = TestBlob;
+    window.Blob = TestBlob;
+    let capturedBlob = null;
+    Object.defineProperty(window.URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn((blob) => {
+        capturedBlob = blob;
+        return "blob:test";
+      })
+    });
+    Object.defineProperty(window.URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(() => {})
+    });
+    vi.spyOn(window.HTMLAnchorElement.prototype, "click").mockImplementation(
+      () => {}
+    );
+
+    document.getElementById("exportSettings").click();
+    await flushAsyncWork();
+
+    expect(JSON.parse(await capturedBlob.text()).localSettings).toEqual({
+      customButtonIcons: { faster: { slug: "rocket", svg: "<svg/>" } }
+    });
+    globalThis.Blob = OriginalBlob;
+    window.Blob = OriginalBlob;
+  });
+
   it("imports wrapped backup payloads and refreshes options", async () => {
     vi.useFakeTimers();
     const chrome = await setupImportExport();

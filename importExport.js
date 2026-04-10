@@ -12,7 +12,7 @@ function exportSettings() {
     chrome.storage.local.get(null, function (localStorage) {
       const backup = importExportUtils.buildBackupPayload(
         storage,
-        localStorage,
+        importExportUtils.filterLocalSettingsForExport(localStorage),
         new Date()
       );
 

@@ -1010,17 +1010,85 @@ button.lucide-result-tile.lucide-picked {
   display: none;
 }
 
-.support-footer {
-  padding: 16px 20px;
+.support-cta {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-subtle);
+}
+
+.support-cta-text {
+  margin: 0 0 12px;
   color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.support-footer p {
-  margin: 0;
+.support-cta-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
-.support-footer a {
-  font-weight: 600;
+.support-cta-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.support-cta-link:hover {
+  background: var(--toggle-open-bg);
+  border-color: var(--toggle-open-border);
+}
+
+.support-cta-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.support-cta-link svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.support-cta-link--kofi {
+  background: #fff4ef;
+}
+
+.support-cta-link--kofi:hover {
+  background: #ffe8de;
+}
+
+.support-cta-kofi-img {
+  display: block;
+  height: 26px;
+  width: auto;
+}
+
+.support-cta-link--bmc {
+  color: #0d0c22;
+  background: #ffdd00;
+}
+
+.support-cta-link--bmc:hover {
+  background: #f7d500;
+}
+
+.support-cta-link--bmc svg {
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 
 @media (max-width: 720px) {
@@ -1161,5 +1229,22 @@ button.lucide-result-tile.lucide-picked {
   button.lucide-result-tile .lucide-result-thumb {
     filter: brightness(0) invert(1);
     opacity: 0.92;
+  }
+
+  .support-cta-link--kofi {
+    background: #2c241f;
+  }
+
+  .support-cta-link--kofi:hover {
+    background: #3a312a;
+  }
+
+  .support-cta-link--bmc {
+    color: #ffdd00;
+    background: #2a2618;
+  }
+
+  .support-cta-link--bmc:hover {
+    background: #3d3510;
   }
 }

@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { JSDOM } from "jsdom";
 import { vi } from "vitest";
+import { applyJSDOMWindow } from "./jsdom-globals.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,19 +13,73 @@ function readRepoFile(relPath) {
   return fs.readFileSync(path.join(repoRoot, relPath), "utf8");
 }
 
+/**
+ * Parse HTML into a fresh JSDOM document so tests can reload scripts without
+ * top-level `const` redeclaration errors (avoids document.write).
+ */
+export function loadHtmlString(html) {
+  const dom = new JSDOM(html, {
+    url: "https://example.org/",
+    pretendToBeVisual: true,
+    runScripts: "dangerously"
+  });
+  applyJSDOMWindow(dom.window);
+}
+
 export function loadHtml(relPath) {
-  document.open();
-  document.write(readRepoFile(relPath));
-  document.close();
+  loadHtmlString(readRepoFile(relPath));
+}
+
+const WINDOW_GLOBAL_SKIP = new Set([
+  "alert",
+  "atob",
+  "blur",
+  "btoa",
+  "cancelAnimationFrame",
+  "captureEvents",
+  "clearInterval",
+  "clearTimeout",
+  "close",
+  "confirm",
+  "fetch",
+  "focus",
+  "getComputedStyle",
+  "matchMedia",
+  "open",
+  "prompt",
+  "queueMicrotask",
+  "releaseEvents",
+  "requestAnimationFrame",
+  "setInterval",
+  "setTimeout",
+  "stop"
+]);
+
+function mirrorExtensionGlobalsFromWindow(win) {
+  if (!win) return;
+  if (win.tc) {
+    globalThis.tc = win.tc;
+  }
+  for (const key of Object.keys(win)) {
+    if (WINDOW_GLOBAL_SKIP.has(key)) continue;
+    if (/^[A-Z]/.test(key)) continue;
+    const val = win[key];
+    if (typeof val === "function") {
+      globalThis[key] = val;
+    }
+  }
 }
 
 export function loadScript(relPath) {
-  window.eval(
+  const source =
     "var chrome = window.chrome || globalThis.chrome;\n" +
-      readRepoFile(relPath) +
-      "\n//# sourceURL=" +
-      relPath
-  );
+    readRepoFile(relPath) +
+    "\n//# sourceURL=" +
+    relPath;
+  const el = document.createElement("script");
+  el.textContent = source;
+  document.head.appendChild(el);
+  mirrorExtensionGlobalsFromWindow(window);
 }
 
 export async function flushAsyncWork() {

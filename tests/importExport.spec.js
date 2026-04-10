@@ -87,6 +87,36 @@ describe("importExport.js", () => {
     expect(document.querySelector("#status").textContent).toContain("exported");
   });
 
+  it("omits Lucide tags cache from exported localSettings", async () => {
+    vi.spyOn(window.HTMLAnchorElement.prototype, "click").mockImplementation(
+      () => {}
+    );
+    const { createObjectURL } = bootImportExport({
+      syncData: { rememberSpeed: true },
+      localData: {
+        customButtonIcons: {
+          faster: { slug: "rocket", svg: "<svg></svg>" }
+        },
+        lucideTagsCacheV1: { "a-arrow-down": ["letter", "text"] },
+        lucideTagsCacheV1At: 999
+      }
+    });
+
+    document.querySelector("#exportSettings").click();
+    await flushAsyncWork();
+
+    const blob = createObjectURL.mock.calls[0][0];
+    const backup = JSON.parse(await blob.text());
+
+    expect(backup.localSettings).toEqual({
+      customButtonIcons: {
+        faster: { slug: "rocket", svg: "<svg></svg>" }
+      }
+    });
+    expect(backup.localSettings.lucideTagsCacheV1).toBeUndefined();
+    expect(backup.localSettings.lucideTagsCacheV1At).toBeUndefined();
+  });
+
   it("imports wrapped backups, restores local data, and refreshes the options page", async () => {
     const { chrome } = bootImportExport();
     window.restore_options = vi.fn();

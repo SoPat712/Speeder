@@ -46,6 +46,29 @@
     });
   }
 
+  /**
+   * Local-only keys excluded from backup JSON. These are disposable caches
+   * (e.g. Lucide tags.json) that bloat exports and are refetched when needed.
+   * Keep in sync with lucide-client.js (LUCIDE_TAGS_CACHE_KEY + "At").
+   */
+  var localSettingsKeysOmittedFromExport = [
+    "lucideTagsCacheV1",
+    "lucideTagsCacheV1At"
+  ];
+
+  function filterLocalSettingsForExport(local) {
+    if (!local || typeof local !== "object" || Array.isArray(local)) {
+      return {};
+    }
+    var out = {};
+    for (var key in local) {
+      if (!Object.prototype.hasOwnProperty.call(local, key)) continue;
+      if (localSettingsKeysOmittedFromExport.indexOf(key) !== -1) continue;
+      out[key] = local[key];
+    }
+    return out;
+  }
+
   function generateBackupFilename(now) {
     var date = now instanceof Date ? now : new Date(now || Date.now());
     var year = date.getFullYear();
@@ -117,6 +140,7 @@
   return {
     buildBackupPayload: buildBackupPayload,
     extractImportSettings: extractImportSettings,
+    filterLocalSettingsForExport: filterLocalSettingsForExport,
     generateBackupFilename: generateBackupFilename,
     isRecognizedRawSettingsObject: isRecognizedRawSettingsObject,
     parseImportText: parseImportText

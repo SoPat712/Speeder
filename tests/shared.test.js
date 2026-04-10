@@ -149,5 +149,15 @@ describe("shared helpers", () => {
     expect(importExportUtils.isRecognizedRawSettingsObject({ wat: true })).toBe(
       false
     );
+
+    expect(
+      importExportUtils.filterLocalSettingsForExport({
+        customButtonIcons: { faster: { slug: "zap" } },
+        lucideTagsCacheV1: { "a-arrow-down": ["letter"] },
+        lucideTagsCacheV1At: 123
+      })
+    ).toEqual({
+      customButtonIcons: { faster: { slug: "zap" } }
+    });
   });
 });

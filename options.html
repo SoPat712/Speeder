@@ -96,7 +96,11 @@
         <section id="customs" class="settings-card">
           <div class="section-heading">
             <h3>Shortcuts</h3>
-            <p class="section-intro">Backspace clears a shortcut. Escape disables it.</p>
+            <p class="section-intro">
+              Backspace clears a key. Escape disables optional shortcuts. If a site
+              steals a shortcut, use a site rule with Override shortcuts (and
+              per-key blocking) for that URL.
+            </p>
           </div>
           <div class="shortcuts-grid">
             <div class="shortcut-row" id="display" data-action="display">
@@ -132,7 +136,10 @@
               />
             </div>
             <div class="shortcut-row" id="slower" data-action="slower">
-              <div class="shortcut-label">Decrease speed</div>
+              <div class="shortcut-label">
+                Decrease speed
+                <em>Required: Speeder needs a key for this action.</em>
+              </div>
               <input
                 class="customKey"
                 type="text"
@@ -146,7 +153,10 @@
               />
             </div>
             <div class="shortcut-row" id="faster" data-action="faster">
-              <div class="shortcut-label">Increase speed</div>
+              <div class="shortcut-label">
+                Increase speed
+                <em>Required: Speeder needs a key for this action.</em>
+              </div>
               <input
                 class="customKey"
                 type="text"

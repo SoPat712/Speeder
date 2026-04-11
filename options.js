@@ -233,7 +233,7 @@ const actionLabels = {
 };
 
 const speedBindingActions = ["slower", "faster", "fast", "softer", "louder"];
-const requiredShortcutActions = new Set(["display", "slower", "faster"]);
+const requiredShortcutActions = new Set(["slower", "faster"]);
 
 function formatSpeedBindingDisplay(action, value) {
   if (!speedBindingActions.includes(action)) {

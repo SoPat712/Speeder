@@ -343,6 +343,14 @@ label em {
   font-weight: 500;
 }
 
+.shortcut-label em {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 400;
+}
+
 .customKey,
 .customValue {
   text-align: center;

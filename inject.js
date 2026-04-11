@@ -969,8 +969,8 @@ function ensureController(node, parent) {
   }
 
   // href selects site rules; re-run on every new/usable media so margins/opacity match current URL.
-  var siteDisabled = applySiteRuleOverrides();
-  if (!tc.settings.enabled || siteDisabled) {
+  applySiteRuleOverrides();
+  if (!siteRuleUtils.isSpeederActiveForSite(tc.settings.enabled, tc.activeSiteRule)) {
     return null;
   }
   refreshAllControllerGeometry();
@@ -2016,6 +2016,7 @@ function defineVideoController() {
 
 function applySiteRuleOverrides() {
   resetSettingsFromSiteRuleBase();
+  tc.activeSiteRule = null;
 
   if (!Array.isArray(tc.settings.siteRules) || tc.settings.siteRules.length === 0) {
     return false;
@@ -2024,7 +2025,9 @@ function applySiteRuleOverrides() {
   var currentUrl = location.href;
   var matchedRule = siteRuleUtils.matchSiteRule(currentUrl, tc.settings.siteRules);
 
-  if (!matchedRule) return false;
+  if (!matchedRule) {
+    return false;
+  }
 
   tc.activeSiteRule = matchedRule;
   log(`Matched site rule: ${matchedRule.pattern}`, 4);
@@ -2104,8 +2107,10 @@ function refreshAllControllerGeometry() {
 
 /** Re-match site rules for current URL and refresh controller position/opacity on every video. */
 function reapplySiteRulesAndControllerGeometry() {
-  var siteDisabled = applySiteRuleOverrides();
-  if (!tc.settings.enabled || siteDisabled) return;
+  applySiteRuleOverrides();
+  if (!siteRuleUtils.isSpeederActiveForSite(tc.settings.enabled, tc.activeSiteRule)) {
+    return;
+  }
   refreshAllControllerGeometry();
 }
 
@@ -2453,8 +2458,10 @@ function attachNavigationListeners() {
 function initializeNow(doc, forceReinit = false) {
   if ((!forceReinit && vscInitializedDocuments.has(doc)) || !doc.body) return;
 
-  var siteDisabled = applySiteRuleOverrides();
-  if (!tc.settings.enabled || siteDisabled) return;
+  applySiteRuleOverrides();
+  if (!siteRuleUtils.isSpeederActiveForSite(tc.settings.enabled, tc.activeSiteRule)) {
+    return;
+  }
 
   if (!doc.body.classList.contains("vsc-initialized")) {
     doc.body.classList.add("vsc-initialized");

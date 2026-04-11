@@ -279,7 +279,10 @@ document.addEventListener("DOMContentLoaded", function () {
         var url = context && context.url ? context.url : "";
         var siteRule = matchSiteRule(url, storage.siteRules);
         var siteDisabled = isSiteRuleDisabled(siteRule);
-        var siteAvailable = storage.enabled !== false && !siteDisabled;
+        var siteAvailable = siteRuleUtils.isSpeederActiveForSite(
+          storage.enabled,
+          siteRule
+        );
         var showBar = storage.showPopupControlBar !== false;
 
         if (siteRule && siteRule.showPopupControlBar !== undefined) {

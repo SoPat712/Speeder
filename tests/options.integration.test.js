@@ -96,6 +96,32 @@ describe("options page", () => {
     expect(toggle.getAttribute("aria-label")).toBe("Collapse site rule");
   });
 
+  it("site rule shortcut override shows no rows by default and adds via selector", async () => {
+    await setupOptions({ sync: { siteRules: [] } });
+
+    globalThis.createSiteRule({ pattern: "example.com" });
+    const rule = document.getElementById("siteRulesContainer").lastElementChild;
+    const rows = rule.querySelector(".site-shortcuts-rows");
+    const selector = rule.querySelector(".site-add-shortcut-selector");
+
+    expect(rows.querySelectorAll(".shortcut-row").length).toBe(0);
+    expect(selector).not.toBeNull();
+    expect(selector.disabled).toBe(true);
+
+    rule.querySelector(".override-shortcuts").checked = true;
+    rule.querySelector(".override-shortcuts").dispatchEvent(
+      new Event("change", { bubbles: true })
+    );
+
+    expect(selector.disabled).toBe(false);
+    expect(selector.options.length).toBeGreaterThan(1);
+
+    selector.value = "pause";
+    selector.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(rows.querySelectorAll('.shortcut-row[data-action="pause"]').length).toBe(1);
+  });
+
   it("keeps site override settings visible but disabled until enabled", async () => {
     await setupOptions({ sync: { siteRules: [] } });
 

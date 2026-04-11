@@ -348,6 +348,27 @@ label em {
   text-align: center;
 }
 
+/* Chevron: native menu indicator is often missing with themed controls */
+#addShortcutSelector,
+.site-add-shortcut-selector {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--panel);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+  padding-right: 38px;
+  cursor: pointer;
+}
+
+#addShortcutSelector:disabled,
+.site-add-shortcut-selector:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 #addShortcutSelector {
   width: min(220px, 100%);
   margin-top: 12px;
@@ -489,7 +510,7 @@ label em {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
-  align-items: center;
+  align-items: start;
   font-weight: 600;
   margin-bottom: 8px;
   cursor: pointer;
@@ -502,6 +523,11 @@ label em {
 
 .site-override-lead span {
   margin: 0;
+  font-weight: 600;
+}
+
+.site-override-lead span em {
+  font-weight: 400;
 }
 
 .site-rule-override-section .site-override-fields,
@@ -935,6 +961,10 @@ button.lucide-result-tile.lucide-picked {
   color: var(--text);
 }
 
+.site-rule-split-label span em {
+  font-weight: 400;
+}
+
 .site-rule-split-label input[type="checkbox"] {
   justify-self: end;
   margin-top: 0;
@@ -969,14 +999,20 @@ button.lucide-result-tile.lucide-picked {
 }
 
 .site-shortcuts-container .shortcut-row {
-  grid-template-columns: minmax(0, 1fr) 110px 110px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 110px 110px minmax(0, 1fr) 38px;
   padding: 8px 0;
   border-top: 1px solid var(--border);
 }
 
-.site-shortcuts-container .shortcut-row:first-child {
+.site-shortcuts-rows .shortcut-row:first-child {
   padding-top: 0;
   border-top: 0;
+}
+
+.site-add-shortcut-selector {
+  width: min(220px, 100%);
+  align-self: flex-start;
+  margin-top: 0;
 }
 
 .force-label {
@@ -1120,7 +1156,8 @@ button.lucide-result-tile.lucide-picked {
   }
 
   .action-row button,
-  #addShortcutSelector {
+  #addShortcutSelector,
+  .site-add-shortcut-selector {
     width: 100%;
   }
 
@@ -1202,6 +1239,12 @@ button.lucide-result-tile.lucide-picked {
 
   .cb-dropzone.cb-over {
     background: rgba(255, 255, 255, 0.04);
+  }
+
+  #addShortcutSelector,
+  .site-add-shortcut-selector {
+    background-color: var(--panel);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   input[type="text"]:focus,

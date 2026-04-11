@@ -60,10 +60,28 @@
     );
   }
 
+  /**
+   * Whether Speeder should run on this URL given global enabled and the matched rule (if any).
+   * - No rule: follows global (enabled unless explicitly false).
+   * - Rule with site "off" / disableExtension: always inactive (blacklist).
+   * - Rule with site "on": active even when global is off (whitelist).
+   */
+  function isSpeederActiveForSite(globalEnabled, siteRule) {
+    var globalOn = globalEnabled !== false;
+    if (!siteRule) {
+      return globalOn;
+    }
+    if (isSiteRuleDisabled(siteRule)) {
+      return false;
+    }
+    return true;
+  }
+
   return {
     compileSiteRulePattern: compileSiteRulePattern,
     escapeStringRegExp: escapeStringRegExp,
     isSiteRuleDisabled: isSiteRuleDisabled,
+    isSpeederActiveForSite: isSpeederActiveForSite,
     matchSiteRule: matchSiteRule
   };
 });

@@ -51,6 +51,28 @@ async function bootInject({ sync = {}, local = {} } = {}) {
 }
 
 describe("inject runtime", () => {
+  it("treats a matching site rule with site enabled as active when global enable is off", async () => {
+    await bootInject({
+      sync: {
+        enabled: false,
+        siteRules: [{ pattern: "example.org", enabled: true }]
+      }
+    });
+
+    expect(window.tc.settings.enabled).toBe(false);
+    window.captureSiteRuleBase();
+    window.applySiteRuleOverrides();
+    expect(window.tc.activeSiteRule).toEqual(
+      expect.objectContaining({ pattern: "example.org", enabled: true })
+    );
+    expect(
+      window.SpeederShared.siteRules.isSpeederActiveForSite(
+        window.tc.settings.enabled,
+        window.tc.activeSiteRule
+      )
+    ).toBe(true);
+  });
+
   it("keeps subtitle nudge disabled when the effective setting is off", async () => {
     await bootInject({
       sync: {

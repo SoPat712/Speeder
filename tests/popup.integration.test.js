@@ -36,6 +36,22 @@ describe("popup UI", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("shows controls when globally disabled but a whitelist site rule matches", async () => {
+    await setupPopup({
+      sync: {
+        enabled: false,
+        siteRules: [{ pattern: "example.com", enabled: true }]
+      }
+    });
+
+    expect(document.getElementById("status").classList.contains("hide")).toBe(
+      true
+    );
+    expect(document.getElementById("popupControlBar").style.display).not.toBe(
+      "none"
+    );
+  });
+
   it("shows disabled state for a matching site rule", async () => {
     await setupPopup({
       sync: {

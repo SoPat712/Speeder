@@ -210,21 +210,63 @@ button:focus-visible {
 
 .donate-split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
 }
 
-.donate-split button {
+.donate-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 4px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.donate-icon-btn:hover {
+  background: #f8f9fb;
+  border-color: #c5ccd5;
+}
+
+.donate-icon-btn:active {
+  background: #f1f3f5;
+}
+
+.donate-icon-btn:focus-visible {
+  outline: 2px solid rgba(17, 24, 39, 0.14);
+  outline-offset: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+.donate-icon-btn svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.donate-icon-btn--kofi img {
+  display: block;
+  height: 22px;
   width: auto;
-  border-radius: 0;
-  min-height: 28px;
+  max-width: 40px;
+  object-fit: contain;
 }
 
-.donate-split button:first-child {
+.donate-icon-btn:first-child {
   border-radius: 8px 0 0 8px;
-  border-right: 0;
+  border-right-width: 0;
 }
 
-.donate-split button:last-child {
+.donate-icon-btn:nth-child(2) {
+  border-radius: 0;
+  border-right-width: 0;
+}
+
+.donate-icon-btn:last-child {
   border-radius: 0 8px 8px 0;
 }
 
@@ -265,5 +307,14 @@ button:focus-visible {
   #refresh:hover {
     background: #dfe3e8;
     border-color: #dfe3e8;
+  }
+
+  .donate-icon-btn:hover {
+    background: #1f2226;
+    border-color: #4a515a;
+  }
+
+  .donate-icon-btn:active {
+    background: #252a2f;
   }
 }

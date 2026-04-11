@@ -230,14 +230,6 @@ document.addEventListener("DOMContentLoaded", function () {
     document.querySelector("#donateOptions").classList.remove("hide");
   });
 
-  document.querySelector("#donateKofi").addEventListener("click", function () {
-    window.open("https://ko-fi.com/joshpatra");
-  });
-
-  document.querySelector("#donateGithub").addEventListener("click", function () {
-    window.open("https://github.com/sponsors/SoPat712");
-  });
-
   document.querySelector("#enable").addEventListener("click", function () {
     toggleEnabled(true, settingsSavedReloadMessage);
   });

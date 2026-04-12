@@ -24,6 +24,20 @@ describe("shared helpers", () => {
     expect(siteRules.isSiteRuleDisabled({ enabled: false })).toBe(true);
   });
 
+  it("combines global enabled with matched site rules (whitelist / blacklist)", () => {
+    const allowSite = { pattern: "good.test", enabled: true };
+    const blockSite = { pattern: "bad.test", enabled: false };
+
+    expect(siteRules.isSpeederActiveForSite(true, null)).toBe(true);
+    expect(siteRules.isSpeederActiveForSite(false, null)).toBe(false);
+
+    expect(siteRules.isSpeederActiveForSite(true, blockSite)).toBe(false);
+    expect(siteRules.isSpeederActiveForSite(false, blockSite)).toBe(false);
+
+    expect(siteRules.isSpeederActiveForSite(true, allowSite)).toBe(true);
+    expect(siteRules.isSpeederActiveForSite(false, allowSite)).toBe(true);
+  });
+
   it("sanitizes and resolves popup button orders", () => {
     const controllerButtonDefs = {
       rewind: {},

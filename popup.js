@@ -230,14 +230,6 @@ document.addEventListener("DOMContentLoaded", function () {
     document.querySelector("#donateOptions").classList.remove("hide");
   });
 
-  document.querySelector("#donateKofi").addEventListener("click", function () {
-    window.open("https://ko-fi.com/joshpatra");
-  });
-
-  document.querySelector("#donateGithub").addEventListener("click", function () {
-    window.open("https://github.com/sponsors/SoPat712");
-  });
-
   document.querySelector("#enable").addEventListener("click", function () {
     toggleEnabled(true, settingsSavedReloadMessage);
   });
@@ -279,7 +271,10 @@ document.addEventListener("DOMContentLoaded", function () {
         var url = context && context.url ? context.url : "";
         var siteRule = matchSiteRule(url, storage.siteRules);
         var siteDisabled = isSiteRuleDisabled(siteRule);
-        var siteAvailable = storage.enabled !== false && !siteDisabled;
+        var siteAvailable = siteRuleUtils.isSpeederActiveForSite(
+          storage.enabled,
+          siteRule
+        );
         var showBar = storage.showPopupControlBar !== false;
 
         if (siteRule && siteRule.showPopupControlBar !== undefined) {

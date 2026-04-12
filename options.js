@@ -233,7 +233,7 @@ const actionLabels = {
 };
 
 const speedBindingActions = ["slower", "faster", "fast", "softer", "louder"];
-const requiredShortcutActions = new Set(["display", "slower", "faster"]);
+const requiredShortcutActions = new Set(["slower", "faster"]);
 
 function formatSpeedBindingDisplay(action, value) {
   if (!speedBindingActions.includes(action)) {
@@ -317,6 +317,70 @@ function refreshAddShortcutSelector() {
     selector.disabled = false;
     selector.options[0].text = "Add shortcut\u2026";
   }
+}
+
+function refreshSiteRuleAddShortcutSelector(ruleEl) {
+  if (!ruleEl) return;
+  var selector = ruleEl.querySelector(".site-add-shortcut-selector");
+  if (!selector) return;
+
+  while (selector.options.length > 1) {
+    selector.remove(1);
+  }
+
+  var usedActions = new Set();
+  ruleEl.querySelectorAll(".site-shortcuts-rows .shortcut-row.customs").forEach(function (row) {
+    var action = row.dataset.action;
+    if (action) usedActions.add(action);
+  });
+
+  Object.keys(actionLabels).forEach(function (action) {
+    if (!usedActions.has(action)) {
+      var option = document.createElement("option");
+      option.value = action;
+      option.textContent = actionLabels[action];
+      selector.appendChild(option);
+    }
+  });
+
+  var overrideShortcutsOn =
+    ruleEl.querySelector(".override-shortcuts") &&
+    ruleEl.querySelector(".override-shortcuts").checked;
+
+  if (selector.options.length === 1) {
+    selector.disabled = true;
+    selector.options[0].text = "All shortcuts added";
+  } else {
+    selector.disabled = !overrideShortcutsOn;
+    selector.options[0].text = "Add shortcut\u2026";
+  }
+}
+
+function getGlobalBindingSnapshotForSiteShortcut(action) {
+  var row = document.querySelector(
+    '#customs .shortcut-row[data-action="' + action + '"]'
+  );
+  if (row) {
+    var keyInput = row.querySelector(".customKey");
+    var binding = normalizeStoredBinding(keyInput && keyInput.vscBinding);
+    if (binding) {
+      var valueInput = row.querySelector(".customValue");
+      var value = customActionsNoValues.includes(action)
+        ? 0
+        : Number(valueInput && valueInput.value);
+      return { binding: binding, value: value };
+    }
+  }
+  var def = tcDefaults.keyBindings.find(function (b) {
+    return b.action === action;
+  });
+  if (def) {
+    return {
+      binding: normalizeStoredBinding(def),
+      value: def.value
+    };
+  }
+  return { binding: null, value: undefined };
 }
 
 function ensureDefaultBinding(storage, action, code, value) {
@@ -942,35 +1006,18 @@ function ensureAllDefaultBindings(storage) {
   });
 }
 
-function addSiteRuleShortcut(container, action, binding, value, force) {
+function addSiteRuleShortcut(rowsEl, action, binding, value, force) {
+  if (!rowsEl) return;
+
   var div = document.createElement("div");
   div.setAttribute("class", "shortcut-row customs");
   div.dataset.action = action;
 
   var actionLabel = document.createElement("div");
   actionLabel.className = "shortcut-label";
-  var actionLabels = {
-    display: "Show/hide controller",
-    move: "Move controller",
-    slower: "Decrease speed",
-    faster: "Increase speed",
-    rewind: "Rewind",
-    advance: "Advance",
-    reset: "Reset speed",
-    fast: "Preferred speed",
-    toggleSubtitleNudge: "Toggle subtitle nudge",
-    pause: "Play / Pause",
-    muted: "Mute / Unmute",
-    louder: "Increase volume",
-    softer: "Decrease volume",
-    mark: "Set marker",
-    jump: "Jump to marker"
-  };
   var actionLabelText = actionLabels[action] || action;
   if (action === "toggleSubtitleNudge") {
-    // Check if the site rule is for YouTube.
-    // We look up the pattern from the site rule element this container belongs to.
-    var ruleEl = container.closest(".site-rule");
+    var ruleEl = rowsEl.closest(".site-rule");
     var pattern = ruleEl ? ruleEl.querySelector(".site-pattern").value : "";
     if (!pattern.toLowerCase().includes("youtube.com")) {
       actionLabelText += " (only for YouTube embeds)";
@@ -1014,12 +1061,18 @@ function addSiteRuleShortcut(container, action, binding, value, force) {
   forceLabel.appendChild(forceCheckbox);
   forceLabel.appendChild(forceText);
 
+  var removeButton = document.createElement("button");
+  removeButton.className = "removeParent";
+  removeButton.type = "button";
+  removeButton.textContent = "\u00d7";
+
   div.appendChild(actionLabel);
   div.appendChild(keyInput);
   div.appendChild(valueInput);
   div.appendChild(forceLabel);
+  div.appendChild(removeButton);
 
-  container.appendChild(div);
+  rowsEl.appendChild(div);
 }
 
 function createSiteRule(rule) {
@@ -1157,54 +1210,22 @@ function createSiteRule(rule) {
     rule && Array.isArray(rule.shortcuts) && rule.shortcuts.length > 0
   );
   ruleEl.querySelector(".override-shortcuts").checked = hasShortcutOverride;
-  var container = ruleEl.querySelector(".site-shortcuts-container");
+  var rowsEl = ruleEl.querySelector(".site-shortcuts-rows");
   if (hasShortcutOverride) {
     rule.shortcuts.forEach((shortcut) => {
       addSiteRuleShortcut(
-        container,
+        rowsEl,
         shortcut.action,
         shortcut,
         shortcut.value,
         shortcut.force
       );
     });
-  } else {
-    populateDefaultSiteShortcuts(container);
   }
   applySiteRuleOverrideState(ruleEl, "override-shortcuts", "site-shortcuts-container");
+  refreshSiteRuleAddShortcutSelector(ruleEl);
 
   document.getElementById("siteRulesContainer").appendChild(ruleEl);
-}
-
-function populateDefaultSiteShortcuts(container) {
-  var bindings = [];
-  document.querySelectorAll("#customs .shortcut-row").forEach((row) => {
-    var action = row.dataset.action;
-    if (!action) return;
-
-    var keyInput = row.querySelector(".customKey");
-    var binding = normalizeStoredBinding(keyInput && keyInput.vscBinding);
-    if (!binding) return;
-
-    var valueInput = row.querySelector(".customValue");
-    bindings.push({
-      action: action,
-      code: binding.code,
-      disabled: binding.disabled === true,
-      value: customActionsNoValues.includes(action)
-        ? 0
-        : Number(valueInput && valueInput.value),
-      force: false
-    });
-  });
-
-  if (bindings.length === 0) {
-    bindings = tcDefaults.keyBindings.slice();
-  }
-
-  bindings.forEach((binding) => {
-    addSiteRuleShortcut(container, binding.action, binding, binding.value, false);
-  });
 }
 
 function createControlBarBlock(buttonId) {
@@ -1780,8 +1801,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     var removeParentButton = targetEl.closest(".removeParent");
     if (removeParentButton) {
-      removeParentButton.parentNode.remove();
+      var removedRow = removeParentButton.parentNode;
+      var siteRuleForShortcut = removedRow.closest(".site-rule");
+      removedRow.remove();
       refreshAddShortcutSelector();
+      if (siteRuleForShortcut) {
+        refreshSiteRuleAddShortcutSelector(siteRuleForShortcut);
+      }
       return;
     }
     var removeSiteRuleButton = targetEl.closest(".remove-site-rule");
@@ -1808,6 +1834,26 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
+    if (event.target.classList.contains("site-add-shortcut-selector")) {
+      var action = event.target.value;
+      if (!action) return;
+      var siteRuleRoot = event.target.closest(".site-rule");
+      var rows = siteRuleRoot && siteRuleRoot.querySelector(".site-shortcuts-rows");
+      if (rows) {
+        var snap = getGlobalBindingSnapshotForSiteShortcut(action);
+        addSiteRuleShortcut(
+          rows,
+          action,
+          snap.binding,
+          snap.value,
+          false
+        );
+        refreshSiteRuleAddShortcutSelector(siteRuleRoot);
+      }
+      event.target.value = "";
+      return;
+    }
+
     // Site rule: show/hide optional override sections
     var siteOverrideContainers = {
       "override-placement": "site-placement-container",
@@ -1828,6 +1874,9 @@ document.addEventListener("DOMContentLoaded", function () {
         );
         if (targetBox) {
           setSiteOverrideContainerState(targetBox, event.target.checked);
+        }
+        if (ocb === "override-shortcuts") {
+          refreshSiteRuleAddShortcutSelector(siteRuleRoot);
         }
         return;
       }

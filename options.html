@@ -96,7 +96,11 @@
         <section id="customs" class="settings-card">
           <div class="section-heading">
             <h3>Shortcuts</h3>
-            <p class="section-intro">Backspace clears a shortcut. Escape disables it.</p>
+            <p class="section-intro">
+              Backspace clears a key. Escape disables optional shortcuts. If a site
+              steals a shortcut, use a site rule with Override shortcuts (and
+              per-key blocking) for that URL.
+            </p>
           </div>
           <div class="shortcuts-grid">
             <div class="shortcut-row" id="display" data-action="display">
@@ -132,7 +136,10 @@
               />
             </div>
             <div class="shortcut-row" id="slower" data-action="slower">
-              <div class="shortcut-label">Decrease speed</div>
+              <div class="shortcut-label">
+                Decrease speed
+                <em>Required: Speeder needs a key for this action.</em>
+              </div>
               <input
                 class="customKey"
                 type="text"
@@ -146,7 +153,10 @@
               />
             </div>
             <div class="shortcut-row" id="faster" data-action="faster">
-              <div class="shortcut-label">Increase speed</div>
+              <div class="shortcut-label">
+                Increase speed
+                <em>Required: Speeder needs a key for this action.</em>
+              </div>
               <input
                 class="customKey"
                 type="text"
@@ -253,11 +263,22 @@
           <h4 class="defaults-sub-heading">General</h4>
 
           <div class="row row-checkbox">
-            <label for="enabled">Enable</label>
+            <label for="enabled"
+              >Enable<br />
+              <em
+                >On: site rules can block sites (blacklist). Off: only matched rules keep Speeder on (whitelist).</em
+              >
+            </label>
             <input id="enabled" type="checkbox" />
           </div>
           <div class="row row-checkbox">
-            <label for="audioBoolean">Work on audio</label>
+            <label for="audioBoolean"
+              >Work on audio<br />
+              <em
+                >Also controls plain HTML5 audio (not just video). Turn off if
+                you only want Speeder on video players.</em
+              >
+            </label>
             <input id="audioBoolean" type="checkbox" />
           </div>
 
@@ -265,7 +286,14 @@
           <h4 class="defaults-sub-heading">Playback</h4>
 
           <div class="row row-checkbox">
-            <label for="rememberSpeed">Remember playback speed</label>
+            <label for="rememberSpeed"
+              >Remember playback speed<br />
+              <em
+                >Stores speed per source so revisiting the same media can restore
+                it. Separate from &ldquo;Force last saved speed,&rdquo; which
+                fights players that reset rate.</em
+              >
+            </label>
             <input id="rememberSpeed" type="checkbox" />
           </div>
           <div class="row row-checkbox">
@@ -283,11 +311,23 @@
           <h4 class="defaults-sub-heading">Controller</h4>
 
           <div class="row row-checkbox">
-            <label for="startHidden">Hide controller by default</label>
+            <label for="startHidden"
+              >Hide controller by default<br />
+              <em
+                >Starts with the overlay hidden; use shortcuts (show/hide,
+                move) or site behavior to reveal it.</em
+              >
+            </label>
             <input id="startHidden" type="checkbox" />
           </div>
           <div class="row">
-            <label for="controllerLocation">Default controller location</label>
+            <label for="controllerLocation"
+              >Default controller location<br />
+              <em
+                >Corner or edge anchor for the hover bar. Site rules can override
+                this for specific URLs.</em
+              >
+            </label>
             <select id="controllerLocation">
               <option value="top-left">Top left</option>
               <option value="top-center">Top center</option>
@@ -300,7 +340,13 @@
             </select>
           </div>
           <div class="row">
-            <label for="controllerOpacity">Controller opacity</label>
+            <label for="controllerOpacity"
+              >Controller opacity<br />
+              <em
+                >0&ndash;1 (decimals). Lower is more transparent. Applies to the
+                in-page controller only.</em
+              >
+            </label>
             <input id="controllerOpacity" type="text" value="" />
           </div>
           <div class="row row-controller-margin">
@@ -416,11 +462,23 @@
                 </p>
               </div>
               <div class="row row-checkbox">
-                <label for="showPopupControlBar">Show popup control bar</label>
+                <label for="showPopupControlBar"
+                  >Show popup control bar<br />
+                  <em
+                    >Shows buttons in the extension popup (toolbar icon). Can be
+                    overridden per site in site rules.</em
+                  >
+                </label>
                 <input id="showPopupControlBar" type="checkbox" />
               </div>
               <div class="row row-checkbox">
-                <label for="popupMatchHoverControls">Match hover controls</label>
+                <label for="popupMatchHoverControls"
+                  >Match hover controls<br />
+                  <em
+                    >When on, the popup copies the hover bar&rsquo;s buttons and
+                    order. When off, customize the popup layout below.</em
+                  >
+                </label>
                 <input id="popupMatchHoverControls" type="checkbox" />
               </div>
               <div id="popupCbEditorWrap" class="cb-editor cb-editor-disabled">
@@ -568,19 +626,36 @@
             <div class="site-rule-body">
               <div class="site-rule-option site-rule-option-checkbox">
                 <label class="site-rule-split-label">
-                  <span>Enable Speeder on this site</span>
+                  <span
+                    >Enable Speeder on this site<br /><em
+                      >For this URL pattern only: off blocks when global Speeder
+                      is on (blacklist); on allows when global is off
+                      (whitelist)&mdash;same pairing as Defaults &rarr;
+                      Enable.</em
+                    ></span
+                  >
                   <input type="checkbox" class="site-enabled" />
                 </label>
               </div>
               <div class="site-rule-content">
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
-                    <span>Override placement for this site</span>
+                    <span
+                      >Override placement for this site<br /><em
+                        >When on, location and margin below replace general
+                        defaults for matching URLs.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-placement" />
                   </label>
                   <div class="site-placement-container">
                     <div class="site-rule-option site-rule-option-field">
-                      <label>Default controller location:</label>
+                      <label
+                        >Default controller location:<br /><em
+                          >Corner or edge anchor for the hover bar. Replaces the
+                          general default for matching URLs only.</em
+                        ></label
+                      >
                       <select class="site-controllerLocation">
                         <option value="top-left">Top left</option>
                         <option value="top-center">Top center</option>
@@ -595,7 +670,8 @@
                     <div class="site-rule-option site-rule-margin-option">
                       <label
                         >Controller margin (px):<br /><em
-                          >Shifts the whole control. 0&ndash;200.</em
+                          >Shifts the whole control from its preset position (CSS
+                          margins). Top and bottom. 0&ndash;200.</em
                         ></label
                       >
                       <div class="controller-margin-inputs">
@@ -613,85 +689,163 @@
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
-                    <span>Override hide-by-default for this site</span>
+                    <span
+                      >Override hide-by-default for this site<br /><em
+                        >When on, the hide-by-default toggle below replaces the
+                        general default for matching URLs.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-visibility" />
                   </label>
                   <div class="site-visibility-container">
                     <div class="site-rule-option site-rule-option-checkbox">
-                      <label>Hide controller by default:</label>
+                      <label
+                        >Hide controller by default:<br /><em
+                          >Starts with the overlay hidden; use shortcuts
+                          (show/hide, move) or site behavior to reveal it.</em
+                        ></label
+                      >
                       <input type="checkbox" class="site-startHidden" />
                     </div>
                   </div>
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
-                    <span>Override auto-hide for this site</span>
+                    <span
+                      >Override auto-hide for this site<br /><em
+                        >When on, hide-with-controls and timer below replace
+                        general defaults for matching URLs.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-autohide" />
                   </label>
                   <div class="site-autohide-container">
                     <div class="site-rule-option site-rule-option-checkbox">
                       <label class="site-rule-split-label">
-                        <span>Hide with controls (idle-based)</span>
+                        <span
+                          >Hide with controls (idle-based)<br /><em
+                            >Fade the controller in and out with the video
+                            interface: perfect sync on YouTube, idle-based
+                            elsewhere.</em
+                          ></span
+                        >
                         <input type="checkbox" class="site-hideWithControls" />
                       </label>
                     </div>
                     <div class="site-rule-option site-rule-option-field">
-                      <label>Auto-hide timer (0.1&ndash;15s):</label>
+                      <label
+                        >Auto-hide timer (0.1&ndash;15s):<br /><em
+                          >Seconds of inactivity before hiding: 0.1&ndash;15 for
+                          non-YouTube sites.</em
+                        ></label
+                      >
                       <input type="text" class="site-hideWithControlsTimer" />
                     </div>
                   </div>
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
-                    <span>Override playback for this site</span>
+                    <span
+                      >Override playback for this site<br /><em
+                        >When on, remember speed / force / audio below replace
+                        general defaults for matching URLs.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-playback" />
                   </label>
                   <div class="site-playback-container">
                     <div class="site-rule-option site-rule-option-checkbox">
-                      <label>Remember playback speed:</label>
+                      <label
+                        >Remember playback speed:<br /><em
+                          >Stores speed per source so revisiting the same media
+                          can restore it. Separate from &ldquo;Force last saved
+                          speed,&rdquo; which fights players that reset
+                          rate.</em
+                        ></label
+                      >
                       <input type="checkbox" class="site-rememberSpeed" />
                     </div>
                     <div class="site-rule-option site-rule-option-checkbox">
-                      <label>Force last saved speed:</label>
+                      <label
+                        >Force last saved speed:<br /><em
+                          >Useful when a video player tries to override the speed
+                          you set in Speeder.</em
+                        ></label
+                      >
                       <input type="checkbox" class="site-forceLastSavedSpeed" />
                     </div>
                     <div class="site-rule-option site-rule-option-checkbox">
-                      <label>Work on audio:</label>
+                      <label
+                        >Work on audio:<br /><em
+                          >Also controls plain HTML5 audio (not just video). Turn
+                          off if you only want Speeder on video players.</em
+                        ></label
+                      >
                       <input type="checkbox" class="site-audioBoolean" />
                     </div>
                   </div>
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
-                    <span>Override opacity for this site</span>
+                    <span
+                      >Override opacity for this site<br /><em
+                        >When on, opacity below replaces the general default for
+                        matching URLs.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-opacity" />
                   </label>
                   <div class="site-opacity-container">
                     <div class="site-rule-option site-rule-option-field">
-                      <label>Controller opacity:</label>
+                      <label
+                        >Controller opacity:<br /><em
+                          >0&ndash;1 (decimals). Lower is more transparent.
+                          Applies to the in-page controller only.</em
+                        ></label
+                      >
                       <input type="text" class="site-controllerOpacity" />
                     </div>
                   </div>
                 </div>
                 <div class="site-rule-override-section">
                   <label class="site-override-lead">
-                    <span>Override subtitle nudge for this site</span>
+                    <span
+                      >Override subtitle nudge for this site<br /><em
+                        >When on, nudge options below replace general defaults for
+                        matching URLs.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-subtitleNudge" />
                   </label>
                   <div class="site-subtitleNudge-container">
                     <div class="site-rule-option site-rule-option-checkbox">
-                      <label>Enable subtitle nudge:</label>
+                      <label
+                        >Enable subtitle nudge:<br /><em
+                          >Makes tiny playback changes to help keep subtitles
+                          aligned.</em
+                        ></label
+                      >
                       <input type="checkbox" class="site-enableSubtitleNudge" />
                     </div>
                     <div class="site-rule-option site-rule-option-field">
-                      <label>Nudge interval (10&ndash;1000ms):</label>
+                      <label
+                        >Nudge interval (10&ndash;1000ms):<br /><em
+                          >How often to nudge: 10&ndash;1000. Smaller values are
+                          more frequent. Default: 50.</em
+                        ></label
+                      >
                       <input type="text" class="site-subtitleNudgeInterval" placeholder="50" />
                     </div>
                   </div>
                 </div>
                 <div class="site-rule-controlbar">
                   <label class="site-override-lead">
-                    <span>Override in-player control bar for this site</span>
+                    <span
+                      >Override in-player control bar for this site<br /><em
+                        >Same idea as Hover control bar: drag blocks between
+                        Active and Available for matching URLs only.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-controlbar" />
                   </label>
                   <div class="site-controlbar-container">
@@ -709,12 +863,22 @@
                 </div>
                 <div class="site-rule-controlbar">
                   <label class="site-override-lead">
-                    <span>Override extension popup for this site</span>
+                    <span
+                      >Override extension popup for this site<br /><em
+                        >Popup layout for matching URLs; mirrors the global Popup
+                        control bar when you customize it here.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-popup-controlbar" />
                   </label>
                   <div class="site-popup-controlbar-container">
                     <div class="site-rule-option site-rule-option-checkbox">
-                      <label>Show popup control bar</label>
+                      <label
+                        >Show popup control bar<br /><em
+                          >Shows buttons in the extension popup (toolbar icon).
+                          Replaces the general default for this pattern.</em
+                        ></label
+                      >
                       <input type="checkbox" class="site-showPopupControlBar" />
                     </div>
                     <div class="cb-editor">
@@ -731,10 +895,23 @@
                 </div>
                 <div class="site-rule-shortcuts">
                   <label class="site-override-lead">
-                    <span>Override shortcuts for this site</span>
+                    <span
+                      >Override shortcuts for this site<br /><em
+                        >Add shortcuts from the menu; none by default. Leave off
+                        to use global Shortcuts.</em
+                      ></span
+                    >
                     <input type="checkbox" class="override-shortcuts" />
                   </label>
-                  <div class="site-shortcuts-container"></div>
+                  <div class="site-shortcuts-container">
+                    <div class="site-shortcuts-rows"></div>
+                    <select
+                      class="site-add-shortcut-selector"
+                      aria-label="Add shortcut for this site"
+                    >
+                      <option value="">Add shortcut&hellip;</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>

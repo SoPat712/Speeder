@@ -1,8 +1,8 @@
-# Available for Firefox  
+# Available for Firefox
+
 [![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org/firefox/addon/speeder/)
 
-
-# The science of accelerated playback
+## The science of accelerated playback
 
 **TL;DR: faster playback translates to better engagement and retention.**
 
@@ -33,9 +33,11 @@ last point to listen to it a few more times.
 
 ![Player](https://cloud.githubusercontent.com/assets/2400185/24076745/5723e6ae-0c41-11e7-820c-1d8e814a2888.png)
 
-#### *Install [Chrome](https://chrome.google.com/webstore/detail/video-speed-controller/nffaoalbilbmmfgbnbgppjihopabppdk) or [Firefox](https://addons.mozilla.org/en-us/firefox/addon/speeder/) Extension*
+## Using the extension
 
-\*\* Once the extension is installed simply navigate to any page that offers
+[![Add to Firefox](https://img.shields.io/badge/Add%20to-Firefox-orange?logo=firefox&logoColor=white)](https://addons.mozilla.org/firefox/addon/speeder/)
+
+Once the extension is installed simply navigate to any page that offers
 HTML5 video ([example](https://www.youtube.com/watch?v=E9FxNzv1Tr8)), and you'll
 see a speed indicator in top left corner. Hover over the indicator to reveal the
 controls to accelerate, slowdown, and quickly rewind or advance the video. Or,
@@ -65,21 +67,25 @@ listens both for lower and upper case values (i.e. you can use
 key. This is not a perfect solution, as some sites may listen to both, but works
 most of the time.
 
-### FAQ
+## FAQ
 
-**The video controls are not showing up?** This extension is only compatible
+### The video controls are not showing up?
+
+This extension is only compatible
 with HTML5 video. If you don't see the controls showing up, chances are you are
 viewing a Flash video. If you want to confirm, try right-clicking on the video
 and inspect the menu: if it mentions flash, then that's the issue. That said,
 most sites will fallback to HTML5 if they detect that Flash is not available.
 You can try manually disabling Flash from the browser.
 
-**What is this fork all about?** This is a fork of 
-[CodeBicycle's Video Speed Controller extension for Firefox](https://github.com/codebicycle/videospeed) 
+### What is this fork all about?
+
+This is a fork of
+[CodeBicycle's Video Speed Controller extension for Firefox](https://github.com/codebicycle/videospeed)
 which is a fork of [Igrigorik's Video Speed Controller extension for Chromium](https://github.com/igrigorik/videospeed).
 
 The goal of this fork is fix bugs in the upstream code as well as add new features.
 
-### License
+## License
 
 (GPLv3) - Copyright (c) 2025 Josh Patra

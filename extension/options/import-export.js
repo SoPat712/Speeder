@@ -215,14 +215,15 @@ function importSettings() {
               importLocalSettings(scopedLocalSettings, function (localError) {
                 if (localError) {
                   showStatus(
-                    "Error: Failed to save local extension data - " +
-                      localError.message,
+                    "Settings imported, but custom icons could not be updated - " +
+                      localError.message +
+                      ". Reloading...",
                     true
                   );
-                  return;
+                } else {
+                  showStatus("Settings imported successfully. Reloading...");
                 }
 
-                showStatus("Settings imported successfully. Reloading...");
                 setTimeout(function () {
                   if (typeof restore_options === "function") {
                     restore_options();

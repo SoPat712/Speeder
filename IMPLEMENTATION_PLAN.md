@@ -18,7 +18,7 @@ Constraints: local commits only; no push; no browser testing; one commit per fea
 ## Settings safety and validation
 
 - [x] Confirm before Restore Defaults removes preferences and remembered data.
-- [ ] Report partial imports accurately when custom icons cannot be restored.
+- [x] Report partial imports accurately when custom icons cannot be restored.
 - [ ] Reject malformed slash-prefixed regular expressions before saving site rules.
 
 ## Extension lifecycle and copy

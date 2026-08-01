@@ -90,6 +90,9 @@ describe("popup UI", () => {
     expect(document.getElementById("enable").classList.contains("hide")).toBe(
       false
     );
+    expect(document.getElementById("status").textContent).toBe(
+      "Disabled. Open pages update automatically."
+    );
     expect(chrome.browserAction.setIcon).not.toHaveBeenCalled();
   });
 

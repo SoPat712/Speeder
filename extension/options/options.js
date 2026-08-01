@@ -1159,15 +1159,7 @@ function addSiteRuleShortcut(rowsEl, action, binding, value, force) {
 
   var actionLabel = document.createElement("div");
   actionLabel.className = "shortcut-label";
-  var actionLabelText = actionLabels[action] || action;
-  if (action === "toggleSubtitleNudge") {
-    var ruleEl = rowsEl.closest(".site-rule");
-    var pattern = ruleEl ? ruleEl.querySelector(".site-pattern").value : "";
-    if (!pattern.toLowerCase().includes("youtube.com")) {
-      actionLabelText += " (only for YouTube embeds)";
-    }
-  }
-  actionLabel.textContent = actionLabelText;
+  actionLabel.textContent = actionLabels[action] || action;
 
   var keyInput = document.createElement("input");
   keyInput.className = "customKey";
@@ -1834,7 +1826,7 @@ function initLucideButtonIconsUI() {
                 slug +
                 " for " +
                 action +
-                ". Reload pages for the hover bar."
+                ". Open pages update automatically."
             );
           });
         })

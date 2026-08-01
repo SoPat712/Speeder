@@ -527,7 +527,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function settingsSavedReloadMessage(enabled) {
     setStatusMessage(
-      `${enabled ? "Enabled" : "Disabled"}. Reload page to see changes`
+      `${enabled ? "Enabled" : "Disabled"}. Open pages update automatically.`
     );
   }
 

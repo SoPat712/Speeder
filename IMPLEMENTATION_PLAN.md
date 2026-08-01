@@ -24,7 +24,7 @@ Constraints: local commits only; no push; no browser testing; one commit per fea
 ## Extension lifecycle and copy
 
 - [x] Initialize and synchronize the disabled toolbar icon from background state.
-- [ ] Correct shortcut, subtitle-nudge, live-update, and obsolete troubleshooting copy.
+- [x] Correct shortcut, subtitle-nudge, live-update, and obsolete troubleshooting copy.
 - [ ] Run automated tests in the release workflow before packaging.
 
 ## Verification

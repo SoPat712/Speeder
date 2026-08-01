@@ -185,13 +185,7 @@ describe("popup.js", () => {
     expect(
       window.vscExpandStoredSettings(chrome.storage.sync._dump()).enabled
     ).toBe(true);
-    expect(chrome.browserAction.setIcon).toHaveBeenCalledWith({
-      path: {
-        19: "assets/icons/icon19.png",
-        38: "assets/icons/icon38.png",
-        48: "assets/icons/icon48.png"
-      }
-    });
+    expect(chrome.browserAction.setIcon).not.toHaveBeenCalled();
 
     document.querySelector("#refresh").click();
     expect(document.querySelector("#status").textContent).toContain("Closing");

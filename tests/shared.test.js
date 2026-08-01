@@ -22,6 +22,13 @@ describe("shared helpers", () => {
       ])
     ).toBeNull();
     expect(siteRules.isSiteRuleDisabled({ enabled: false })).toBe(true);
+    expect(siteRules.compileSiteRulePattern("/youtube")).toBeNull();
+    expect(
+      siteRules.siteRuleMatchesUrl(
+        { pattern: "/youtube" },
+        "https://youtube.com/watch"
+      )
+    ).toBe(false);
   });
 
   it("matches plain and regex rules against safely decoded URL text", () => {

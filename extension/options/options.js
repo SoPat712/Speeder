@@ -808,9 +808,8 @@ function validate() {
     if (pattern.startsWith("/")) {
       try {
         var lastSlash = pattern.lastIndexOf("/");
-        if (lastSlash > 0) {
-          new RegExp(pattern.substring(1, lastSlash), pattern.substring(lastSlash + 1));
-        }
+        if (lastSlash === 0) throw new Error("Missing closing slash");
+        new RegExp(pattern.substring(1, lastSlash), pattern.substring(lastSlash + 1));
       } catch (err) {
         status.textContent =
           "Error: Invalid site rule regex: " + pattern + ". Unable to save";

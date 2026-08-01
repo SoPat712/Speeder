@@ -199,6 +199,13 @@
 
     if (
       normalizedPattern.startsWith("/") &&
+      normalizedPattern.lastIndexOf("/") === 0
+    ) {
+      return null;
+    }
+
+    if (
+      normalizedPattern.startsWith("/") &&
       normalizedPattern.lastIndexOf("/") > 0
     ) {
       var lastSlash = normalizedPattern.lastIndexOf("/");

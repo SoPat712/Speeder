@@ -142,7 +142,7 @@ describe("options page", () => {
     chrome.storage.sync.set.mockClear();
     globalThis.createSiteRule(null);
     const rule = document.querySelector(".site-rule");
-    rule.querySelector(".site-pattern").value = "/(/";
+    rule.querySelector(".site-pattern").value = "/youtube";
 
     globalThis.save_options();
 

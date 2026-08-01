@@ -624,6 +624,9 @@ label em {
   cursor: grab;
   user-select: none;
   transition: box-shadow 150ms ease, opacity 150ms ease;
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
 }
 
 .cb-block:hover {

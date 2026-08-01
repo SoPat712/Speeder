@@ -1385,7 +1385,8 @@ function createControlBarBlock(buttonId) {
   var def = controllerButtonDefs[buttonId];
   if (!def) return null;
 
-  var block = document.createElement("div");
+  var block = document.createElement("button");
+  block.type = "button";
   block.className = "cb-block";
   block.dataset.buttonId = buttonId;
   block.draggable = true;
@@ -1406,6 +1407,25 @@ function createControlBarBlock(buttonId) {
   block.appendChild(label);
 
   return block;
+}
+
+function updateControlBarBlockLabels(editor) {
+  if (!editor) return;
+  editor.querySelectorAll(".cb-dropzone").forEach(function(zone) {
+    var state = zone.classList.contains("cb-active-zone")
+      ? "active"
+      : "available";
+    zone.querySelectorAll(".cb-block").forEach(function(block) {
+      var def = controllerButtonDefs[block.dataset.buttonId];
+      block.setAttribute(
+        "aria-label",
+        (def ? def.name : block.dataset.buttonId) +
+          ", " +
+          state +
+          ". Press Enter to move; use arrow keys to reorder."
+      );
+    });
+  });
 }
 
 function populateControlBarZones(activeZone, availableZone, activeIds, allowButtonId) {
@@ -1430,6 +1450,8 @@ function populateControlBarZones(activeZone, availableZone, activeIds, allowButt
       if (block) availableZone.appendChild(block);
     }
   });
+
+  updateControlBarBlockLabels(activeZone.closest(".cb-editor"));
 }
 
 function readControlBarOrder(activeZone) {
@@ -1473,11 +1495,11 @@ function updatePopupEditorDisabledState() {
   var checkbox = document.getElementById("popupMatchHoverControls");
   var wrap = document.getElementById("popupCbEditorWrap");
   if (!checkbox || !wrap) return;
-  if (checkbox.checked) {
-    wrap.classList.add("cb-editor-disabled");
-  } else {
-    wrap.classList.remove("cb-editor-disabled");
-  }
+  wrap.classList.toggle("cb-editor-disabled", checkbox.checked);
+  wrap.querySelectorAll(".cb-block").forEach(function(block) {
+    block.disabled = checkbox.checked;
+    block.draggable = !checkbox.checked;
+  });
 }
 
 function getDragAfterElement(container, x, y) {
@@ -1500,6 +1522,8 @@ function getDragAfterElement(container, x, y) {
 }
 
 function initControlBarEditor() {
+  if (document.vscControlBarEditorInitialized) return;
+  document.vscControlBarEditorInitialized = true;
   var draggedBlock = null;
 
   function clearControlBarDropTargets(activeZone) {
@@ -1512,7 +1536,7 @@ function initControlBarEditor() {
 
   document.addEventListener("dragstart", function (e) {
     var block = e.target.closest(".cb-block");
-    if (!block) return;
+    if (!block || block.disabled) return;
     draggedBlock = block;
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", block.dataset.buttonId);
@@ -1557,10 +1581,48 @@ function initControlBarEditor() {
     var zone = e.target.closest(".cb-dropzone");
     if (zone) {
       e.preventDefault();
+      updateControlBarBlockLabels(zone.closest(".cb-editor"));
       scheduleAutoSave();
     }
 
     clearControlBarDropTargets(null);
+  });
+
+  document.addEventListener("click", function(e) {
+    var block = e.target.closest ? e.target.closest(".cb-block") : null;
+    if (!block || block.disabled) return;
+    var editor = block.closest(".cb-editor");
+    var currentZone = block.closest(".cb-dropzone");
+    if (!editor || !currentZone) return;
+    var otherZone = editor.querySelector(
+      currentZone.classList.contains("cb-active-zone")
+        ? ".cb-available-zone"
+        : ".cb-active-zone"
+    );
+    if (!otherZone) return;
+    otherZone.appendChild(block);
+    updateControlBarBlockLabels(editor);
+    block.focus();
+    scheduleAutoSave();
+  });
+
+  document.addEventListener("keydown", function(e) {
+    var block = e.target.closest ? e.target.closest(".cb-block") : null;
+    if (!block || block.disabled) return;
+    var previous = e.key === "ArrowLeft" || e.key === "ArrowUp";
+    var next = e.key === "ArrowRight" || e.key === "ArrowDown";
+    if (!previous && !next) return;
+    var sibling = previous ? block.previousElementSibling : block.nextElementSibling;
+    if (!sibling) return;
+    e.preventDefault();
+    if (previous) {
+      block.parentNode.insertBefore(block, sibling);
+    } else {
+      block.parentNode.insertBefore(block, sibling.nextElementSibling);
+    }
+    updateControlBarBlockLabels(block.closest(".cb-editor"));
+    block.focus();
+    scheduleAutoSave();
   });
 }
 

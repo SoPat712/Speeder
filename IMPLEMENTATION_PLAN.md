@@ -11,7 +11,7 @@ Constraints: local commits only; no push; no browser testing; one commit per fea
 ## Accessibility and usability
 
 - [x] Give in-player controls accessible names, keyboard behavior, and visible focus.
-- [ ] Make control-bar customization operable by keyboard as well as drag and drop.
+- [x] Make control-bar customization operable by keyboard as well as drag and drop.
 - [ ] Label generated shortcut and site-rule form controls.
 - [ ] Improve popup status announcements, focus indicators, and icon-search semantics.
 

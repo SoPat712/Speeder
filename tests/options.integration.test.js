@@ -91,6 +91,29 @@ describe("options page", () => {
     expect(globalThis.getPopupControlBarOrder()).toEqual(["rewind", "advance"]);
   });
 
+  it("reorders and toggles control-bar buttons from the keyboard", async () => {
+    await setupOptions({
+      sync: { controllerButtons: ["rewind", "faster"] }
+    });
+    const active = document.getElementById("controlBarActive");
+    const rewind = active.querySelector('[data-button-id="rewind"]');
+
+    rewind.dispatchEvent(
+      new window.KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        bubbles: true,
+        cancelable: true
+      })
+    );
+    expect(globalThis.getControlBarOrder()).toEqual(["faster", "rewind"]);
+
+    expect(rewind.disabled).toBe(false);
+    rewind.click();
+    expect(globalThis.getControlBarOrder()).toEqual(["faster"]);
+    expect(rewind.closest(".cb-available-zone")).not.toBeNull();
+    expect(rewind.getAttribute("aria-label")).toContain("available");
+  });
+
   it("validates site rule regexes before saving", async () => {
     const chrome = await setupOptions();
     chrome.storage.sync.set.mockClear();

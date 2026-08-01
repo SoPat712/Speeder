@@ -414,6 +414,30 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(video.currentTime).toBe(63);
   });
 
+  it("ignores shortcuts from selects and shadow-DOM edit fields", async () => {
+    bootInject();
+    await settleLifecycle();
+    const { video } = createControlledVideo();
+    const select = document.createElement("select");
+    const host = document.createElement("site-editor");
+    const input = document.createElement("input");
+    host.attachShadow({ mode: "open" }).appendChild(input);
+    document.body.append(select, host);
+
+    [select, input].forEach((target) => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          composed: true,
+          code: "KeyD",
+          key: "d"
+        })
+      );
+    });
+
+    expect(video.playbackRate).toBe(1);
+  });
+
   it("finishes a forced SPA initialization after settings hydration", async () => {
     vi.useFakeTimers();
     bootInject({

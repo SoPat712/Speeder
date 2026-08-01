@@ -4373,6 +4373,32 @@ function inIframe() {
   }
 }
 
+function isEditableShortcutTarget(event) {
+  var path =
+    event && typeof event.composedPath === "function"
+      ? event.composedPath()
+      : [event && event.target];
+
+  return path.some(function(target) {
+    if (!target || target.nodeType !== 1) return false;
+    var nodeName = target.nodeName;
+    var role = target.getAttribute && target.getAttribute("role");
+    var contentEditable =
+      target.getAttribute && target.getAttribute("contenteditable");
+    return (
+      nodeName === "INPUT" ||
+      nodeName === "TEXTAREA" ||
+      nodeName === "SELECT" ||
+      target.isContentEditable ||
+      (contentEditable !== null && contentEditable !== "false") ||
+      role === "textbox" ||
+      role === "searchbox" ||
+      role === "combobox" ||
+      role === "spinbutton"
+    );
+  });
+}
+
 function attachKeydownListeners(doc) {
   // Content scripts already run in every frame. Keeping each listener scoped
   // to its own frame avoids duplicate shortcuts and stale iframe ownership.
@@ -4396,13 +4422,7 @@ function attachKeydownListeners(doc) {
           return;
         }
 
-        if (
-          event.target.nodeName === "INPUT" ||
-          event.target.nodeName === "TEXTAREA" ||
-          event.target.isContentEditable
-        ) {
-          return;
-        }
+        if (isEditableShortcutTarget(event)) return;
 
         if (
           !siteRuleUtils.isSpeederActiveForSite(

@@ -29,6 +29,6 @@ Constraints: local commits only; no push; no browser testing; one commit per fea
 
 ## Verification
 
-- [ ] Run focused automated checks after each non-trivial change.
-- [ ] Run the complete non-browser test suite and review the final local commit series.
-- [ ] Leave cross-site fullscreen visual verification for reporter/user validation.
+- [x] Run focused automated checks after each non-trivial change.
+- [x] Run the complete non-browser test suite and review the final local commit series.
+- [x] Leave cross-site fullscreen visual verification for reporter/user validation.

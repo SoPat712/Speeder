@@ -116,6 +116,9 @@ describe("options page", () => {
 
   it("labels shortcut and generated site-rule controls", async () => {
     await setupOptions();
+    expect(document.getElementById("lucideIconResults").getAttribute("role")).toBe(
+      "group"
+    );
     expect(
       document.querySelector('#display .customKey').getAttribute("aria-label")
     ).toBe("Show/hide controller key");

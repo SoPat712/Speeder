@@ -247,6 +247,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       if (def.className) btn.className = def.className;
       btn.title = btnId.charAt(0).toUpperCase() + btnId.slice(1);
+      btn.setAttribute("aria-label", btn.title);
 
       btn.addEventListener("click", function () {
         if (btnId === "settings") {

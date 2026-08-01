@@ -1741,6 +1741,10 @@ function initLucideButtonIconsUI() {
       b.dataset.slug = slug;
       b.title = slug;
       b.setAttribute("aria-label", slug);
+      b.setAttribute(
+        "aria-pressed",
+        slug === lucidePickerSelectedSlug ? "true" : "false"
+      );
       if (slug === lucidePickerSelectedSlug) {
         b.classList.add("lucide-picked");
       }
@@ -1762,6 +1766,10 @@ function initLucideButtonIconsUI() {
           resultsEl.querySelectorAll("button"),
           function (x) {
             x.classList.toggle("lucide-picked", x.dataset.slug === slug);
+            x.setAttribute(
+              "aria-pressed",
+              x.dataset.slug === slug ? "true" : "false"
+            );
           }
         );
         fetchLucideSvg(slug)

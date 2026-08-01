@@ -35,6 +35,12 @@ describe("popup UI", () => {
     expect(
       document.querySelectorAll("#popupControlBar button").length
     ).toBeGreaterThan(0);
+    expect(document.getElementById("status").getAttribute("role")).toBe(
+      "status"
+    );
+    expect(
+      document.querySelector("#popupControlBar button").getAttribute("aria-label")
+    ).not.toBe("");
   });
 
   it("shows controls when globally disabled but a whitelist site rule matches", async () => {

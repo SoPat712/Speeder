@@ -309,6 +309,26 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(second.video.playbackRate).toBe(1.2);
   });
 
+  it("ignores popup actions addressed to another frame", async () => {
+    const chrome = bootInject();
+    await settleLifecycle();
+    const { video } = createControlledVideo();
+    const listener = chrome.runtime.onMessage.listeners[0];
+    const initialSpeed = video.playbackRate;
+
+    listener(
+      {
+        action: "run_action",
+        actionName: "faster",
+        targetFrameToken: "another-frame"
+      },
+      {},
+      vi.fn()
+    );
+
+    expect(video.playbackRate).toBe(initialSpeed);
+  });
+
   it("drops a stale hover-preview shortcut target after SPA navigation", async () => {
     bootInject({
       url: "https://www.youtube.com/",

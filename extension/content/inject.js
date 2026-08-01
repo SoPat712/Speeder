@@ -156,7 +156,11 @@ var tc = {
   pendingMediaCandidates: [],
   settingsReloadRetries: 0,
   lastPointerPosition: null,
-  lastInteractedMedia: null
+  lastInteractedMedia: null,
+  frameToken:
+    window.crypto && typeof window.crypto.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : String(Date.now()) + "-" + Math.random().toString(36).slice(2)
 };
 
 var MIN_SPEED = Number(keyBindingUtils.MIN_SPEED) || 0.1;
@@ -2335,6 +2339,7 @@ function loadInitialRuntimeSettings(attempt) {
           if (!videoGs) return false;
           sendResponse({
             speed: videoGs.playbackRate,
+            frameToken: tc.frameToken,
             forceLastSavedSpeed: tc.settings.forceLastSavedSpeed === true,
             forceLastSavedSpeedControlledBySiteRule: Boolean(
               tc.activeSiteRule &&
@@ -2371,6 +2376,12 @@ function loadInitialRuntimeSettings(attempt) {
           return false;
         }
         if (request.action === "run_action") {
+          if (
+            request.targetFrameToken &&
+            request.targetFrameToken !== tc.frameToken
+          ) {
+            return false;
+          }
           if (
             !siteRuleUtils.isSpeederActiveForSite(
               tc.settings.enabled,

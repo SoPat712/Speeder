@@ -8,6 +8,10 @@
     if (!v) return null;
     return {
       speed: v.playbackRate,
+      frameToken:
+        typeof tc === "object" && typeof tc.frameToken === "string"
+          ? tc.frameToken
+          : null,
       preferred: !v.paused,
       forceLastSavedSpeed: Boolean(
         typeof tc === "object" && tc.settings && tc.settings.forceLastSavedSpeed

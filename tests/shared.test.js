@@ -134,6 +134,15 @@ describe("shared helpers", () => {
     ).toEqual(["advance"]);
   });
 
+  it("keeps the selected frame token with the displayed popup speed", () => {
+    expect(
+      popupControls.pickBestFrameSpeedResult([
+        { speed: 1.25, frameToken: "background", preferred: false },
+        { speed: 1.75, frameToken: "playing", preferred: true }
+      ])
+    ).toEqual({ speed: 1.75, frameToken: "playing" });
+  });
+
   it("normalizes controller locations and margins", () => {
     expect(controllerUtils.normalizeControllerLocation("top-right")).toBe(
       "top-right"

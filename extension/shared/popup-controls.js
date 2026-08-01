@@ -68,6 +68,9 @@
 
     function normalizeResult(result) {
       var normalized = { speed: result.speed };
+      if (typeof result.frameToken === "string") {
+        normalized.frameToken = result.frameToken;
+      }
       if (typeof result.forceLastSavedSpeed === "boolean") {
         normalized.forceLastSavedSpeed = result.forceLastSavedSpeed;
       }

@@ -3196,12 +3196,13 @@ function syncControllerFullscreenMount(videoController) {
   var doc = video.ownerDocument;
   var fullscreenElement = getFullscreenElement(doc);
   var targetMount = videoController.normalControllerMount;
-
-  if (
+  var ownsFullscreen = Boolean(
     fullscreenElement &&
-    (fullscreenElement === video ||
-      isComposedDescendant(video, fullscreenElement))
-  ) {
+      (fullscreenElement === video ||
+        isComposedDescendant(video, fullscreenElement))
+  );
+
+  if (ownsFullscreen) {
     targetMount = getControllerMount(video, fullscreenElement);
   } else if (!fullscreenElement && (!targetMount || !targetMount.isConnected)) {
     targetMount = getControllerMount(video);
@@ -3210,7 +3211,7 @@ function syncControllerFullscreenMount(videoController) {
 
   if (!targetMount) return false;
 
-  if (fullscreenElement) {
+  if (ownsFullscreen) {
     // Fullscreen elements and popovers both participate in the browser's top
     // layer. Showing Speeder's host after the player enters fullscreen keeps it
     // above provider-owned surfaces even when the provider clips descendants or

@@ -612,6 +612,42 @@ describe("inject.js media/controller lifecycle regressions", () => {
     controller.controllerHostCleanup();
   });
 
+  it("only promotes the controller owned by the fullscreen player", async () => {
+    bootInject();
+    await settleLifecycle();
+
+    const fullscreenPlayer = document.createElement("div");
+    const fullscreenVideo = document.createElement("video");
+    const otherVideo = document.createElement("video");
+    const rect = makeRect(0, 0, 640, 360);
+
+    fullscreenVideo.src = "https://example.org/fullscreen.mp4";
+    otherVideo.src = "https://example.org/other.mp4";
+    fullscreenPlayer.appendChild(fullscreenVideo);
+    document.body.append(fullscreenPlayer, otherVideo);
+    [fullscreenPlayer, fullscreenVideo, otherVideo].forEach((element) => {
+      setRect(element, rect);
+      setBoxMetrics(element, rect.width, rect.height);
+    });
+    window.ensureController(fullscreenVideo, fullscreenPlayer);
+    window.ensureController(otherVideo, document.body);
+    fullscreenVideo.vsc.div.showPopover = vi.fn();
+    otherVideo.vsc.div.showPopover = vi.fn();
+
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: fullscreenPlayer
+    });
+    window.syncControllerFullscreenMount(fullscreenVideo.vsc);
+    window.syncControllerFullscreenMount(otherVideo.vsc);
+
+    expect(fullscreenVideo.vsc.div.showPopover).toHaveBeenCalledOnce();
+    expect(otherVideo.vsc.div.showPopover).not.toHaveBeenCalled();
+    expect(
+      otherVideo.vsc.div.classList.contains("vsc-fullscreen-popover")
+    ).toBe(false);
+  });
+
   it("preserves direct-video requestFullscreen semantics and overlays with a popover", async () => {
     bootInject();
     await settleLifecycle();

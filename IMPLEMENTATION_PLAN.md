@@ -4,7 +4,7 @@ Constraints: local commits only; no push; no browser testing; one commit per fea
 
 ## Controller and targeting
 
-- [ ] Keep the controller visible for its own video in element and ancestor fullscreen.
+- [x] Keep the controller visible for its own video in element and ancestor fullscreen.
 - [ ] Target popup actions at the frame represented by the displayed speed; keep “all videos” intentional.
 - [ ] Ignore shortcuts originating from editable controls, including shadow-DOM inputs.
 

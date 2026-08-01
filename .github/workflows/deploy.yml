@@ -14,7 +14,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install deps
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Install web-ext
         run: npm install -g web-ext
 
       - name: Lint

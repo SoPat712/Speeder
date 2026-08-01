@@ -25,7 +25,7 @@ Constraints: local commits only; no push; no browser testing; one commit per fea
 
 - [x] Initialize and synchronize the disabled toolbar icon from background state.
 - [x] Correct shortcut, subtitle-nudge, live-update, and obsolete troubleshooting copy.
-- [ ] Run automated tests in the release workflow before packaging.
+- [x] Run automated tests in the release workflow before packaging.
 
 ## Verification
 

@@ -42,6 +42,7 @@ function applyJSDOMWindow(win) {
   win.Date = globalThis.Date;
   win.open = vi.fn();
   win.close = vi.fn();
+  win.confirm = vi.fn(() => true);
 }
 
 function loadHtmlString(html, options) {

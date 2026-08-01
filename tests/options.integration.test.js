@@ -390,4 +390,22 @@ describe("options page", () => {
     ).toEqual(expect.any(Number));
     expect(chrome.storage.local.__state.unrelatedLocalValue).toBe("keep");
   });
+
+  it("leaves settings untouched when restoring defaults is cancelled", async () => {
+    const chrome = await setupOptions({ sync: { rememberSpeed: true } });
+    window.confirm.mockReturnValueOnce(false);
+    chrome.storage.sync.set.mockClear();
+    chrome.storage.sync.remove.mockClear();
+    chrome.storage.local.set.mockClear();
+    chrome.storage.local.remove.mockClear();
+
+    globalThis.restore_defaults();
+
+    expect(window.confirm).toHaveBeenCalledOnce();
+    expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+    expect(chrome.storage.sync.remove).not.toHaveBeenCalled();
+    expect(chrome.storage.local.set).not.toHaveBeenCalled();
+    expect(chrome.storage.local.remove).not.toHaveBeenCalled();
+    expect(chrome.storage.sync.__state.rememberSpeed).toBe(true);
+  });
 });

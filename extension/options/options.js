@@ -2018,6 +2018,13 @@ function restore_options(callback) {
 }
 
 function restore_defaults() {
+  if (
+    !window.confirm(
+      "Restore all defaults? This removes saved preferences, remembered speeds, and custom icons."
+    )
+  ) {
+    return;
+  }
   var status = document.getElementById("status");
   var restoreButton = document.getElementById("restore");
   setOptionsSyncSettingsLoaded(false);

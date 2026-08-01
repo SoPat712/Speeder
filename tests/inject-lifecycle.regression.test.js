@@ -896,6 +896,21 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(wrapper.classList.contains("vsc-idle-hidden")).toBe(true);
   });
 
+  it("creates named native buttons for in-player controls", async () => {
+    bootInject({
+      syncData: { controllerButtons: ["rewind", "nudge"] }
+    });
+    await settleLifecycle();
+    const { wrapper } = createControlledVideo();
+    const rewind = wrapper.shadowRoot.querySelector('[data-action="rewind"]');
+    const nudge = wrapper.shadowRoot.querySelector("#nudge-indicator");
+
+    expect(rewind.tagName).toBe("BUTTON");
+    expect(rewind.getAttribute("aria-label")).toBe("Rewind");
+    expect(nudge.tagName).toBe("BUTTON");
+    expect(nudge.getAttribute("aria-label")).toContain("Subtitle nudge");
+  });
+
   it("does not let YouTube auto-hide collapse controls under the pointer", async () => {
     vi.useFakeTimers();
     bootInject({

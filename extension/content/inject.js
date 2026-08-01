@@ -239,21 +239,25 @@ var controllerLocationStyles = {
 
 /* `label` fallback only when ui-icons has no path for the action. */
 var controllerButtonDefs = {
-  rewind: { label: "", className: "rw" },
-  slower: { label: "", className: "" },
-  faster: { label: "", className: "" },
-  advance: { label: "", className: "rw" },
-  display: { label: "", className: "hideButton" },
-  reset: { label: "\u21BB", className: "" },
-  fast: { label: "", className: "" },
-  nudge: { label: "", className: "" },
-  pause: { label: "", className: "" },
-  muted: { label: "", className: "" },
-  louder: { label: "", className: "" },
-  softer: { label: "", className: "" },
-  mark: { label: "", className: "" },
-  jump: { label: "", className: "" },
-  settings: { label: "", className: "" }
+  rewind: { label: "", name: "Rewind", className: "rw" },
+  slower: { label: "", name: "Decrease speed", className: "" },
+  faster: { label: "", name: "Increase speed", className: "" },
+  advance: { label: "", name: "Advance", className: "rw" },
+  display: {
+    label: "",
+    name: "Show or hide controller",
+    className: "hideButton"
+  },
+  reset: { label: "\u21BB", name: "Reset speed", className: "" },
+  fast: { label: "", name: "Toggle preferred speed", className: "" },
+  nudge: { label: "", name: "Toggle subtitle nudge", className: "" },
+  pause: { label: "", name: "Play or pause", className: "" },
+  muted: { label: "", name: "Mute or unmute", className: "" },
+  louder: { label: "", name: "Increase volume", className: "" },
+  softer: { label: "", name: "Decrease volume", className: "" },
+  mark: { label: "", name: "Mark position", className: "" },
+  jump: { label: "", name: "Jump to marked position", className: "" },
+  settings: { label: "", name: "Open Speeder settings", className: "" }
 };
 
 function createDefaultBinding(action, code, value) {
@@ -2601,7 +2605,11 @@ function setKeyBindings(action, value) {
 
 function createControllerButton(doc, action, label, className) {
   var button = doc.createElement("button");
+  var name = controllerButtonDefs[action] && controllerButtonDefs[action].name;
+  button.type = "button";
   button.dataset.action = action;
+  button.setAttribute("aria-label", name || action);
+  button.title = name || action;
   var custom =
     tc.settings.customButtonIcons &&
     tc.settings.customButtonIcons[action] &&
@@ -3873,11 +3881,14 @@ function defineVideoController() {
 
     buttonConfig.forEach(function(btnId) {
       if (btnId === "nudge") {
-        subtitleNudgeIndicator = doc.createElement("span");
+        subtitleNudgeIndicator = createControllerButton(
+          doc,
+          btnId,
+          controllerButtonDefs.nudge.label,
+          controllerButtonDefs.nudge.className
+        );
         subtitleNudgeIndicator.id = "nudge-indicator";
-        subtitleNudgeIndicator.setAttribute("role", "button");
         subtitleNudgeIndicator.setAttribute("aria-live", "polite");
-        subtitleNudgeIndicator.setAttribute("tabindex", "0");
         controls.appendChild(subtitleNudgeIndicator);
       } else {
         var def = controllerButtonDefs[btnId];
@@ -3961,21 +3972,6 @@ function defineVideoController() {
         true
       );
     });
-    if (subtitleNudgeIndicator) {
-      subtitleNudgeIndicator.addEventListener(
-        "click",
-        (e) => {
-          var video = this.video;
-          if (video) {
-            var newState = !isSubtitleNudgeEnabledForVideo(video);
-            setSubtitleNudgeEnabledForVideo(video, newState);
-          }
-          blurAfterPointerTap(subtitleNudgeIndicator, e);
-          e.stopPropagation();
-        },
-        true
-      );
-    }
     controller.addEventListener("click", (e) => e.stopPropagation(), false);
     controller.addEventListener("mousedown", (e) => e.stopPropagation(), false);
 

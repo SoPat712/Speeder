@@ -12,7 +12,7 @@ Constraints: local commits only; no push; no browser testing; one commit per fea
 
 - [x] Give in-player controls accessible names, keyboard behavior, and visible focus.
 - [x] Make control-bar customization operable by keyboard as well as drag and drop.
-- [ ] Label generated shortcut and site-rule form controls.
+- [x] Label generated shortcut and site-rule form controls.
 - [ ] Improve popup status announcements, focus indicators, and icon-search semantics.
 
 ## Settings safety and validation

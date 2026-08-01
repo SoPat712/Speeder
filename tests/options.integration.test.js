@@ -114,6 +114,26 @@ describe("options page", () => {
     expect(rewind.getAttribute("aria-label")).toContain("available");
   });
 
+  it("labels shortcut and generated site-rule controls", async () => {
+    await setupOptions();
+    expect(
+      document.querySelector('#display .customKey').getAttribute("aria-label")
+    ).toBe("Show/hide controller key");
+
+    globalThis.createSiteRule(null);
+    const rule = document.querySelector(".site-rule");
+    const location = rule.querySelector(".site-controllerLocation");
+    const locationLabel = location.closest(".site-rule-option").querySelector("label");
+    expect(location.id).not.toBe("");
+    expect(locationLabel.htmlFor).toBe(location.id);
+    expect(
+      rule.querySelector(".site-controllerMarginTop").getAttribute("aria-label")
+    ).toBe("Controller margin top");
+    expect(
+      rule.querySelector(".remove-site-rule").getAttribute("aria-label")
+    ).toBe("Remove site rule");
+  });
+
   it("validates site rule regexes before saving", async () => {
     const chrome = await setupOptions();
     chrome.storage.sync.set.mockClear();

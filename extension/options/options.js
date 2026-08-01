@@ -672,6 +672,20 @@ function appendSelectOptions(select, options) {
   });
 }
 
+function labelShortcutRow(row) {
+  if (!row) return;
+  var action = row.dataset.action;
+  var name = actionLabels[action] || action || "Shortcut";
+  var keyInput = row.querySelector(".customKey");
+  var valueInput = row.querySelector(".customValue");
+  var removeButton = row.querySelector(".removeParent");
+  if (keyInput) keyInput.setAttribute("aria-label", name + " key");
+  if (valueInput) valueInput.setAttribute("aria-label", name + " value");
+  if (removeButton) {
+    removeButton.setAttribute("aria-label", "Remove " + name + " shortcut");
+  }
+}
+
 function add_shortcut(action, value) {
   if (!action) return;
 
@@ -711,6 +725,7 @@ function add_shortcut(action, value) {
   div.appendChild(keyInput);
   div.appendChild(valueInput);
   div.appendChild(removeButton);
+  labelShortcutRow(div);
 
   var customsElement = document.querySelector(".shortcuts-grid");
   customsElement.appendChild(div);
@@ -1201,8 +1216,38 @@ function addSiteRuleShortcut(rowsEl, action, binding, value, force) {
   div.appendChild(valueInput);
   div.appendChild(forceLabel);
   div.appendChild(removeButton);
+  labelShortcutRow(div);
 
   rowsEl.appendChild(div);
+}
+
+var siteRuleControlId = 0;
+
+function associateSiteRuleLabels(ruleEl) {
+  ruleEl.querySelectorAll(".site-rule-option").forEach(function(option) {
+    var label = Array.from(option.children).find(function(child) {
+      return child.tagName === "LABEL";
+    });
+    var controls = option.querySelectorAll("input, select, textarea");
+    if (!label || controls.length !== 1 || label.contains(controls[0])) return;
+    controls[0].id = "site-rule-control-" + ++siteRuleControlId;
+    label.htmlFor = controls[0].id;
+  });
+
+  ruleEl.querySelectorAll(".margin-pad-cell").forEach(function(cell) {
+    var input = cell.querySelector("input");
+    var miniLabel = cell.querySelector(".margin-pad-mini");
+    if (input && miniLabel) {
+      input.setAttribute(
+        "aria-label",
+        "Controller margin " +
+          (miniLabel.textContent === "T" ? "top" : "bottom")
+      );
+    }
+  });
+
+  var removeRule = ruleEl.querySelector(".remove-site-rule");
+  if (removeRule) removeRule.setAttribute("aria-label", "Remove site rule");
 }
 
 function createSiteRule(rule) {
@@ -1377,6 +1422,7 @@ function createSiteRule(rule) {
   }
   applySiteRuleOverrideState(ruleEl, "override-shortcuts", "site-shortcuts-container");
   refreshSiteRuleAddShortcutSelector(ruleEl);
+  associateSiteRuleLabels(ruleEl);
 
   document.getElementById("siteRulesContainer").appendChild(ruleEl);
 }
@@ -2042,6 +2088,8 @@ document.addEventListener("DOMContentLoaded", function () {
   if (versionElement) {
     versionElement.textContent = manifest.version;
   }
+
+  document.querySelectorAll("#customs .shortcut-row").forEach(labelShortcutRow);
 
   restore_options();
   initControlBarEditor();

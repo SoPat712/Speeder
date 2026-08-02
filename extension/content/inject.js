@@ -3168,14 +3168,14 @@ function disableDirectFullscreenPopover(videoController) {
   wrapper.removeAttribute("popover");
 }
 
-function enableFullscreenPopover(videoController, preferredMount) {
+function enableDirectFullscreenPopover(videoController) {
   if (!videoController || !videoController.video || !videoController.div) {
     return false;
   }
   var wrapper = videoController.div;
   if (typeof wrapper.showPopover !== "function") return false;
 
-  var normalMount = preferredMount || videoController.normalControllerMount;
+  var normalMount = videoController.normalControllerMount;
   var normalMountIsConnected = Boolean(
     normalMount &&
       (normalMount.isConnected ||
@@ -3230,13 +3230,10 @@ function syncControllerFullscreenMount(videoController) {
 
   if (!targetMount) return false;
 
-  if (ownsFullscreen) {
-    // Fullscreen elements and popovers both participate in the browser's top
-    // layer. Showing Speeder's host after the player enters fullscreen keeps it
-    // above provider-owned surfaces even when the provider clips descendants or
-    // creates a new fullscreen stacking context (notably Firefox + YouTube).
-    // Browsers without the Popover API retain the player-local remount fallback.
-    if (enableFullscreenPopover(videoController, targetMount)) return true;
+  if (fullscreenElement === video) {
+    // A replaced <video> cannot paint author children, so direct-media
+    // fullscreen is the only case that needs a separate top-layer popover.
+    if (enableDirectFullscreenPopover(videoController)) return true;
   } else {
     disableDirectFullscreenPopover(videoController);
   }

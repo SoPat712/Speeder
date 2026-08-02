@@ -35,6 +35,12 @@ describe("popup UI", () => {
     expect(
       document.querySelectorAll("#popupControlBar button").length
     ).toBeGreaterThan(0);
+    expect(document.getElementById("status").getAttribute("role")).toBe(
+      "status"
+    );
+    expect(
+      document.querySelector("#popupControlBar button").getAttribute("aria-label")
+    ).not.toBe("");
   });
 
   it("shows controls when globally disabled but a whitelist site rule matches", async () => {
@@ -70,7 +76,7 @@ describe("popup UI", () => {
     );
   });
 
-  it("toggles enabled state and updates the browser action icons", async () => {
+  it("toggles enabled state without owning background icon state", async () => {
     const chrome = await setupPopup();
     chrome.storage.sync.set.mockClear();
     chrome.browserAction.setIcon.mockClear();
@@ -84,13 +90,10 @@ describe("popup UI", () => {
     expect(document.getElementById("enable").classList.contains("hide")).toBe(
       false
     );
-    expect(chrome.browserAction.setIcon).toHaveBeenCalledWith({
-      path: {
-        19: "assets/icons/icon19_disabled.png",
-        38: "assets/icons/icon38_disabled.png",
-        48: "assets/icons/icon48_disabled.png"
-      }
-    });
+    expect(document.getElementById("status").textContent).toBe(
+      "Disabled. Open pages update automatically."
+    );
+    expect(chrome.browserAction.setIcon).not.toHaveBeenCalled();
   });
 
   it("handles refresh responses for unsupported and successful pages", async () => {

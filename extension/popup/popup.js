@@ -27,6 +27,8 @@ document.addEventListener("DOMContentLoaded", function () {
   var popupExcludedButtonIds = new Set(["settings"]);
   var renderToken = 0;
   var forceLastSavedSpeedControlledBySiteRule = null;
+  var selectedFrameToken = null;
+  var shortcutTargetMode = "closest";
 
   function persistExpandedSettings(rawStorage, settings, callback) {
     var mutation = vscBuildManagedStorageMutation(rawStorage, settings);
@@ -162,6 +164,10 @@ document.addEventListener("DOMContentLoaded", function () {
     if (response && response.speed != null) {
       updateSpeedDisplay(response.speed);
     }
+    selectedFrameToken =
+      response && typeof response.frameToken === "string"
+        ? response.frameToken
+        : null;
   }
 
   function pickBestFrameSpeedResult(results) {
@@ -241,14 +247,19 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       if (def.className) btn.className = def.className;
       btn.title = btnId.charAt(0).toUpperCase() + btnId.slice(1);
+      btn.setAttribute("aria-label", btn.title);
 
       btn.addEventListener("click", function () {
         if (btnId === "settings") {
           window.open(chrome.runtime.getURL("options/options.html"));
           return;
         }
+        var message = { action: "run_action", actionName: btnId };
+        if (shortcutTargetMode !== "all" && selectedFrameToken) {
+          message.targetFrameToken = selectedFrameToken;
+        }
         sendToActiveTab(
-          { action: "run_action", actionName: btnId },
+          message,
           function () {
             querySpeed();
           }
@@ -372,6 +383,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function renderForActiveTab() {
     var currentRenderToken = ++renderToken;
     forceLastSavedSpeedControlledBySiteRule = null;
+    selectedFrameToken = null;
     setForceButtonLoading(true);
 
     chrome.storage.local.get(["customButtonIcons"], function (loc) {
@@ -395,6 +407,10 @@ document.addEventListener("DOMContentLoaded", function () {
             storage.enabled,
             siteRule
           );
+          shortcutTargetMode =
+            siteRule && siteRule.shortcutTargetMode !== undefined
+              ? siteRule.shortcutTargetMode
+              : storage.shortcutTargetMode;
           var showBar = storage.showPopupControlBar !== false;
           forceLastSavedSpeedControlledBySiteRule = Boolean(
             siteRule && siteRule.forceLastSavedSpeed !== undefined
@@ -507,20 +523,11 @@ document.addEventListener("DOMContentLoaded", function () {
   function toggleEnabledUI(enabled) {
     document.querySelector("#enable").classList.toggle("hide", enabled);
     document.querySelector("#disable").classList.toggle("hide", !enabled);
-
-    const suffix = `${enabled ? "" : "_disabled"}.png`;
-    chrome.browserAction.setIcon({
-      path: {
-        19: "assets/icons/icon19" + suffix,
-        38: "assets/icons/icon38" + suffix,
-        48: "assets/icons/icon48" + suffix
-      }
-    });
   }
 
   function settingsSavedReloadMessage(enabled) {
     setStatusMessage(
-      `${enabled ? "Enabled" : "Disabled"}. Reload page to see changes`
+      `${enabled ? "Enabled" : "Disabled"}. Open pages update automatically.`
     );
   }
 

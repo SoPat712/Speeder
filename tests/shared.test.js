@@ -22,6 +22,13 @@ describe("shared helpers", () => {
       ])
     ).toBeNull();
     expect(siteRules.isSiteRuleDisabled({ enabled: false })).toBe(true);
+    expect(siteRules.compileSiteRulePattern("/youtube")).toBeNull();
+    expect(
+      siteRules.siteRuleMatchesUrl(
+        { pattern: "/youtube" },
+        "https://youtube.com/watch"
+      )
+    ).toBe(false);
   });
 
   it("matches plain and regex rules against safely decoded URL text", () => {
@@ -132,6 +139,15 @@ describe("shared helpers", () => {
         }
       )
     ).toEqual(["advance"]);
+  });
+
+  it("keeps the selected frame token with the displayed popup speed", () => {
+    expect(
+      popupControls.pickBestFrameSpeedResult([
+        { speed: 1.25, frameToken: "background", preferred: false },
+        { speed: 1.75, frameToken: "playing", preferred: true }
+      ])
+    ).toEqual({ speed: 1.75, frameToken: "playing" });
   });
 
   it("normalizes controller locations and margins", () => {

@@ -156,7 +156,11 @@ var tc = {
   pendingMediaCandidates: [],
   settingsReloadRetries: 0,
   lastPointerPosition: null,
-  lastInteractedMedia: null
+  lastInteractedMedia: null,
+  frameToken:
+    window.crypto && typeof window.crypto.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : String(Date.now()) + "-" + Math.random().toString(36).slice(2)
 };
 
 var MIN_SPEED = Number(keyBindingUtils.MIN_SPEED) || 0.1;
@@ -235,21 +239,25 @@ var controllerLocationStyles = {
 
 /* `label` fallback only when ui-icons has no path for the action. */
 var controllerButtonDefs = {
-  rewind: { label: "", className: "rw" },
-  slower: { label: "", className: "" },
-  faster: { label: "", className: "" },
-  advance: { label: "", className: "rw" },
-  display: { label: "", className: "hideButton" },
-  reset: { label: "\u21BB", className: "" },
-  fast: { label: "", className: "" },
-  nudge: { label: "", className: "" },
-  pause: { label: "", className: "" },
-  muted: { label: "", className: "" },
-  louder: { label: "", className: "" },
-  softer: { label: "", className: "" },
-  mark: { label: "", className: "" },
-  jump: { label: "", className: "" },
-  settings: { label: "", className: "" }
+  rewind: { label: "", name: "Rewind", className: "rw" },
+  slower: { label: "", name: "Decrease speed", className: "" },
+  faster: { label: "", name: "Increase speed", className: "" },
+  advance: { label: "", name: "Advance", className: "rw" },
+  display: {
+    label: "",
+    name: "Show or hide controller",
+    className: "hideButton"
+  },
+  reset: { label: "\u21BB", name: "Reset speed", className: "" },
+  fast: { label: "", name: "Toggle preferred speed", className: "" },
+  nudge: { label: "", name: "Toggle subtitle nudge", className: "" },
+  pause: { label: "", name: "Play or pause", className: "" },
+  muted: { label: "", name: "Mute or unmute", className: "" },
+  louder: { label: "", name: "Increase volume", className: "" },
+  softer: { label: "", name: "Decrease volume", className: "" },
+  mark: { label: "", name: "Mark position", className: "" },
+  jump: { label: "", name: "Jump to marked position", className: "" },
+  settings: { label: "", name: "Open Speeder settings", className: "" }
 };
 
 function createDefaultBinding(action, code, value) {
@@ -2335,6 +2343,7 @@ function loadInitialRuntimeSettings(attempt) {
           if (!videoGs) return false;
           sendResponse({
             speed: videoGs.playbackRate,
+            frameToken: tc.frameToken,
             forceLastSavedSpeed: tc.settings.forceLastSavedSpeed === true,
             forceLastSavedSpeedControlledBySiteRule: Boolean(
               tc.activeSiteRule &&
@@ -2371,6 +2380,12 @@ function loadInitialRuntimeSettings(attempt) {
           return false;
         }
         if (request.action === "run_action") {
+          if (
+            request.targetFrameToken &&
+            request.targetFrameToken !== tc.frameToken
+          ) {
+            return false;
+          }
           if (
             !siteRuleUtils.isSpeederActiveForSite(
               tc.settings.enabled,
@@ -2590,7 +2605,11 @@ function setKeyBindings(action, value) {
 
 function createControllerButton(doc, action, label, className) {
   var button = doc.createElement("button");
+  var name = controllerButtonDefs[action] && controllerButtonDefs[action].name;
+  button.type = "button";
   button.dataset.action = action;
+  button.setAttribute("aria-label", name || action);
+  button.title = name || action;
   var custom =
     tc.settings.customButtonIcons &&
     tc.settings.customButtonIcons[action] &&
@@ -3196,12 +3215,13 @@ function syncControllerFullscreenMount(videoController) {
   var doc = video.ownerDocument;
   var fullscreenElement = getFullscreenElement(doc);
   var targetMount = videoController.normalControllerMount;
-
-  if (
+  var ownsFullscreen = Boolean(
     fullscreenElement &&
-    (fullscreenElement === video ||
-      isComposedDescendant(video, fullscreenElement))
-  ) {
+      (fullscreenElement === video ||
+        isComposedDescendant(video, fullscreenElement))
+  );
+
+  if (ownsFullscreen) {
     targetMount = getControllerMount(video, fullscreenElement);
   } else if (!fullscreenElement && (!targetMount || !targetMount.isConnected)) {
     targetMount = getControllerMount(video);
@@ -3210,7 +3230,7 @@ function syncControllerFullscreenMount(videoController) {
 
   if (!targetMount) return false;
 
-  if (fullscreenElement) {
+  if (ownsFullscreen) {
     // Fullscreen elements and popovers both participate in the browser's top
     // layer. Showing Speeder's host after the player enters fullscreen keeps it
     // above provider-owned surfaces even when the provider clips descendants or
@@ -3861,11 +3881,14 @@ function defineVideoController() {
 
     buttonConfig.forEach(function(btnId) {
       if (btnId === "nudge") {
-        subtitleNudgeIndicator = doc.createElement("span");
+        subtitleNudgeIndicator = createControllerButton(
+          doc,
+          btnId,
+          controllerButtonDefs.nudge.label,
+          controllerButtonDefs.nudge.className
+        );
         subtitleNudgeIndicator.id = "nudge-indicator";
-        subtitleNudgeIndicator.setAttribute("role", "button");
         subtitleNudgeIndicator.setAttribute("aria-live", "polite");
-        subtitleNudgeIndicator.setAttribute("tabindex", "0");
         controls.appendChild(subtitleNudgeIndicator);
       } else {
         var def = controllerButtonDefs[btnId];
@@ -3949,21 +3972,6 @@ function defineVideoController() {
         true
       );
     });
-    if (subtitleNudgeIndicator) {
-      subtitleNudgeIndicator.addEventListener(
-        "click",
-        (e) => {
-          var video = this.video;
-          if (video) {
-            var newState = !isSubtitleNudgeEnabledForVideo(video);
-            setSubtitleNudgeEnabledForVideo(video, newState);
-          }
-          blurAfterPointerTap(subtitleNudgeIndicator, e);
-          e.stopPropagation();
-        },
-        true
-      );
-    }
     controller.addEventListener("click", (e) => e.stopPropagation(), false);
     controller.addEventListener("mousedown", (e) => e.stopPropagation(), false);
 
@@ -4361,6 +4369,32 @@ function inIframe() {
   }
 }
 
+function isEditableShortcutTarget(event) {
+  var path =
+    event && typeof event.composedPath === "function"
+      ? event.composedPath()
+      : [event && event.target];
+
+  return path.some(function(target) {
+    if (!target || target.nodeType !== 1) return false;
+    var nodeName = target.nodeName;
+    var role = target.getAttribute && target.getAttribute("role");
+    var contentEditable =
+      target.getAttribute && target.getAttribute("contenteditable");
+    return (
+      nodeName === "INPUT" ||
+      nodeName === "TEXTAREA" ||
+      nodeName === "SELECT" ||
+      target.isContentEditable ||
+      (contentEditable !== null && contentEditable !== "false") ||
+      role === "textbox" ||
+      role === "searchbox" ||
+      role === "combobox" ||
+      role === "spinbutton"
+    );
+  });
+}
+
 function attachKeydownListeners(doc) {
   // Content scripts already run in every frame. Keeping each listener scoped
   // to its own frame avoids duplicate shortcuts and stale iframe ownership.
@@ -4384,13 +4418,7 @@ function attachKeydownListeners(doc) {
           return;
         }
 
-        if (
-          event.target.nodeName === "INPUT" ||
-          event.target.nodeName === "TEXTAREA" ||
-          event.target.isContentEditable
-        ) {
-          return;
-        }
+        if (isEditableShortcutTarget(event)) return;
 
         if (
           !siteRuleUtils.isSpeederActiveForSite(

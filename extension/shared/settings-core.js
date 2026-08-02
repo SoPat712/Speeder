@@ -985,6 +985,9 @@
     }
 
     var regex;
+    if (pattern.startsWith("/") && pattern.lastIndexOf("/") === 0) {
+      return false;
+    }
     if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
       try {
         var lastSlash = pattern.lastIndexOf("/");

@@ -91,12 +91,58 @@ describe("options page", () => {
     expect(globalThis.getPopupControlBarOrder()).toEqual(["rewind", "advance"]);
   });
 
+  it("reorders and toggles control-bar buttons from the keyboard", async () => {
+    await setupOptions({
+      sync: { controllerButtons: ["rewind", "faster"] }
+    });
+    const active = document.getElementById("controlBarActive");
+    const rewind = active.querySelector('[data-button-id="rewind"]');
+
+    rewind.dispatchEvent(
+      new window.KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        bubbles: true,
+        cancelable: true
+      })
+    );
+    expect(globalThis.getControlBarOrder()).toEqual(["faster", "rewind"]);
+
+    expect(rewind.disabled).toBe(false);
+    rewind.click();
+    expect(globalThis.getControlBarOrder()).toEqual(["faster"]);
+    expect(rewind.closest(".cb-available-zone")).not.toBeNull();
+    expect(rewind.getAttribute("aria-label")).toContain("available");
+  });
+
+  it("labels shortcut and generated site-rule controls", async () => {
+    await setupOptions();
+    expect(document.getElementById("lucideIconResults").getAttribute("role")).toBe(
+      "group"
+    );
+    expect(
+      document.querySelector('#display .customKey').getAttribute("aria-label")
+    ).toBe("Show/hide controller key");
+
+    globalThis.createSiteRule(null);
+    const rule = document.querySelector(".site-rule");
+    const location = rule.querySelector(".site-controllerLocation");
+    const locationLabel = location.closest(".site-rule-option").querySelector("label");
+    expect(location.id).not.toBe("");
+    expect(locationLabel.htmlFor).toBe(location.id);
+    expect(
+      rule.querySelector(".site-controllerMarginTop").getAttribute("aria-label")
+    ).toBe("Controller margin top");
+    expect(
+      rule.querySelector(".remove-site-rule").getAttribute("aria-label")
+    ).toBe("Remove site rule");
+  });
+
   it("validates site rule regexes before saving", async () => {
     const chrome = await setupOptions();
     chrome.storage.sync.set.mockClear();
     globalThis.createSiteRule(null);
     const rule = document.querySelector(".site-rule");
-    rule.querySelector(".site-pattern").value = "/(/";
+    rule.querySelector(".site-pattern").value = "/youtube";
 
     globalThis.save_options();
 
@@ -343,5 +389,23 @@ describe("options page", () => {
       chrome.storage.local.__state.rememberedSpeedsResetAt
     ).toEqual(expect.any(Number));
     expect(chrome.storage.local.__state.unrelatedLocalValue).toBe("keep");
+  });
+
+  it("leaves settings untouched when restoring defaults is cancelled", async () => {
+    const chrome = await setupOptions({ sync: { rememberSpeed: true } });
+    window.confirm.mockReturnValueOnce(false);
+    chrome.storage.sync.set.mockClear();
+    chrome.storage.sync.remove.mockClear();
+    chrome.storage.local.set.mockClear();
+    chrome.storage.local.remove.mockClear();
+
+    globalThis.restore_defaults();
+
+    expect(window.confirm).toHaveBeenCalledOnce();
+    expect(chrome.storage.sync.set).not.toHaveBeenCalled();
+    expect(chrome.storage.sync.remove).not.toHaveBeenCalled();
+    expect(chrome.storage.local.set).not.toHaveBeenCalled();
+    expect(chrome.storage.local.remove).not.toHaveBeenCalled();
+    expect(chrome.storage.sync.__state.rememberSpeed).toBe(true);
   });
 });

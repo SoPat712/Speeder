@@ -6,6 +6,7 @@
   --text: #17191c;
   --muted: #626b76;
   --accent: #111827;
+  --focus-ring: #2563eb;
 }
 
 * {
@@ -84,7 +85,7 @@ button:active {
 }
 
 button:focus-visible {
-  outline: 2px solid rgba(17, 24, 39, 0.14);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -251,7 +252,7 @@ button:focus-visible {
 }
 
 .donate-icon-btn:focus-visible {
-  outline: 2px solid rgba(17, 24, 39, 0.14);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
   position: relative;
   z-index: 1;
@@ -297,6 +298,7 @@ button:focus-visible {
     --text: #f2f4f6;
     --muted: #a0a8b2;
     --accent: #f2f4f6;
+    --focus-ring: #93c5fd;
   }
 
   body {

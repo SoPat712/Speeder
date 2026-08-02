@@ -110,7 +110,7 @@ describe("popup.js", () => {
           speedQueryCount <= 2
             ? [
                 { speed: 1.25, preferred: false },
-                { speed: 1.5, preferred: true }
+                { speed: 1.5, frameToken: "playing-frame", preferred: true }
               ]
             : [{ speed: 1.75, preferred: true }]
         );
@@ -138,10 +138,33 @@ describe("popup.js", () => {
 
     expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
       99,
-      { action: "run_action", actionName: "faster" },
+      {
+        action: "run_action",
+        actionName: "faster",
+        targetFrameToken: "playing-frame"
+      },
       expect.any(Function)
     );
     expect(document.querySelector("#popupSpeed").textContent).toBe("1.75");
+  });
+
+  it("keeps all-video popup actions intentionally untargeted", async () => {
+    const chrome = bootPopup({
+      syncData: { shortcutTargetMode: "all" },
+      executeScriptImpl: (tabId, details, callback) => {
+        callback([{ speed: 1.5, frameToken: "playing-frame", preferred: true }]);
+      }
+    });
+    await flushAsyncWork();
+    chrome.tabs.sendMessage.mockClear();
+
+    document.querySelector("#popupControlBar button").click();
+
+    expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+      99,
+      { action: "run_action", actionName: "rewind" },
+      expect.any(Function)
+    );
   });
 
   it("toggles enablement and closes after a successful refresh", async () => {
@@ -162,13 +185,7 @@ describe("popup.js", () => {
     expect(
       window.vscExpandStoredSettings(chrome.storage.sync._dump()).enabled
     ).toBe(true);
-    expect(chrome.browserAction.setIcon).toHaveBeenCalledWith({
-      path: {
-        19: "assets/icons/icon19.png",
-        38: "assets/icons/icon38.png",
-        48: "assets/icons/icon48.png"
-      }
-    });
+    expect(chrome.browserAction.setIcon).not.toHaveBeenCalled();
 
     document.querySelector("#refresh").click();
     expect(document.querySelector("#status").textContent).toContain("Closing");

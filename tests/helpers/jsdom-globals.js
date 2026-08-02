@@ -27,4 +27,5 @@ export function applyJSDOMWindow(win) {
 
   win.open = vi.fn();
   win.close = vi.fn();
+  win.confirm = vi.fn(() => true);
 }

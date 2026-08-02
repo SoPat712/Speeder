@@ -309,6 +309,26 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(second.video.playbackRate).toBe(1.2);
   });
 
+  it("ignores popup actions addressed to another frame", async () => {
+    const chrome = bootInject();
+    await settleLifecycle();
+    const { video } = createControlledVideo();
+    const listener = chrome.runtime.onMessage.listeners[0];
+    const initialSpeed = video.playbackRate;
+
+    listener(
+      {
+        action: "run_action",
+        actionName: "faster",
+        targetFrameToken: "another-frame"
+      },
+      {},
+      vi.fn()
+    );
+
+    expect(video.playbackRate).toBe(initialSpeed);
+  });
+
   it("drops a stale hover-preview shortcut target after SPA navigation", async () => {
     bootInject({
       url: "https://www.youtube.com/",
@@ -392,6 +412,30 @@ describe("inject.js media/controller lifecycle regressions", () => {
     );
 
     expect(video.currentTime).toBe(63);
+  });
+
+  it("ignores shortcuts from selects and shadow-DOM edit fields", async () => {
+    bootInject();
+    await settleLifecycle();
+    const { video } = createControlledVideo();
+    const select = document.createElement("select");
+    const host = document.createElement("site-editor");
+    const input = document.createElement("input");
+    host.attachShadow({ mode: "open" }).appendChild(input);
+    document.body.append(select, host);
+
+    [select, input].forEach((target) => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          composed: true,
+          code: "KeyD",
+          key: "d"
+        })
+      );
+    });
+
+    expect(video.playbackRate).toBe(1);
   });
 
   it("finishes a forced SPA initialization after settings hydration", async () => {
@@ -612,6 +656,42 @@ describe("inject.js media/controller lifecycle regressions", () => {
     controller.controllerHostCleanup();
   });
 
+  it("only promotes the controller owned by the fullscreen player", async () => {
+    bootInject();
+    await settleLifecycle();
+
+    const fullscreenPlayer = document.createElement("div");
+    const fullscreenVideo = document.createElement("video");
+    const otherVideo = document.createElement("video");
+    const rect = makeRect(0, 0, 640, 360);
+
+    fullscreenVideo.src = "https://example.org/fullscreen.mp4";
+    otherVideo.src = "https://example.org/other.mp4";
+    fullscreenPlayer.appendChild(fullscreenVideo);
+    document.body.append(fullscreenPlayer, otherVideo);
+    [fullscreenPlayer, fullscreenVideo, otherVideo].forEach((element) => {
+      setRect(element, rect);
+      setBoxMetrics(element, rect.width, rect.height);
+    });
+    window.ensureController(fullscreenVideo, fullscreenPlayer);
+    window.ensureController(otherVideo, document.body);
+    fullscreenVideo.vsc.div.showPopover = vi.fn();
+    otherVideo.vsc.div.showPopover = vi.fn();
+
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: fullscreenPlayer
+    });
+    window.syncControllerFullscreenMount(fullscreenVideo.vsc);
+    window.syncControllerFullscreenMount(otherVideo.vsc);
+
+    expect(fullscreenVideo.vsc.div.showPopover).toHaveBeenCalledOnce();
+    expect(otherVideo.vsc.div.showPopover).not.toHaveBeenCalled();
+    expect(
+      otherVideo.vsc.div.classList.contains("vsc-fullscreen-popover")
+    ).toBe(false);
+  });
+
   it("preserves direct-video requestFullscreen semantics and overlays with a popover", async () => {
     bootInject();
     await settleLifecycle();
@@ -814,6 +894,21 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(controller.controllerInteractionActive).toBe(false);
     await vi.advanceTimersByTimeAsync(1000);
     expect(wrapper.classList.contains("vsc-idle-hidden")).toBe(true);
+  });
+
+  it("creates named native buttons for in-player controls", async () => {
+    bootInject({
+      syncData: { controllerButtons: ["rewind", "nudge"] }
+    });
+    await settleLifecycle();
+    const { wrapper } = createControlledVideo();
+    const rewind = wrapper.shadowRoot.querySelector('[data-action="rewind"]');
+    const nudge = wrapper.shadowRoot.querySelector("#nudge-indicator");
+
+    expect(rewind.tagName).toBe("BUTTON");
+    expect(rewind.getAttribute("aria-label")).toBe("Rewind");
+    expect(nudge.tagName).toBe("BUTTON");
+    expect(nudge.getAttribute("aria-label")).toContain("Subtitle nudge");
   });
 
   it("does not let YouTube auto-hide collapse controls under the pointer", async () => {

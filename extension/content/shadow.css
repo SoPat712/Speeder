@@ -10,6 +10,24 @@
   overflow: visible !important;
 }
 
+/* Important declarations inside a shadow tree outrank important page styles.
+   Repeat the top-layer positioning here so fullscreen cannot fall back to the
+   base absolute host rule. */
+:host(.vsc-fullscreen-popover) {
+  position: fixed !important;
+  inset: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+:host(.vsc-fullscreen-popover)::backdrop {
+  pointer-events: none !important;
+  background: transparent !important;
+}
+
 :host(.vsc-nosource),
 :host(.vsc-hidden) {
   display: none !important;
@@ -316,8 +334,13 @@ button .vsc-btn-icon svg {
   transform: translateY(0.5px);
 }
 
-button:focus {
+button:focus:not(:focus-visible) {
   outline: 0;
+}
+
+button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 button:hover {

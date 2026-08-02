@@ -70,7 +70,7 @@ describe("options/import-export.js", () => {
   });
 
   it("generates timestamped backup filenames", () => {
-    vi.setSystemTime(new Date("2026-04-04T13:14:15Z"));
+    vi.setSystemTime(new Date(2026, 3, 4, 9, 14, 15));
     bootImportExport();
 
     expect(window.generateBackupFilename()).toBe(

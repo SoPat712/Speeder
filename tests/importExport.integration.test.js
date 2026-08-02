@@ -44,7 +44,8 @@ describe("import/export flows", () => {
 
   it("exports sync and local settings as a JSON download", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date(2026, 3, 4, 8, 9, 10));
+    const exportTime = new Date(2026, 3, 4, 8, 9, 10);
+    vi.setSystemTime(exportTime);
     const chrome = await setupImportExport({
       sync: { rememberSpeed: true, shortcutTargetMode: "all" },
       local: { customButtonIcons: { faster: { slug: "rocket" } } }
@@ -89,7 +90,7 @@ describe("import/export flows", () => {
     const blobText = await capturedBlob.text();
     expect(JSON.parse(blobText)).toEqual({
       version: "1.1",
-      exportDate: "2026-04-04T12:09:10.000Z",
+      exportDate: exportTime.toISOString(),
       settings: {
         rememberSpeed: true,
         shortcutTargetMode: "all",

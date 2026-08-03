@@ -329,6 +329,31 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(video.playbackRate).toBe(initialSpeed);
   });
 
+  it("removes and restores controls when this tab is paused", async () => {
+    const chrome = bootInject();
+    await settleLifecycle();
+    const { video } = createControlledVideo();
+    const listener = chrome.runtime.onMessage.listeners[0];
+    const playbackRate = video.playbackRate;
+
+    listener(
+      { action: "set_tab_paused", paused: true },
+      {},
+      vi.fn()
+    );
+    expect(window.tc.tabPaused).toBe(true);
+    expect(video.vsc).toBeUndefined();
+    expect(video.playbackRate).toBe(playbackRate);
+
+    listener(
+      { action: "set_tab_paused", paused: false },
+      {},
+      vi.fn()
+    );
+    expect(window.tc.tabPaused).toBe(false);
+    expect(video.vsc).toBeTruthy();
+  });
+
   it("drops a stale hover-preview shortcut target after SPA navigation", async () => {
     bootInject({
       url: "https://www.youtube.com/",

@@ -141,6 +141,7 @@ function getDiagnosticsSnapshot(media) {
     },
     effectiveSettings: {
       enabled: tc.settings.enabled !== false,
+      tabPaused: tc.tabPaused === true,
       startHidden: tc.settings.startHidden === true,
       hideWithControls: tc.settings.hideWithControls === true,
       rememberSpeed: tc.settings.rememberSpeed === true,
@@ -225,6 +226,7 @@ var tc = {
   speedAccessTimes: {},
   persistedLastSpeed: 1.0,
   activeSiteRule: null,
+  tabPaused: false,
   siteRuleBase: null,
   runtimeSettingsHydrated: false,
   pendingMediaCandidates: [],
@@ -236,6 +238,29 @@ var tc = {
       ? window.crypto.randomUUID()
       : String(Date.now()) + "-" + Math.random().toString(36).slice(2)
 };
+
+function isSpeederActiveForCurrentPage() {
+  return (
+    tc.tabPaused !== true &&
+    siteRuleUtils.isSpeederActiveForSite(
+      tc.settings.enabled,
+      tc.activeSiteRule
+    )
+  );
+}
+
+function applyTabPausedState(paused) {
+  tc.tabPaused = paused === true;
+  if (!tc.runtimeSettingsHydrated) return;
+  if (tc.tabPaused) {
+    clearAllSpeedRestoreEnforcement();
+    tc.mediaElements.slice().forEach(function(media) {
+      removeController(media);
+    });
+    return;
+  }
+  initializeWhenReady(document, true);
+}
 
 var MIN_SPEED = Number(keyBindingUtils.MIN_SPEED) || 0.1;
 var MAX_SPEED = Number(keyBindingUtils.MAX_SPEED) || 16;
@@ -1590,7 +1615,7 @@ function ensureController(node, parent) {
   // href selects site rules; re-run on every new/usable media so all runtime
   // paths agree on activation and effective settings.
   applySiteRuleOverrides();
-  if (!siteRuleUtils.isSpeederActiveForSite(tc.settings.enabled, tc.activeSiteRule)) {
+  if (!isSpeederActiveForCurrentPage()) {
     if (node.vsc) removeController(node);
     return null;
   }
@@ -2398,12 +2423,24 @@ function loadInitialRuntimeSettings(attempt) {
     return;
   }
   hydrateRuntimeSettings(rawStorage || {});
+  if (chrome.runtime && typeof chrome.runtime.sendMessage === "function") {
+    chrome.runtime.sendMessage({ action: "get_tab_pause_state" }, function(response) {
+      if (!chrome.runtime.lastError && response) {
+        applyTabPausedState(response.paused === true);
+      }
+    });
+  }
   // patchAttachShadow() is now called at top-level before this callback
   // Add a listener for messages from the popup.
   // We use a global flag to ensure the listener is only attached once.
   if (!window.vscMessageListener) {
     chrome.runtime.onMessage.addListener(
       function(request, sender, sendResponse) {
+        if (request.action === "set_tab_paused") {
+          applyTabPausedState(request.paused === true);
+          sendResponse({ paused: tc.tabPaused });
+          return false;
+        }
         if (request.action === "rescan_page") {
           log("Re-scan command received from popup.", 4);
           initializeWhenReady(document, true);
@@ -2462,10 +2499,7 @@ function loadInitialRuntimeSettings(attempt) {
             return false;
           }
           if (
-            !siteRuleUtils.isSpeederActiveForSite(
-              tc.settings.enabled,
-              tc.activeSiteRule
-            )
+            !isSpeederActiveForCurrentPage()
           ) {
             return false;
           }
@@ -4235,7 +4269,7 @@ function refreshAllControllerGeometry() {
 /** Re-match site rules for current URL and refresh controller position/opacity on every video. */
 function reapplySiteRulesAndControllerGeometry() {
   applySiteRuleOverrides();
-  if (!siteRuleUtils.isSpeederActiveForSite(tc.settings.enabled, tc.activeSiteRule)) {
+  if (!isSpeederActiveForCurrentPage()) {
     tc.mediaElements.slice().forEach(function(video) {
       removeController(video);
     });
@@ -4493,10 +4527,7 @@ function attachKeydownListeners(doc) {
         if (isEditableShortcutTarget(event)) return;
 
         if (
-          !siteRuleUtils.isSpeederActiveForSite(
-            tc.settings.enabled,
-            tc.activeSiteRule
-          )
+          !isSpeederActiveForCurrentPage()
         ) {
           return;
         }
@@ -4721,10 +4752,7 @@ function initializeNow(doc, forceReinit = false) {
   attachNavigationListeners();
   if (typeof tc.videoController === "undefined") defineVideoController();
   applySiteRuleOverrides();
-  var isActive = siteRuleUtils.isSpeederActiveForSite(
-    tc.settings.enabled,
-    tc.activeSiteRule
-  );
+  var isActive = isSpeederActiveForCurrentPage();
 
   // Keep observing while inactive so dynamically-created media/shadow roots
   // are available to the next forced SPA rescan, but remove stale controls.

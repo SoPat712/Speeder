@@ -173,7 +173,13 @@ export function createChromeMock(options = {}) {
       getManifest: vi.fn(() => ({
         version: options.manifestVersion || "9.9.9"
       })),
-      getURL: vi.fn((url) => "moz-extension://speeder/" + url)
+      getURL: vi.fn((url) => "moz-extension://speeder/" + url),
+      sendMessage: vi.fn((message, callback) => {
+        if (options.runtimeSendMessageImpl) {
+          return options.runtimeSendMessageImpl(message, callback);
+        }
+        if (callback) callback({ paused: false });
+      })
     },
     storage: {
       sync: syncArea,

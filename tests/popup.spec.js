@@ -18,6 +18,7 @@ function bootPopup(options) {
     manifest: { version: "9.9.9-test" },
     syncData: config.syncData,
     localData: config.localData,
+    runtimeSendMessageImpl: config.runtimeSendMessageImpl,
     tabsQueryResult: [
       config.activeTab || { id: 99, active: true, url: "https://example.com/" }
     ]
@@ -107,7 +108,7 @@ describe("popup.js", () => {
       executeScriptImpl: (tabId, details, callback) => {
         speedQueryCount += 1;
         callback(
-          speedQueryCount <= 2
+          speedQueryCount === 1
             ? [
                 { speed: 1.25, preferred: false },
                 { speed: 1.5, frameToken: "playing-frame", preferred: true }
@@ -241,6 +242,31 @@ describe("popup.js", () => {
     expect(window.open).toHaveBeenCalledWith(
       "moz-extension://options/options.html"
     );
+  });
+
+  it("pauses only the active tab for the browser session", async () => {
+    let paused = false;
+    const chrome = bootPopup({
+      runtimeSendMessageImpl: (message, callback) => {
+        if (message.action === "set_tab_paused") paused = message.paused === true;
+        callback({ paused });
+      }
+    });
+    await flushAsyncWork();
+
+    document.querySelector("#pauseTab").click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      { action: "set_tab_paused", tabId: 99, paused: true },
+      expect.any(Function)
+    );
+    expect(document.querySelector("#pauseTab").textContent).toBe(
+      "Resume on this tab"
+    );
+    expect(document.querySelector("#popupControlBar").style.display).toBe(
+      "none"
+    );
+    expect(document.querySelector("#status").textContent).toContain("paused");
   });
 
   it("toggles enablement and closes after a successful refresh", async () => {

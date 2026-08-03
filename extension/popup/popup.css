@@ -119,6 +119,12 @@ button:disabled {
   color: #285d21;
 }
 
+#pauseTab[aria-pressed="true"] {
+  background: #fff3d6;
+  border-color: #d8b66b;
+  color: #704f0d;
+}
+
 .popup-divider {
   height: 1px;
   background: var(--border);

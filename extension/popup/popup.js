@@ -1,4 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
+  if (window.vscPopupInitialized) return;
+  window.vscPopupInitialized = true;
   var speederShared =
     typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
   var siteRuleUtils = speederShared.siteRules || {};
@@ -30,6 +32,27 @@ document.addEventListener("DOMContentLoaded", function () {
   var selectedFrameToken = null;
   var shortcutTargetMode = "closest";
   var diagnosticContext = null;
+
+  function updateTabPauseButton(paused) {
+    var button = document.querySelector("#pauseTab");
+    button.setAttribute("aria-pressed", paused ? "true" : "false");
+    button.textContent = paused ? "Resume on this tab" : "Pause on this tab";
+  }
+
+  function getTabPauseState(tab, callback) {
+    if (!tab || !Number.isInteger(tab.id)) {
+      callback(false);
+      return;
+    }
+    chrome.runtime.sendMessage(
+      { action: "get_tab_pause_state", tabId: tab.id },
+      function(response) {
+        callback(
+          !chrome.runtime.lastError && response && response.paused === true
+        );
+      }
+    );
+  }
 
   function getSafePageDetails(url) {
     try {
@@ -93,6 +116,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 .sort()
             : []
         },
+        tabPaused: diagnosticContext.tabPaused === true,
         frame: frame && frame.diagnostics ? frame.diagnostics : null
       },
       null,
@@ -195,16 +219,23 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getActiveTabContext(callback) {
+    function finish(context) {
+      getTabPauseState(context.tab, function(paused) {
+        context.tabPaused = paused;
+        if (callback) callback(context);
+      });
+    }
+
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       var activeTab = tabs && tabs[0] ? tabs[0] : null;
       if (!activeTab || !activeTab.id) {
-        if (callback) callback({ tab: null, url: "" });
+        finish({ tab: null, url: "" });
         return;
       }
 
       var tabUrl = typeof activeTab.url === "string" ? activeTab.url : "";
       if (tabUrl.length > 0) {
-        if (callback) callback({ tab: activeTab, url: tabUrl });
+        finish({ tab: activeTab, url: tabUrl });
         return;
       }
 
@@ -213,13 +244,13 @@ document.addEventListener("DOMContentLoaded", function () {
         { action: "get_page_context" },
         function (response) {
           if (chrome.runtime.lastError) {
-            if (callback) callback({ tab: activeTab, url: "" });
+            finish({ tab: activeTab, url: "" });
             return;
           }
 
           var pageUrl =
             response && typeof response.url === "string" ? response.url : "";
-          if (callback) callback({ tab: activeTab, url: pageUrl });
+          finish({ tab: activeTab, url: pageUrl });
         }
       );
     });
@@ -422,6 +453,40 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   });
 
+  document.querySelector("#pauseTab").addEventListener("click", function () {
+    var tab = diagnosticContext && diagnosticContext.tab;
+    if (!tab || !Number.isInteger(tab.id)) {
+      setStatusMessage("This page cannot be paused.");
+      return;
+    }
+    var button = this;
+    var paused = button.getAttribute("aria-pressed") !== "true";
+    button.disabled = true;
+    chrome.runtime.sendMessage(
+      { action: "set_tab_paused", tabId: tab.id, paused: paused },
+      function(response) {
+        button.disabled = false;
+        if (chrome.runtime.lastError || !response) {
+          setStatusMessage("Could not update this tab.");
+          return;
+        }
+        diagnosticContext.tabPaused = response.paused === true;
+        updateTabPauseButton(diagnosticContext.tabPaused);
+        setControlBarVisible(
+          !diagnosticContext.tabPaused &&
+            diagnosticContext.siteAvailable &&
+            diagnosticContext.showBar
+        );
+        setForceButtonLoading(diagnosticContext.tabPaused);
+        setStatusMessage(
+          diagnosticContext.tabPaused
+            ? "Speeder is paused for this tab."
+            : "Speeder resumed for this tab."
+        );
+      }
+    );
+  });
+
   document.querySelector("#donate").addEventListener("click", function () {
     this.classList.add("hide");
     document.querySelector("#donateOptions").classList.remove("hide");
@@ -534,6 +599,9 @@ document.addEventListener("DOMContentLoaded", function () {
         getActiveTabContext(function (context) {
           if (currentRenderToken !== renderToken) return;
 
+          var tabPaused = context && context.tabPaused === true;
+          updateTabPauseButton(tabPaused);
+
           var url = context && context.url ? context.url : "";
           var siteRule = matchSiteRule(url, storage.siteRules);
           var siteDisabled = isSiteRuleDisabled(siteRule);
@@ -554,16 +622,21 @@ document.addEventListener("DOMContentLoaded", function () {
               ? siteRule.forceLastSavedSpeed === true
               : storage.forceLastSavedSpeed === true;
           diagnosticContext = {
+            tab: context && context.tab,
             url: url,
             storage: storage,
             siteRule: siteRule,
-            frame: null
+            frame: null,
+            tabPaused: tabPaused,
+            siteAvailable: siteAvailable,
+            showBar: showBar
           };
           document.querySelector("#addSiteRule").disabled =
             !getCurrentSiteRuleDetails(url);
 
           if (siteRule && siteRule.showPopupControlBar !== undefined) {
             showBar = siteRule.showPopupControlBar;
+            diagnosticContext.showBar = showBar;
           }
 
           toggleEnabledUI(storage.enabled !== false);
@@ -572,7 +645,13 @@ document.addEventListener("DOMContentLoaded", function () {
             resolvePopupButtons(storage, siteRule),
             customIconsMap
           );
-          setControlBarVisible(siteAvailable && showBar);
+          setControlBarVisible(!tabPaused && siteAvailable && showBar);
+
+          if (tabPaused) {
+            setForceButtonLoading(true);
+            setStatusMessage("Speeder is paused for this tab.");
+            return;
+          }
 
           if (siteDisabled) {
             setForceButtonLoading(false);

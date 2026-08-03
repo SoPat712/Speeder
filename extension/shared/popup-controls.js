@@ -97,7 +97,61 @@
     return fallback;
   }
 
+  function getSafePageDetails(url) {
+    try {
+      var parsed = new URL(url);
+      return {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname || null
+      };
+    } catch (_error) {
+      return { protocol: null, hostname: null };
+    }
+  }
+
+  function buildDiagnosticReport(context) {
+    var config = context || {};
+    var storage = config.storage || {};
+    var siteRule = config.siteRule || null;
+    var frame = config.frame || null;
+
+    return JSON.stringify(
+      {
+        speederVersion: config.speederVersion || null,
+        browser: config.browser || null,
+        platform: config.platform || null,
+        page: getSafePageDetails(config.url),
+        globalSettings: {
+          enabled: storage.enabled !== false,
+          rememberSpeed: storage.rememberSpeed === true,
+          forceLastSavedSpeed: storage.forceLastSavedSpeed === true,
+          audioEnabled: storage.audioBoolean === true,
+          startHidden: storage.startHidden === true,
+          hideWithControls: storage.hideWithControls === true,
+          controllerLocation: storage.controllerLocation,
+          shortcutTargetMode: storage.shortcutTargetMode
+        },
+        matchedSiteRule: {
+          matched: Boolean(siteRule),
+          disabled: config.siteRuleDisabled === true,
+          overrideKeys: siteRule
+            ? Object.keys(siteRule)
+                .filter(function(key) {
+                  return key !== "pattern" && key !== "title";
+                })
+                .sort()
+            : []
+        },
+        tabPaused: config.tabPaused === true,
+        frame: frame && frame.diagnostics ? frame.diagnostics : null
+      },
+      null,
+      2
+    );
+  }
+
   return {
+    buildDiagnosticReport: buildDiagnosticReport,
     pickBestFrameSpeedResult: pickBestFrameSpeedResult,
     resolvePopupButtons: resolvePopupButtons,
     sanitizeButtonOrder: sanitizeButtonOrder

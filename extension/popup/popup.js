@@ -54,18 +54,6 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   }
 
-  function getSafePageDetails(url) {
-    try {
-      var parsed = new URL(url);
-      return {
-        protocol: parsed.protocol,
-        hostname: parsed.hostname || null
-      };
-    } catch (_error) {
-      return { protocol: null, hostname: null };
-    }
-  }
-
   function getCurrentSiteRuleDetails(url) {
     try {
       var parsed = new URL(url);
@@ -86,42 +74,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function buildDiagnosticReport() {
     if (!diagnosticContext) return null;
-    var storage = diagnosticContext.storage;
-    var siteRule = diagnosticContext.siteRule;
-    var frame = diagnosticContext.frame;
-    return JSON.stringify(
-      {
-        speederVersion: chrome.runtime.getManifest().version,
-        browser: navigator.userAgent,
-        platform: navigator.platform || null,
-        page: getSafePageDetails(diagnosticContext.url),
-        globalSettings: {
-          enabled: storage.enabled !== false,
-          rememberSpeed: storage.rememberSpeed === true,
-          forceLastSavedSpeed: storage.forceLastSavedSpeed === true,
-          audioEnabled: storage.audioBoolean === true,
-          startHidden: storage.startHidden === true,
-          hideWithControls: storage.hideWithControls === true,
-          controllerLocation: storage.controllerLocation,
-          shortcutTargetMode: storage.shortcutTargetMode
-        },
-        matchedSiteRule: {
-          matched: Boolean(siteRule),
-          disabled: isSiteRuleDisabled(siteRule),
-          overrideKeys: siteRule
-            ? Object.keys(siteRule)
-                .filter(function(key) {
-                  return key !== "pattern" && key !== "title";
-                })
-                .sort()
-            : []
-        },
-        tabPaused: diagnosticContext.tabPaused === true,
-        frame: frame && frame.diagnostics ? frame.diagnostics : null
-      },
-      null,
-      2
-    );
+    return popupControlUtils.buildDiagnosticReport({
+      speederVersion: chrome.runtime.getManifest().version,
+      browser: navigator.userAgent,
+      platform: navigator.platform || null,
+      url: diagnosticContext.url,
+      storage: diagnosticContext.storage,
+      siteRule: diagnosticContext.siteRule,
+      siteRuleDisabled: isSiteRuleDisabled(diagnosticContext.siteRule),
+      tabPaused: diagnosticContext.tabPaused,
+      frame: diagnosticContext.frame
+    });
   }
 
   function persistExpandedSettings(rawStorage, settings, callback) {

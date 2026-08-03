@@ -29,6 +29,58 @@ document.addEventListener("DOMContentLoaded", function () {
   var forceLastSavedSpeedControlledBySiteRule = null;
   var selectedFrameToken = null;
   var shortcutTargetMode = "closest";
+  var diagnosticContext = null;
+
+  function getSafePageDetails(url) {
+    try {
+      var parsed = new URL(url);
+      return {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname || null
+      };
+    } catch (_error) {
+      return { protocol: null, hostname: null };
+    }
+  }
+
+  function buildDiagnosticReport() {
+    if (!diagnosticContext) return null;
+    var storage = diagnosticContext.storage;
+    var siteRule = diagnosticContext.siteRule;
+    var frame = diagnosticContext.frame;
+    return JSON.stringify(
+      {
+        speederVersion: chrome.runtime.getManifest().version,
+        browser: navigator.userAgent,
+        platform: navigator.platform || null,
+        page: getSafePageDetails(diagnosticContext.url),
+        globalSettings: {
+          enabled: storage.enabled !== false,
+          rememberSpeed: storage.rememberSpeed === true,
+          forceLastSavedSpeed: storage.forceLastSavedSpeed === true,
+          audioEnabled: storage.audioBoolean === true,
+          startHidden: storage.startHidden === true,
+          hideWithControls: storage.hideWithControls === true,
+          controllerLocation: storage.controllerLocation,
+          shortcutTargetMode: storage.shortcutTargetMode
+        },
+        matchedSiteRule: {
+          matched: Boolean(siteRule),
+          disabled: isSiteRuleDisabled(siteRule),
+          overrideKeys: siteRule
+            ? Object.keys(siteRule)
+                .filter(function(key) {
+                  return key !== "pattern" && key !== "title";
+                })
+                .sort()
+            : []
+        },
+        frame: frame && frame.diagnostics ? frame.diagnostics : null
+      },
+      null,
+      2
+    );
+  }
 
   function persistExpandedSettings(rawStorage, settings, callback) {
     var mutation = vscBuildManagedStorageMutation(rawStorage, settings);
@@ -288,6 +340,26 @@ document.addEventListener("DOMContentLoaded", function () {
     window.open("https://github.com/SoPat712/Speeder/issues");
   });
 
+  document.querySelector("#copyDiagnostics").addEventListener("click", function () {
+    var report = buildDiagnosticReport();
+    if (!report) {
+      setStatusMessage("Diagnostics are still loading.");
+      return;
+    }
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+      setStatusMessage("Clipboard access is unavailable.");
+      return;
+    }
+    navigator.clipboard.writeText(report).then(
+      function () {
+        setStatusMessage("Diagnostics copied. Review before sharing.");
+      },
+      function () {
+        setStatusMessage("Could not copy diagnostics.");
+      }
+    );
+  });
+
   document.querySelector("#donate").addEventListener("click", function () {
     this.classList.add("hide");
     document.querySelector("#donateOptions").classList.remove("hide");
@@ -419,6 +491,12 @@ document.addEventListener("DOMContentLoaded", function () {
             forceLastSavedSpeedControlledBySiteRule
               ? siteRule.forceLastSavedSpeed === true
               : storage.forceLastSavedSpeed === true;
+          diagnosticContext = {
+            url: url,
+            storage: storage,
+            siteRule: siteRule,
+            frame: null
+          };
 
           if (siteRule && siteRule.showPopupControlBar !== undefined) {
             showBar = siteRule.showPopupControlBar;
@@ -443,6 +521,7 @@ document.addEventListener("DOMContentLoaded", function () {
           if (siteAvailable) {
             querySpeed(function(frameContext) {
               if (currentRenderToken !== renderToken) return;
+              diagnosticContext.frame = frameContext || null;
               if (
                 frameContext &&
                 typeof frameContext.forceLastSavedSpeed === "boolean"

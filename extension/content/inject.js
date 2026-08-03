@@ -90,6 +90,80 @@ function getPrimaryVideoElement(mediaElements) {
   return best;
 }
 
+function getDiagnosticsSnapshot(media) {
+  var primary = media || getPrimaryVideoElement();
+  if (!primary) return null;
+
+  var controller = primary.vsc || null;
+  var wrapper = controller && controller.div;
+  var fullscreenElement = getFullscreenElement(primary.ownerDocument);
+  var rect = null;
+  try {
+    rect = primary.getBoundingClientRect();
+  } catch (_error) {}
+
+  return {
+    mediaCount: tc.mediaElements.filter(function(item) {
+      return item && item.isConnected;
+    }).length,
+    mediaType: String(primary.nodeName || "media").toLowerCase(),
+    playbackRate: Number(primary.playbackRate),
+    paused: primary.paused === true,
+    ended: primary.ended === true,
+    readyState: Number(primary.readyState) || 0,
+    muted: primary.muted === true,
+    volume: Number(primary.volume),
+    dimensions: rect
+      ? [Math.round(Number(rect.width) || 0), Math.round(Number(rect.height) || 0)]
+      : [0, 0],
+    fullscreen: {
+      active: Boolean(fullscreenElement),
+      element: fullscreenElement
+        ? String(fullscreenElement.nodeName || "element").toLowerCase()
+        : null,
+      ownsMedia: Boolean(
+        fullscreenElement &&
+          (fullscreenElement === primary ||
+            isComposedDescendant(primary, fullscreenElement))
+      )
+    },
+    controller: {
+      present: Boolean(controller && wrapper),
+      connected: Boolean(wrapper && wrapper.isConnected),
+      hidden: Boolean(wrapper && wrapper.classList.contains("vsc-hidden")),
+      geometryHidden: Boolean(
+        wrapper && wrapper.classList.contains("vsc-geometry-hidden")
+      ),
+      fullscreenPopover: Boolean(
+        wrapper && wrapper.classList.contains("vsc-fullscreen-popover")
+      ),
+      location: controller ? controller.controllerLocation : null
+    },
+    effectiveSettings: {
+      enabled: tc.settings.enabled !== false,
+      startHidden: tc.settings.startHidden === true,
+      hideWithControls: tc.settings.hideWithControls === true,
+      rememberSpeed: tc.settings.rememberSpeed === true,
+      forceLastSavedSpeed: tc.settings.forceLastSavedSpeed === true,
+      shortcutTargetMode: tc.settings.shortcutTargetMode
+    },
+    siteRule: {
+      matched: Boolean(tc.activeSiteRule),
+      disabled: Boolean(
+        tc.activeSiteRule &&
+          siteRuleUtils.isSiteRuleDisabled(tc.activeSiteRule)
+      ),
+      overrideKeys: tc.activeSiteRule
+        ? Object.keys(tc.activeSiteRule)
+            .filter(function(key) {
+              return key !== "pattern" && key !== "title";
+            })
+            .sort()
+        : []
+    }
+  };
+}
+
 var tc = {
   settings: {
     lastSpeed: getSharedDefault("lastSpeed", 1.0),
@@ -2344,6 +2418,7 @@ function loadInitialRuntimeSettings(attempt) {
           sendResponse({
             speed: videoGs.playbackRate,
             frameToken: tc.frameToken,
+            diagnostics: getDiagnosticsSnapshot(videoGs),
             forceLastSavedSpeed: tc.settings.forceLastSavedSpeed === true,
             forceLastSavedSpeedControlledBySiteRule: Boolean(
               tc.activeSiteRule &&

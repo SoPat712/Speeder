@@ -167,6 +167,50 @@ describe("popup.js", () => {
     );
   });
 
+  it("copies redacted diagnostics for the active media frame", async () => {
+    bootPopup({
+      activeTab: {
+        id: 12,
+        active: true,
+        url: "https://video.example/watch?private_token=secret"
+      },
+      executeScriptImpl: (tabId, details, callback) => {
+        callback([
+          {
+            speed: 1.5,
+            preferred: true,
+            diagnostics: {
+              mediaType: "video",
+              fullscreen: { active: true, element: "div", ownsMedia: true },
+              controller: { present: true, hidden: false }
+            }
+          }
+        ]);
+      }
+    });
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    await flushAsyncWork();
+
+    document.querySelector("#copyDiagnostics").click();
+    await flushAsyncWork();
+
+    expect(writeText).toHaveBeenCalled();
+    const reportText = writeText.mock.calls.at(-1)[0];
+    const report = JSON.parse(reportText);
+    expect(report.page).toEqual({
+      protocol: "https:",
+      hostname: "video.example"
+    });
+    expect(report.frame.mediaType).toBe("video");
+    expect(reportText).not.toContain("private_token");
+    expect(reportText).not.toContain("secret");
+    expect(document.querySelector("#status").textContent).toContain("copied");
+  });
+
   it("toggles enablement and closes after a successful refresh", async () => {
     const chrome = bootPopup({
       syncData: {

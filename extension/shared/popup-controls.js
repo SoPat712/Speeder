@@ -71,6 +71,9 @@
       if (typeof result.frameToken === "string") {
         normalized.frameToken = result.frameToken;
       }
+      if (result.diagnostics && typeof result.diagnostics === "object") {
+        normalized.diagnostics = result.diagnostics;
+      }
       if (typeof result.forceLastSavedSpeed === "boolean") {
         normalized.forceLastSavedSpeed = result.forceLastSavedSpeed;
       }

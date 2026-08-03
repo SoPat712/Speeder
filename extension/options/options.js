@@ -2104,6 +2104,41 @@ document.addEventListener("DOMContentLoaded", function () {
     .addEventListener("change", updatePopupEditorDisabledState);
 
   document.getElementById("save").addEventListener("click", save_options);
+  document.getElementById("copyDiagnostics").addEventListener("click", function () {
+    var status = document.getElementById("status");
+    if (
+      !navigator.clipboard ||
+      typeof navigator.clipboard.writeText !== "function"
+    ) {
+      status.textContent = "Clipboard access is unavailable.";
+      return;
+    }
+    var report = popupControlUtils.buildDiagnosticReport({
+      speederVersion: manifest.version,
+      browser: navigator.userAgent,
+      platform: navigator.platform || null,
+      storage: {
+        enabled: document.getElementById("enabled").checked,
+        rememberSpeed: document.getElementById("rememberSpeed").checked,
+        forceLastSavedSpeed:
+          document.getElementById("forceLastSavedSpeed").checked,
+        audioBoolean: document.getElementById("audioBoolean").checked,
+        startHidden: document.getElementById("startHidden").checked,
+        hideWithControls: document.getElementById("hideWithControls").checked,
+        controllerLocation: document.getElementById("controllerLocation").value,
+        shortcutTargetMode:
+          document.getElementById("shortcutTargetMode").value
+      }
+    });
+    navigator.clipboard.writeText(report).then(
+      function() {
+        status.textContent = "Diagnostics copied. Review before sharing.";
+      },
+      function() {
+        status.textContent = "Could not copy diagnostics.";
+      }
+    );
+  });
   
   const addSelector = document.getElementById("addShortcutSelector");
   if (addSelector) {

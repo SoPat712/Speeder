@@ -12,6 +12,10 @@
         typeof tc === "object" && typeof tc.frameToken === "string"
           ? tc.frameToken
           : null,
+      diagnostics:
+        typeof getDiagnosticsSnapshot === "function"
+          ? getDiagnosticsSnapshot(v)
+          : null,
       preferred: !v.paused,
       forceLastSavedSpeed: Boolean(
         typeof tc === "object" && tc.settings && tc.settings.forceLastSavedSpeed

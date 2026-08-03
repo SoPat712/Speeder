@@ -90,6 +90,81 @@ function getPrimaryVideoElement(mediaElements) {
   return best;
 }
 
+function getDiagnosticsSnapshot(media) {
+  var primary = media || getPrimaryVideoElement();
+  if (!primary) return null;
+
+  var controller = primary.vsc || null;
+  var wrapper = controller && controller.div;
+  var fullscreenElement = getFullscreenElement(primary.ownerDocument);
+  var rect = null;
+  try {
+    rect = primary.getBoundingClientRect();
+  } catch (_error) {}
+
+  return {
+    mediaCount: tc.mediaElements.filter(function(item) {
+      return item && item.isConnected;
+    }).length,
+    mediaType: String(primary.nodeName || "media").toLowerCase(),
+    playbackRate: Number(primary.playbackRate),
+    paused: primary.paused === true,
+    ended: primary.ended === true,
+    readyState: Number(primary.readyState) || 0,
+    muted: primary.muted === true,
+    volume: Number(primary.volume),
+    dimensions: rect
+      ? [Math.round(Number(rect.width) || 0), Math.round(Number(rect.height) || 0)]
+      : [0, 0],
+    fullscreen: {
+      active: Boolean(fullscreenElement),
+      element: fullscreenElement
+        ? String(fullscreenElement.nodeName || "element").toLowerCase()
+        : null,
+      ownsMedia: Boolean(
+        fullscreenElement &&
+          (fullscreenElement === primary ||
+            isComposedDescendant(primary, fullscreenElement))
+      )
+    },
+    controller: {
+      present: Boolean(controller && wrapper),
+      connected: Boolean(wrapper && wrapper.isConnected),
+      hidden: Boolean(wrapper && wrapper.classList.contains("vsc-hidden")),
+      geometryHidden: Boolean(
+        wrapper && wrapper.classList.contains("vsc-geometry-hidden")
+      ),
+      fullscreenPopover: Boolean(
+        wrapper && wrapper.classList.contains("vsc-fullscreen-popover")
+      ),
+      location: controller ? controller.controllerLocation : null
+    },
+    effectiveSettings: {
+      enabled: tc.settings.enabled !== false,
+      tabPaused: tc.tabPaused === true,
+      startHidden: tc.settings.startHidden === true,
+      hideWithControls: tc.settings.hideWithControls === true,
+      rememberSpeed: tc.settings.rememberSpeed === true,
+      forceLastSavedSpeed: tc.settings.forceLastSavedSpeed === true,
+      shortcutTargetMode: tc.settings.shortcutTargetMode
+    },
+    siteRule: {
+      matched: Boolean(tc.activeSiteRule),
+      disabled: Boolean(
+        tc.activeSiteRule &&
+          siteRuleUtils.isSiteRuleDisabled(tc.activeSiteRule)
+      ),
+      overrideKeys: tc.activeSiteRule
+        ? Object.keys(tc.activeSiteRule)
+            .filter(function(key) {
+              return key !== "pattern" && key !== "title";
+            })
+            .sort()
+        : []
+    }
+  };
+}
+
 var tc = {
   settings: {
     lastSpeed: getSharedDefault("lastSpeed", 1.0),
@@ -151,6 +226,7 @@ var tc = {
   speedAccessTimes: {},
   persistedLastSpeed: 1.0,
   activeSiteRule: null,
+  tabPaused: false,
   siteRuleBase: null,
   runtimeSettingsHydrated: false,
   pendingMediaCandidates: [],
@@ -162,6 +238,29 @@ var tc = {
       ? window.crypto.randomUUID()
       : String(Date.now()) + "-" + Math.random().toString(36).slice(2)
 };
+
+function isSpeederActiveForCurrentPage() {
+  return (
+    tc.tabPaused !== true &&
+    siteRuleUtils.isSpeederActiveForSite(
+      tc.settings.enabled,
+      tc.activeSiteRule
+    )
+  );
+}
+
+function applyTabPausedState(paused) {
+  tc.tabPaused = paused === true;
+  if (!tc.runtimeSettingsHydrated) return;
+  if (tc.tabPaused) {
+    clearAllSpeedRestoreEnforcement();
+    tc.mediaElements.slice().forEach(function(media) {
+      removeController(media);
+    });
+    return;
+  }
+  initializeWhenReady(document, true);
+}
 
 var MIN_SPEED = Number(keyBindingUtils.MIN_SPEED) || 0.1;
 var MAX_SPEED = Number(keyBindingUtils.MAX_SPEED) || 16;
@@ -1516,7 +1615,7 @@ function ensureController(node, parent) {
   // href selects site rules; re-run on every new/usable media so all runtime
   // paths agree on activation and effective settings.
   applySiteRuleOverrides();
-  if (!siteRuleUtils.isSpeederActiveForSite(tc.settings.enabled, tc.activeSiteRule)) {
+  if (!isSpeederActiveForCurrentPage()) {
     if (node.vsc) removeController(node);
     return null;
   }
@@ -2324,12 +2423,24 @@ function loadInitialRuntimeSettings(attempt) {
     return;
   }
   hydrateRuntimeSettings(rawStorage || {});
+  if (chrome.runtime && typeof chrome.runtime.sendMessage === "function") {
+    chrome.runtime.sendMessage({ action: "get_tab_pause_state" }, function(response) {
+      if (!chrome.runtime.lastError && response) {
+        applyTabPausedState(response.paused === true);
+      }
+    });
+  }
   // patchAttachShadow() is now called at top-level before this callback
   // Add a listener for messages from the popup.
   // We use a global flag to ensure the listener is only attached once.
   if (!window.vscMessageListener) {
     chrome.runtime.onMessage.addListener(
       function(request, sender, sendResponse) {
+        if (request.action === "set_tab_paused") {
+          applyTabPausedState(request.paused === true);
+          sendResponse({ paused: tc.tabPaused });
+          return false;
+        }
         if (request.action === "rescan_page") {
           log("Re-scan command received from popup.", 4);
           initializeWhenReady(document, true);
@@ -2344,6 +2455,7 @@ function loadInitialRuntimeSettings(attempt) {
           sendResponse({
             speed: videoGs.playbackRate,
             frameToken: tc.frameToken,
+            diagnostics: getDiagnosticsSnapshot(videoGs),
             forceLastSavedSpeed: tc.settings.forceLastSavedSpeed === true,
             forceLastSavedSpeedControlledBySiteRule: Boolean(
               tc.activeSiteRule &&
@@ -2387,10 +2499,7 @@ function loadInitialRuntimeSettings(attempt) {
             return false;
           }
           if (
-            !siteRuleUtils.isSpeederActiveForSite(
-              tc.settings.enabled,
-              tc.activeSiteRule
-            )
+            !isSpeederActiveForCurrentPage()
           ) {
             return false;
           }
@@ -4160,7 +4269,7 @@ function refreshAllControllerGeometry() {
 /** Re-match site rules for current URL and refresh controller position/opacity on every video. */
 function reapplySiteRulesAndControllerGeometry() {
   applySiteRuleOverrides();
-  if (!siteRuleUtils.isSpeederActiveForSite(tc.settings.enabled, tc.activeSiteRule)) {
+  if (!isSpeederActiveForCurrentPage()) {
     tc.mediaElements.slice().forEach(function(video) {
       removeController(video);
     });
@@ -4418,10 +4527,7 @@ function attachKeydownListeners(doc) {
         if (isEditableShortcutTarget(event)) return;
 
         if (
-          !siteRuleUtils.isSpeederActiveForSite(
-            tc.settings.enabled,
-            tc.activeSiteRule
-          )
+          !isSpeederActiveForCurrentPage()
         ) {
           return;
         }
@@ -4646,10 +4752,7 @@ function initializeNow(doc, forceReinit = false) {
   attachNavigationListeners();
   if (typeof tc.videoController === "undefined") defineVideoController();
   applySiteRuleOverrides();
-  var isActive = siteRuleUtils.isSpeederActiveForSite(
-    tc.settings.enabled,
-    tc.activeSiteRule
-  );
+  var isActive = isSpeederActiveForCurrentPage();
 
   // Keep observing while inactive so dynamically-created media/shadow roots
   // are available to the next forced SPA rescan, but remove stale controls.

@@ -18,6 +18,7 @@ function bootPopup(options) {
     manifest: { version: "9.9.9-test" },
     syncData: config.syncData,
     localData: config.localData,
+    runtimeSendMessageImpl: config.runtimeSendMessageImpl,
     tabsQueryResult: [
       config.activeTab || { id: 99, active: true, url: "https://example.com/" }
     ]
@@ -107,7 +108,7 @@ describe("popup.js", () => {
       executeScriptImpl: (tabId, details, callback) => {
         speedQueryCount += 1;
         callback(
-          speedQueryCount <= 2
+          speedQueryCount === 1
             ? [
                 { speed: 1.25, preferred: false },
                 { speed: 1.5, frameToken: "playing-frame", preferred: true }
@@ -165,6 +166,107 @@ describe("popup.js", () => {
       { action: "run_action", actionName: "rewind" },
       expect.any(Function)
     );
+  });
+
+  it("copies redacted diagnostics for the active media frame", async () => {
+    bootPopup({
+      activeTab: {
+        id: 12,
+        active: true,
+        url: "https://video.example/watch?private_token=secret"
+      },
+      executeScriptImpl: (tabId, details, callback) => {
+        callback([
+          {
+            speed: 1.5,
+            preferred: true,
+            diagnostics: {
+              mediaType: "video",
+              fullscreen: { active: true, element: "div", ownsMedia: true },
+              controller: { present: true, hidden: false }
+            }
+          }
+        ]);
+      }
+    });
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    await flushAsyncWork();
+
+    document.querySelector("#copyDiagnostics").click();
+    await flushAsyncWork();
+
+    expect(writeText).toHaveBeenCalled();
+    const reportText = writeText.mock.calls.at(-1)[0];
+    const report = JSON.parse(reportText);
+    expect(report.page).toEqual({
+      protocol: "https:",
+      hostname: "video.example"
+    });
+    expect(report.frame.mediaType).toBe("video");
+    expect(reportText).not.toContain("private_token");
+    expect(reportText).not.toContain("secret");
+    expect(document.querySelector("#status").textContent).toContain("copied");
+  });
+
+  it("adds one safe origin rule for the current site", async () => {
+    const chrome = bootPopup({
+      activeTab: {
+        id: 18,
+        active: true,
+        url: "https://courses.example:8443/watch/lesson?token=private"
+      }
+    });
+    await flushAsyncWork();
+
+    document.querySelector("#addSiteRule").click();
+    await flushAsyncWork();
+    document.querySelector("#addSiteRule").click();
+    await flushAsyncWork();
+
+    const rules = window.vscExpandStoredSettings(
+      chrome.storage.sync._dump()
+    ).siteRules.filter(function(rule) {
+      return rule.pattern === "https://courses.example:8443";
+    });
+    expect(rules).toEqual([
+      {
+        title: "courses.example:8443",
+        pattern: "https://courses.example:8443",
+        enabled: true
+      }
+    ]);
+    expect(window.open).toHaveBeenCalledWith(
+      "moz-extension://options/options.html"
+    );
+  });
+
+  it("pauses only the active tab for the browser session", async () => {
+    let paused = false;
+    const chrome = bootPopup({
+      runtimeSendMessageImpl: (message, callback) => {
+        if (message.action === "set_tab_paused") paused = message.paused === true;
+        callback({ paused });
+      }
+    });
+    await flushAsyncWork();
+
+    document.querySelector("#pauseTab").click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      { action: "set_tab_paused", tabId: 99, paused: true },
+      expect.any(Function)
+    );
+    expect(document.querySelector("#pauseTab").textContent).toBe(
+      "Resume on this tab"
+    );
+    expect(document.querySelector("#popupControlBar").style.display).toBe(
+      "none"
+    );
+    expect(document.querySelector("#status").textContent).toContain("paused");
   });
 
   it("toggles enablement and closes after a successful refresh", async () => {

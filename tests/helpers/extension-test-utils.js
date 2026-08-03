@@ -245,6 +245,7 @@ function createChromeMock(options) {
   const storageOnChanged = createChromeEvent();
   const tabsOnActivated = createChromeEvent();
   const tabsOnUpdated = createChromeEvent();
+  const tabsOnRemoved = createChromeEvent();
   const runtimeOnMessage = createChromeEvent();
 
   const chrome = {
@@ -252,6 +253,12 @@ function createChromeMock(options) {
       lastError: null,
       getManifest: vi.fn(() => clone(config.manifest) || { version: "0.0.0-test" }),
       getURL: vi.fn((relPath) => `moz-extension://${relPath}`),
+      sendMessage: vi.fn((message, callback) => {
+        if (config.runtimeSendMessageImpl) {
+          return config.runtimeSendMessageImpl(message, callback);
+        }
+        if (callback) callback({ paused: false });
+      }),
       onMessage: runtimeOnMessage
     },
     browserAction: {
@@ -272,7 +279,8 @@ function createChromeMock(options) {
       }),
       create: vi.fn(),
       onActivated: tabsOnActivated,
-      onUpdated: tabsOnUpdated
+      onUpdated: tabsOnUpdated,
+      onRemoved: tabsOnRemoved
     },
     storage: {
       onChanged: storageOnChanged,

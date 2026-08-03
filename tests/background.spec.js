@@ -33,4 +33,34 @@ describe("background toolbar state", () => {
       }
     });
   });
+
+  it("keeps tab pauses in memory and clears closed tabs", () => {
+    loadHtmlString("<!doctype html><html><body></body></html>");
+    const chrome = createChromeMock();
+    global.chrome = chrome;
+    window.chrome = chrome;
+
+    evaluateScript("extension/background/background.js");
+    const listener = chrome.runtime.onMessage.listeners[0];
+    const respond = vi.fn();
+
+    listener(
+      { action: "set_tab_paused", tabId: 42, paused: true },
+      {},
+      respond
+    );
+    expect(respond).toHaveBeenLastCalledWith({ paused: true });
+    expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+      42,
+      { action: "set_tab_paused", paused: true },
+      expect.any(Function)
+    );
+
+    listener({ action: "get_tab_pause_state" }, { tab: { id: 42 } }, respond);
+    expect(respond).toHaveBeenLastCalledWith({ paused: true });
+
+    chrome.tabs.onRemoved.emit(42);
+    listener({ action: "get_tab_pause_state", tabId: 42 }, {}, respond);
+    expect(respond).toHaveBeenLastCalledWith({ paused: false });
+  });
 });

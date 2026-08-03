@@ -43,6 +43,24 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function getCurrentSiteRuleDetails(url) {
+    try {
+      var parsed = new URL(url);
+      if (
+        (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+        !parsed.host
+      ) {
+        return null;
+      }
+      return {
+        title: parsed.host,
+        pattern: parsed.protocol + "//" + parsed.host
+      };
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function buildDiagnosticReport() {
     if (!diagnosticContext) return null;
     var storage = diagnosticContext.storage;
@@ -360,6 +378,50 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   });
 
+  document.querySelector("#addSiteRule").addEventListener("click", function () {
+    var details = diagnosticContext
+      ? getCurrentSiteRuleDetails(diagnosticContext.url)
+      : null;
+    if (!details) {
+      setStatusMessage("A site rule cannot be created for this page.");
+      return;
+    }
+    var added = false;
+
+    updateStoredSettings(
+      function (settings) {
+        var rules = Array.isArray(settings.siteRules) ? settings.siteRules : [];
+        if (
+          rules.some(function(rule) {
+            return rule && rule.pattern === details.pattern;
+          })
+        ) {
+          return;
+        }
+        settings.siteRules = rules.concat([
+          {
+            title: details.title,
+            pattern: details.pattern,
+            enabled: true
+          }
+        ]);
+        added = true;
+      },
+      function (error) {
+        if (error) {
+          setStatusMessage("Could not add this site: " + error.message);
+          return;
+        }
+        setStatusMessage(
+          added
+            ? "Site rule added. Opening settings..."
+            : "Site rule already exists. Opening settings..."
+        );
+        window.open(chrome.runtime.getURL("options/options.html"));
+      }
+    );
+  });
+
   document.querySelector("#donate").addEventListener("click", function () {
     this.classList.add("hide");
     document.querySelector("#donateOptions").classList.remove("hide");
@@ -497,6 +559,8 @@ document.addEventListener("DOMContentLoaded", function () {
             siteRule: siteRule,
             frame: null
           };
+          document.querySelector("#addSiteRule").disabled =
+            !getCurrentSiteRuleDetails(url);
 
           if (siteRule && siteRule.showPopupControlBar !== undefined) {
             showBar = siteRule.showPopupControlBar;

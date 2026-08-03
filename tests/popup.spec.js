@@ -211,6 +211,38 @@ describe("popup.js", () => {
     expect(document.querySelector("#status").textContent).toContain("copied");
   });
 
+  it("adds one safe origin rule for the current site", async () => {
+    const chrome = bootPopup({
+      activeTab: {
+        id: 18,
+        active: true,
+        url: "https://courses.example:8443/watch/lesson?token=private"
+      }
+    });
+    await flushAsyncWork();
+
+    document.querySelector("#addSiteRule").click();
+    await flushAsyncWork();
+    document.querySelector("#addSiteRule").click();
+    await flushAsyncWork();
+
+    const rules = window.vscExpandStoredSettings(
+      chrome.storage.sync._dump()
+    ).siteRules.filter(function(rule) {
+      return rule.pattern === "https://courses.example:8443";
+    });
+    expect(rules).toEqual([
+      {
+        title: "courses.example:8443",
+        pattern: "https://courses.example:8443",
+        enabled: true
+      }
+    ]);
+    expect(window.open).toHaveBeenCalledWith(
+      "moz-extension://options/options.html"
+    );
+  });
+
   it("toggles enablement and closes after a successful refresh", async () => {
     const chrome = bootPopup({
       syncData: {

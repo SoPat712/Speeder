@@ -29,7 +29,10 @@ describe("lucide-client.js", () => {
       <svg width="10" height="10" onclick="evil()">
         <script>alert(1)</script>
         <foreignObject>bad</foreignObject>
-        <path d="M0 0h10v10"></path>
+        <image href="https://tracking.example/icon.png"></image>
+        <use href="https://tracking.example/sprite.svg#icon"></use>
+        <animate attributeName="opacity" values="0;1"></animate>
+        <path style="fill: url(https://tracking.example/a)" fill="url(#paint)" d="M0 0h10v10"></path>
       </svg>
     `);
 
@@ -37,6 +40,12 @@ describe("lucide-client.js", () => {
     expect(sanitized).not.toContain("onclick");
     expect(sanitized).not.toContain("<script");
     expect(sanitized).not.toContain("foreignObject");
+    expect(sanitized).not.toContain("tracking.example");
+    expect(sanitized).not.toContain("<image");
+    expect(sanitized).not.toContain("<use");
+    expect(sanitized).not.toContain("<animate");
+    expect(sanitized).not.toContain("style=");
+    expect(sanitized).not.toContain("url(");
     expect(sanitized).toContain('width="100%"');
   });
 

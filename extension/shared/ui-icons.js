@@ -72,22 +72,26 @@ function vscClearElement(el) {
 function vscSanitizeSvgTree(svg) {
   if (!svg || String(svg.tagName).toLowerCase() !== "svg") return null;
 
-  svg.querySelectorAll("script, style, foreignObject").forEach(function (n) {
-    n.remove();
-  });
+  svg
+    .querySelectorAll(
+      "script, style, foreignObject, iframe, object, embed, image, use, a, " +
+        "animate, animateMotion, animateTransform, set"
+    )
+    .forEach(function (n) {
+      n.remove();
+    });
 
   [svg].concat(Array.from(svg.querySelectorAll("*"))).forEach(function (el) {
     for (var i = el.attributes.length - 1; i >= 0; i--) {
       var attr = el.attributes[i];
       var name = attr.name.toLowerCase();
       var val = attr.value;
-      if (name.indexOf("on") === 0) {
-        el.removeAttribute(attr.name);
-        continue;
-      }
       if (
-        (name === "href" || name === "xlink:href") &&
-        /^\s*javascript:/i.test(val)
+        name.indexOf("on") === 0 ||
+        name === "style" ||
+        name === "href" ||
+        name === "xlink:href" ||
+        /url\s*\(/i.test(val)
       ) {
         el.removeAttribute(attr.name);
       }

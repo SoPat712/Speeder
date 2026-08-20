@@ -28,6 +28,8 @@
     "popupControllerButtons",
     "popupMatchHoverControls",
     "rememberSpeed",
+    "shortcutTargetMode",
+    "showAmbientLoopControls",
     "showPopupControlBar",
     "siteRules",
     "siteRulesFormat",

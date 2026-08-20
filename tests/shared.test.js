@@ -241,6 +241,24 @@ describe("shared helpers", () => {
       localSettings: null
     });
 
+    expect(
+      importExportUtils.extractImportSettings({
+        showAmbientLoopControls: true
+      })
+    ).toEqual({
+      isWrappedBackup: false,
+      settings: { showAmbientLoopControls: true },
+      localSettings: null
+    });
+
+    expect(
+      importExportUtils.extractImportSettings({ shortcutTargetMode: "closest" })
+    ).toEqual({
+      isWrappedBackup: false,
+      settings: { shortcutTargetMode: "closest" },
+      localSettings: null
+    });
+
     expect(importExportUtils.isRecognizedRawSettingsObject({ wat: true })).toBe(
       false
     );

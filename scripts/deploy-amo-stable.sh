@@ -45,8 +45,8 @@ validate_semver() {
     echo "Error: empty version." >&2
     return 1
   fi
-  if [[ ! "$s" =~ ^[0-9]+(\.[0-9]+){0,3}(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-    echo "Error: invalid version (use something like 5.0.4)." >&2
+  if [[ ! "$s" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+    echo "Error: Firefox versions must contain only 1-4 numeric parts (for example, 6.0.8.1)." >&2
     return 1
   fi
 }
@@ -59,16 +59,26 @@ fi
 git checkout beta
 git pull origin beta
 
-echo "Current version on beta ($MANIFEST_PATH): $(manifest_version)"
+CURRENT_VERSION="$(manifest_version)"
+echo "Current version on beta ($MANIFEST_PATH): $CURRENT_VERSION"
 read -r -p "Release version for $MANIFEST_PATH + tag (e.g. 5.0.4): " SEMVER_IN
 SEMVER="$(normalize_semver "$SEMVER_IN")"
 validate_semver "$SEMVER"
+if [[ "$SEMVER" == "$CURRENT_VERSION" ]]; then
+  echo "Error: release version must differ from the current manifest version $CURRENT_VERSION." >&2
+  exit 1
+fi
 
 TAG="v${SEMVER}"
 if [[ "$TAG" == *-beta* ]]; then
   echo "Warning: stable tags should not contain '-beta' (workflow would use unlisted + prerelease, not AMO listed)."
   read -r -p "Continue anyway? [y/N] " w
   [[ "${w:-}" =~ ^[yY](es)?$ ]] || { echo "Aborted."; exit 1; }
+fi
+if git show-ref --verify --quiet "refs/tags/$TAG" ||
+  git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+  echo "Error: tag $TAG already exists." >&2
+  exit 1
 fi
 
 echo
@@ -87,11 +97,11 @@ git pull origin main
 git merge --squash beta
 bump_manifest "$SEMVER"
 git add -A
-git commit -m "Release $TAG"
+git commit -m "chore(release): prepare $TAG"
 
 git push origin main
 
-git tag -a "$TAG" -m "$TAG"
+git tag -s "$TAG" -m "$TAG"
 git push origin "$TAG"
 
 git checkout dev

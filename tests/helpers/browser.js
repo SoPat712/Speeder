@@ -8,6 +8,7 @@ import { applyJSDOMWindow } from "./jsdom-globals.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..", "..");
+let activeDom = null;
 
 function readRepoFile(relPath) {
   return fs.readFileSync(path.join(repoRoot, relPath), "utf8");
@@ -18,11 +19,13 @@ function readRepoFile(relPath) {
  * top-level `const` redeclaration errors (avoids document.write).
  */
 export function loadHtmlString(html, options = {}) {
+  if (activeDom) activeDom.window.close();
   const dom = new JSDOM(html, {
     url: options.url || "https://example.org/",
     pretendToBeVisual: true,
     runScripts: "dangerously"
   });
+  activeDom = dom;
   applyJSDOMWindow(dom.window);
 }
 

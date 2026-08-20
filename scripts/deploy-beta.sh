@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Merge dev → beta, push beta, and push an annotated beta tag (v*-beta*).
+# Merge dev → beta, push beta, and push a signed beta tag (v*-beta*).
 # Triggers .github/workflows/deploy.yml: unlisted AMO sign + GitHub prerelease.
 
 set -euo pipefail
@@ -44,8 +44,8 @@ validate_semver() {
     echo "Error: empty version." >&2
     return 1
   fi
-  if [[ ! "$s" =~ ^[0-9]+(\.[0-9]+){0,3}(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-    echo "Error: invalid version (use something like 5.0.4 or 5.0.4-beta.1)." >&2
+  if [[ ! "$s" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+    echo "Error: Firefox versions must contain only 1-4 numeric parts (for example, 6.0.8.1)." >&2
     return 1
   fi
 }
@@ -58,10 +58,15 @@ fi
 git checkout dev
 git pull origin dev
 
-echo "Current version in $MANIFEST_PATH: $(manifest_version)"
+CURRENT_VERSION="$(manifest_version)"
+echo "Current version in $MANIFEST_PATH: $CURRENT_VERSION"
 read -r -p "New version for $MANIFEST_PATH (e.g. 5.0.4): " SEMVER_IN
 SEMVER="$(normalize_semver "$SEMVER_IN")"
 validate_semver "$SEMVER"
+if [[ "$SEMVER" == "$CURRENT_VERSION" ]]; then
+  echo "Error: release version must differ from the current manifest version $CURRENT_VERSION." >&2
+  exit 1
+fi
 
 echo "Beta git tag will include '-beta' (required by deploy.yml)."
 read -r -p "Beta tag suffix [beta.1]: " SUFFIX_IN
@@ -72,6 +77,11 @@ SUFFIX="${SUFFIX:-beta.1}"
 TAG="v${SEMVER}-${SUFFIX}"
 if [[ "$TAG" != *-beta* ]]; then
   echo "Error: beta tag must contain '-beta' for the workflow (got $TAG). Try suffix like beta.1." >&2
+  exit 1
+fi
+if git show-ref --verify --quiet "refs/tags/$TAG" ||
+  git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+  echo "Error: tag $TAG already exists." >&2
   exit 1
 fi
 
@@ -88,7 +98,7 @@ echo "🚀 Releasing beta $TAG"
 
 bump_manifest "$SEMVER"
 git add "$MANIFEST_PATH"
-git commit -m "Bump version to $SEMVER"
+git commit -m "chore(release): bump version to $SEMVER"
 git push origin dev
 
 git checkout beta
@@ -96,7 +106,7 @@ git pull origin beta
 git merge dev --no-ff -m "$TAG"
 git push origin beta
 
-git tag -a "$TAG" -m "$TAG"
+git tag -s "$TAG" -m "$TAG"
 git push origin "$TAG"
 
 git checkout dev

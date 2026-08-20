@@ -89,6 +89,17 @@ describe("canonical settings storage", () => {
     );
   });
 
+  it("keeps every managed setting recognizable in legacy raw backups", () => {
+    evaluateScript("extension/shared/import-export.js");
+    const importExport = window.SpeederShared.importExport;
+
+    window.vscGetManagedSyncKeys().forEach(function (key) {
+      expect(importExport.isRecognizedRawSettingsObject({ [key]: null })).toBe(
+        true
+      );
+    });
+  });
+
   it("provides titles for built-in video rules and round-trips title edits sparsely", () => {
     const settings = window.vscExpandStoredSettings({});
     expect(settings.siteRules.map((rule) => rule.title)).toEqual([

@@ -1,4 +1,3 @@
-var isUserSeek = false; // Track if seek was user-initiated
 var lastToggleSpeed = {}; // Store last toggle speeds per video
 var speederShared =
   typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
@@ -28,6 +27,11 @@ function getSharedDefault(key, fallback) {
   return fallback;
 }
 
+function getCachedVideoRect(video) {
+  var wrapper = video && video.vsc && video.vsc.div;
+  return (wrapper && wrapper.vscVideoRect) || null;
+}
+
 function getPrimaryVideoElement(mediaElements) {
   var candidates = Array.isArray(mediaElements)
     ? mediaElements
@@ -39,10 +43,13 @@ function getPrimaryVideoElement(mediaElements) {
   candidates.forEach(function(el, index) {
     if (!el || !el.vsc || !el.isConnected) return;
 
-    var rect = null;
-    try {
-      rect = el.getBoundingClientRect();
-    } catch (_error) {}
+    var rect = getCachedVideoRect(el);
+    var hasCachedRect = Boolean(rect);
+    if (!rect) {
+      try {
+        rect = el.getBoundingClientRect();
+      } catch (_error) {}
+    }
 
     var width = rect && Number(rect.width) > 0 ? Number(rect.width) : 0;
     var height = rect && Number(rect.height) > 0 ? Number(rect.height) : 0;
@@ -57,17 +64,24 @@ function getPrimaryVideoElement(mediaElements) {
       : 0;
     var visibleArea = visibleWidth * visibleHeight;
     var visuallyAvailable = visibleArea > 0;
-    try {
-      var computed = win && win.getComputedStyle(el);
-      if (
-        computed &&
-        (computed.display === "none" ||
-          computed.visibility === "hidden" ||
-          Number(computed.opacity) === 0)
-      ) {
-        visuallyAvailable = false;
-      }
-    } catch (_error) {}
+    if (
+      el.vsc.div &&
+      el.vsc.div.classList.contains("vsc-geometry-hidden")
+    ) {
+      visuallyAvailable = false;
+    } else if (!hasCachedRect) {
+      try {
+        var computed = win && win.getComputedStyle(el);
+        if (
+          computed &&
+          (computed.display === "none" ||
+            computed.visibility === "hidden" ||
+            Number(computed.opacity) === 0)
+        ) {
+          visuallyAvailable = false;
+        }
+      } catch (_error) {}
+    }
 
     var score = visibleArea;
     if (visuallyAvailable) score += 1e12;
@@ -2894,8 +2908,6 @@ function getControllerMount(video, boundary) {
     return isShadowRootNode(directRoot) ? directRoot : null;
   }
 
-  var mountBoundary = null;
-
   var videoRect = video.getBoundingClientRect();
   var mount = video.parentElement;
   var candidate = mount;
@@ -2913,15 +2925,7 @@ function getControllerMount(video, boundary) {
   // Climb through tightly-sized wrappers so our host shares their stacking
   // context, but stop before broad page-layout containers.
   while (candidate && candidate.parentElement && depth < 5) {
-    if (mountBoundary && candidate === mountBoundary) break;
     var next = candidate.parentElement;
-    if (
-      mountBoundary &&
-      next !== mountBoundary &&
-      !mountBoundary.contains(next)
-    ) {
-      break;
-    }
     var nextRect = next.getBoundingClientRect();
     var widthLimit = Math.max(videoRect.width * 1.35, videoRect.width + 80);
     var heightLimit = Math.max(videoRect.height * 1.35, videoRect.height + 80);
@@ -2944,10 +2948,6 @@ function getControllerMount(video, boundary) {
     mount = next;
     candidate = next;
     depth += 1;
-
-    // In fullscreen, the wrapper must remain inside the exact subtree the
-    // browser promotes to its top layer.
-    if (mountBoundary && next === mountBoundary) break;
 
     // Never climb out of a player-owned stacking context. Doing so lets the
     // controller's high local z-index escape above sticky page headers.
@@ -2976,6 +2976,14 @@ function positionControllerHost(wrapper, video, mount) {
     return;
   }
   var videoRect = video.getBoundingClientRect();
+  wrapper.vscVideoRect = {
+    left: Number(videoRect.left) || 0,
+    top: Number(videoRect.top) || 0,
+    right: Number(videoRect.right) || 0,
+    bottom: Number(videoRect.bottom) || 0,
+    width: Number(videoRect.width) || 0,
+    height: Number(videoRect.height) || 0
+  };
   if (wrapper.classList.contains("vsc-fullscreen-popover")) {
     if (videoRect.width <= 0 || videoRect.height <= 0) {
       wrapper.classList.add("vsc-geometry-hidden");
@@ -3144,6 +3152,12 @@ function setupControllerHostTracking(videoController, wrapper, mount) {
     resizeObserver.observe(geometryMount);
   }
 
+  var mediaGeometryEvents = ["loadedmetadata", "play", "playing"];
+  mediaGeometryEvents.forEach(function(eventName) {
+    videoController.video.addEventListener(eventName, schedule, {
+      passive: true
+    });
+  });
   win.addEventListener("resize", schedule, { passive: true });
   doc.addEventListener("fullscreenchange", schedule, { passive: true });
   geometryMount.addEventListener("scroll", schedule, { passive: true });
@@ -3154,6 +3168,9 @@ function setupControllerHostTracking(videoController, wrapper, mount) {
     if (resizeObserver) resizeObserver.disconnect();
     if (frameId !== null) win.cancelAnimationFrame(frameId);
     if (geometryRetryTimer !== null) win.clearTimeout(geometryRetryTimer);
+    mediaGeometryEvents.forEach(function(eventName) {
+      videoController.video.removeEventListener(eventName, schedule);
+    });
     win.removeEventListener("resize", schedule);
     doc.removeEventListener("fullscreenchange", schedule);
     geometryMount.removeEventListener("scroll", schedule);
@@ -3329,8 +3346,15 @@ function syncControllerFullscreenMount(videoController) {
       (fullscreenElement === video ||
         isComposedDescendant(video, fullscreenElement))
   );
+  var normalGeometryMount = getControllerGeometryMount(targetMount);
+  var normalMountIsAlreadyFullscreenVisible = Boolean(
+    fullscreenElement &&
+      fullscreenElement !== video &&
+      normalGeometryMount &&
+      isComposedDescendant(normalGeometryMount, fullscreenElement)
+  );
 
-  if (ownsFullscreen) {
+  if (ownsFullscreen && !normalMountIsAlreadyFullscreenVisible) {
     targetMount = getControllerMount(video, fullscreenElement);
   } else if (!fullscreenElement && (!targetMount || !targetMount.isConnected)) {
     targetMount = getControllerMount(video);
@@ -3484,9 +3508,6 @@ function defineVideoController() {
           setSpeed(event.target, expectedSpeed, false, false);
         }
 
-        if (isUserSeek) {
-          isUserSeek = false;
-        }
       }
     };
 
@@ -3880,11 +3901,6 @@ function defineVideoController() {
       timer = setTimeout(() => {
         timer = null;
         if (this.controllerInteractionActive) return;
-        // Only hide if the video is not paused
-        // (Many players keep controls visible while paused)
-        // However, the user said "Reveal on every mouse and keyboard input"
-        // and "auto-hidden after timespan".
-        // We'll follow the timer strictly.
         wrapper.classList.add("vsc-idle-hidden");
         log("Generic hide: controller hidden due to inactivity", 5);
       }, tc.settings.hideWithControlsTimer * 1000);
@@ -3907,8 +3923,8 @@ function defineVideoController() {
     // Initial show/timer
     resetTimer();
 
-    // The wrapper covers the player area on most sites due to inject.css styles,
-    // but we listen on both the video and the wrapper for maximum coverage.
+    // Players dispatch activity at different layers, so observe the media,
+    // aligned controller host, and player mount.
     const activityEvents = ["mousemove", "mousedown", "keydown", "touchstart"];
     const parentEl =
       getControllerGeometryMount(this.controllerHostMount) ||
@@ -3950,6 +3966,9 @@ function defineVideoController() {
     const speed = this.video.playbackRate.toFixed(2);
     var wrapper = doc.createElement("div");
     wrapper.classList.add("vsc-controller");
+    // Keep the host out of player layout while its shadow stylesheet loads.
+    wrapper.style.position = "absolute";
+    wrapper.style.pointerEvents = "none";
     if (!hasUsableMediaSource(this.video))
       wrapper.classList.add("vsc-nosource");
     if (tc.settings.startHidden) wrapper.classList.add("vsc-hidden");
@@ -4904,16 +4923,7 @@ function getClosestMediaToPointer(candidates, pointerPosition) {
 
   candidates.forEach(function(video) {
     if (!video || !video.vsc || !video.isConnected) return;
-    var target = getControllerElement(video.vsc) || video;
-    var rect = null;
-    try {
-      rect = target.getBoundingClientRect();
-      if (!rect || rect.width <= 0 || rect.height <= 0) {
-        rect = video.getBoundingClientRect();
-      }
-    } catch (_error) {
-      return;
-    }
+    var rect = getCachedVideoRect(video);
     if (!rect || rect.width <= 0 || rect.height <= 0) return;
     var distance = distanceSquaredToRect(
       pointerPosition.x,
@@ -5042,12 +5052,10 @@ function runAction(action, value, e) {
     );
     switch (action) {
       case "rewind":
-        isUserSeek = true;
         extendSpeedRestoreWindow(v);
         v.currentTime -= numValue;
         break;
       case "advance":
-        isUserSeek = true;
         extendSpeedRestoreWindow(v);
         v.currentTime += numValue;
         break;

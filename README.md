@@ -72,7 +72,7 @@ The unpacked extension root is `extension/`. Load that directory in
 
 ```sh
 npm test
-npx --yes web-ext lint --source-dir extension
+npx --yes web-ext@10.6.0 lint --source-dir extension
 ```
 
 ## FAQ

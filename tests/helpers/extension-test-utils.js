@@ -4,6 +4,7 @@ const { JSDOM } = require("jsdom");
 const vi = globalThis.vi;
 
 const ROOT = path.resolve(__dirname, "..", "..");
+let activeDom = null;
 
 function clone(value) {
   if (value === undefined) return undefined;
@@ -47,11 +48,13 @@ function applyJSDOMWindow(win) {
 
 function loadHtmlString(html, options) {
   const config = options || {};
+  if (activeDom) activeDom.window.close();
   const dom = new JSDOM(html, {
     url: config.url || "https://example.org/",
     pretendToBeVisual: true,
     runScripts: "dangerously"
   });
+  activeDom = dom;
   applyJSDOMWindow(dom.window);
 }
 

@@ -1,9 +1,5 @@
 :host {
   position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
   pointer-events: none !important;
   z-index: 2147483647 !important;
   white-space: normal;
@@ -15,7 +11,6 @@
    base absolute host rule. */
 :host(.vsc-fullscreen-popover) {
   position: fixed !important;
-  inset: auto !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;

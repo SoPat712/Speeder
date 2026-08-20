@@ -281,15 +281,25 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(video.vsc.div.style.getPropertyValue("height")).toBe("226px");
   });
 
-  it("does not let shadow host defaults override measured geometry", () => {
-    const shadowCss = readWorkspaceFile("extension/content/shadow.css");
-    const hostRule = shadowCss.match(/:host\s*\{([^}]*)\}/)[1];
-    const fullscreenRule = shadowCss.match(
-      /:host\(\.vsc-fullscreen-popover\)\s*\{([^}]*)\}/
-    )[1];
-
-    expect(hostRule).not.toMatch(/\b(?:top|left|width|height)\s*:/);
-    expect(fullscreenRule).not.toMatch(/\binset\s*:/);
+  it("keeps measured geometry out of controller stylesheet defaults", () => {
+    [
+      {
+        css: readWorkspaceFile("extension/content/inject.css"),
+        host: /\.vsc-controller\s*\{([^}]*)\}/,
+        fullscreen:
+          /\.vsc-controller\.vsc-fullscreen-popover\s*\{([^}]*)\}/
+      },
+      {
+        css: readWorkspaceFile("extension/content/shadow.css"),
+        host: /:host\s*\{([^}]*)\}/,
+        fullscreen: /:host\(\.vsc-fullscreen-popover\)\s*\{([^}]*)\}/
+      }
+    ].forEach(({ css, host, fullscreen }) => {
+      expect(css.match(host)[1]).not.toMatch(
+        /\b(?:top|left|width|height)\s*:/
+      );
+      expect(css.match(fullscreen)[1]).not.toMatch(/\binset\s*:/);
+    });
   });
 
   it("repositions a Shorts controller when playback moves the video on-screen", async () => {
@@ -332,16 +342,27 @@ describe("inject.js media/controller lifecycle regressions", () => {
       src: "https://example.org/second.mp4",
       mountRect: makeRect(500, 0, 320, 180)
     });
-    setRect(window.getControllerElement(first.controller), makeRect(10, 10, 120, 30));
-    setRect(window.getControllerElement(second.controller), makeRect(510, 10, 120, 30));
+    const firstLayoutRead = vi.fn(() => first.mount.getBoundingClientRect());
+    const secondLayoutRead = vi.fn(() => second.mount.getBoundingClientRect());
+    first.video.getBoundingClientRect = firstLayoutRead;
+    second.video.getBoundingClientRect = secondLayoutRead;
 
     document.dispatchEvent(
       new MouseEvent("mousemove", { bubbles: true, clientX: 600, clientY: 20 })
     );
-    window.runAction("faster", 0.1);
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        code: "KeyD",
+        key: "d"
+      })
+    );
 
     expect(first.video.playbackRate).toBe(1);
     expect(second.video.playbackRate).toBe(1.1);
+    expect(firstLayoutRead).not.toHaveBeenCalled();
+    expect(secondLayoutRead).not.toHaveBeenCalled();
 
     window.tc.settings.shortcutTargetMode = "all";
     window.runAction("faster", 0.1);
@@ -1026,9 +1047,13 @@ describe("inject.js media/controller lifecycle regressions", () => {
       videoRect: makeRect(40, 40, 640, 360),
       src: "https://example.org/visible.mp4"
     }).video;
+    const offscreenLayoutRead = vi.spyOn(offscreen, "getBoundingClientRect");
+    const visibleLayoutRead = vi.spyOn(visible, "getBoundingClientRect");
 
     expect(window.getPrimaryVideoElement()).toBe(visible);
     expect(window.getPrimaryVideoElement()).not.toBe(offscreen);
+    expect(offscreenLayoutRead).not.toHaveBeenCalled();
+    expect(visibleLayoutRead).not.toHaveBeenCalled();
   });
 
   it("mounts a controller locally for video directly under an open ShadowRoot", async () => {

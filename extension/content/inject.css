@@ -1,10 +1,6 @@
 /* Base styles for the controller wrapper (the shadow host) */
 .vsc-controller {
   position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
   pointer-events: none !important;
   /* Keep the interactive controller above player-owned click/pause panes. */
   z-index: 2147483647 !important;
@@ -17,7 +13,6 @@
    controller in the browser top layer without nesting it inside <video>. */
 .vsc-controller.vsc-fullscreen-popover {
   position: fixed !important;
-  inset: auto !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;

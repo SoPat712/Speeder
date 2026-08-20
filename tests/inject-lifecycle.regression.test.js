@@ -2,7 +2,8 @@ const {
   createChromeMock,
   evaluateScript,
   flushAsyncWork,
-  loadHtmlString
+  loadHtmlString,
+  readWorkspaceFile
 } = require("./helpers/extension-test-utils");
 
 function bootInject(options) {
@@ -278,6 +279,45 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(video.vsc.div.classList.contains("vsc-geometry-hidden")).toBe(false);
     expect(video.vsc.div.style.getPropertyValue("width")).toBe("402px");
     expect(video.vsc.div.style.getPropertyValue("height")).toBe("226px");
+  });
+
+  it("does not let shadow host defaults override measured geometry", () => {
+    const shadowCss = readWorkspaceFile("extension/content/shadow.css");
+    const hostRule = shadowCss.match(/:host\s*\{([^}]*)\}/)[1];
+    const fullscreenRule = shadowCss.match(
+      /:host\(\.vsc-fullscreen-popover\)\s*\{([^}]*)\}/
+    )[1];
+
+    expect(hostRule).not.toMatch(/\b(?:top|left|width|height)\s*:/);
+    expect(fullscreenRule).not.toMatch(/\binset\s*:/);
+  });
+
+  it("repositions a Shorts controller when playback moves the video on-screen", async () => {
+    vi.useFakeTimers();
+    bootInject({ url: "https://www.youtube.com/shorts/example" });
+    await settleLifecycle();
+
+    const player = document.createElement("div");
+    player.className = "html5-video-player";
+    const video = document.createElement("video");
+    const playerRect = makeRect(40, 64, 351, 624);
+    let videoRect = makeRect(40, -560, 351, 624);
+
+    setRect(player, playerRect);
+    setBoxMetrics(player, playerRect.width, playerRect.height);
+    video.getBoundingClientRect = () => videoRect;
+    video.src = "blob:https://www.youtube.com/shorts";
+    player.appendChild(video);
+    document.body.appendChild(player);
+
+    window.ensureController(video, player);
+    expect(video.vsc.div.style.getPropertyValue("top")).toBe("-624px");
+
+    videoRect = playerRect;
+    video.dispatchEvent(new Event("playing"));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(video.vsc.div.style.getPropertyValue("top")).toBe("0px");
   });
 
   it("targets the controller nearest the pointer unless change-all is selected", async () => {
@@ -636,6 +676,25 @@ describe("inject.js media/controller lifecycle regressions", () => {
 
     wrapper.remove();
     controller.controllerHostCleanup();
+  });
+
+  it("keeps a visible player-local host when Firefox fullscreens the page root", async () => {
+    bootInject();
+    await settleLifecycle();
+
+    const { mount, controller, wrapper } = createControlledVideo();
+    setRect(document.documentElement, makeRect(0, 0, 0, 0));
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: document.documentElement
+    });
+
+    window.syncControllerFullscreenMount(controller);
+
+    expect(wrapper.parentElement).toBe(mount);
+    expect(wrapper.classList.contains("vsc-geometry-hidden")).toBe(false);
+    expect(document.documentElement.style.position).toBe("");
+    expect(document.documentElement.style.isolation).toBe("");
   });
 
   it("only promotes the directly-fullscreen video's controller", async () => {

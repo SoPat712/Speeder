@@ -3144,6 +3144,12 @@ function setupControllerHostTracking(videoController, wrapper, mount) {
     resizeObserver.observe(geometryMount);
   }
 
+  var mediaGeometryEvents = ["loadedmetadata", "play", "playing"];
+  mediaGeometryEvents.forEach(function(eventName) {
+    videoController.video.addEventListener(eventName, schedule, {
+      passive: true
+    });
+  });
   win.addEventListener("resize", schedule, { passive: true });
   doc.addEventListener("fullscreenchange", schedule, { passive: true });
   geometryMount.addEventListener("scroll", schedule, { passive: true });
@@ -3154,6 +3160,9 @@ function setupControllerHostTracking(videoController, wrapper, mount) {
     if (resizeObserver) resizeObserver.disconnect();
     if (frameId !== null) win.cancelAnimationFrame(frameId);
     if (geometryRetryTimer !== null) win.clearTimeout(geometryRetryTimer);
+    mediaGeometryEvents.forEach(function(eventName) {
+      videoController.video.removeEventListener(eventName, schedule);
+    });
     win.removeEventListener("resize", schedule);
     doc.removeEventListener("fullscreenchange", schedule);
     geometryMount.removeEventListener("scroll", schedule);
@@ -3329,8 +3338,15 @@ function syncControllerFullscreenMount(videoController) {
       (fullscreenElement === video ||
         isComposedDescendant(video, fullscreenElement))
   );
+  var normalGeometryMount = getControllerGeometryMount(targetMount);
+  var normalMountIsAlreadyFullscreenVisible = Boolean(
+    fullscreenElement &&
+      fullscreenElement !== video &&
+      normalGeometryMount &&
+      isComposedDescendant(normalGeometryMount, fullscreenElement)
+  );
 
-  if (ownsFullscreen) {
+  if (ownsFullscreen && !normalMountIsAlreadyFullscreenVisible) {
     targetMount = getControllerMount(video, fullscreenElement);
   } else if (!fullscreenElement && (!targetMount || !targetMount.isConnected)) {
     targetMount = getControllerMount(video);
@@ -3950,6 +3966,9 @@ function defineVideoController() {
     const speed = this.video.playbackRate.toFixed(2);
     var wrapper = doc.createElement("div");
     wrapper.classList.add("vsc-controller");
+    // Keep the host out of player layout while its shadow stylesheet loads.
+    wrapper.style.position = "absolute";
+    wrapper.style.pointerEvents = "none";
     if (!hasUsableMediaSource(this.video))
       wrapper.classList.add("vsc-nosource");
     if (tc.settings.startHidden) wrapper.classList.add("vsc-hidden");

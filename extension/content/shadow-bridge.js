@@ -1,7 +1,28 @@
 (function() {
   "use strict";
 
-  if (window.__speederPageShadowBridgeInstalled) return;
+  function dispatchBridgeEvent(eventName) {
+    try {
+      document.dispatchEvent(
+        new Event(eventName, {
+          bubbles: true,
+          composed: true
+        })
+      );
+    } catch (_error) {}
+  }
+
+  function notifyBridgeReady() {
+    if (window.__speederPageNavigationApiBridgeInstalled) {
+      dispatchBridgeEvent("speeder-page-navigation-api-ready");
+    }
+    dispatchBridgeEvent("speeder-page-bridge-ready");
+  }
+
+  if (window.__speederPageShadowBridgeInstalled) {
+    notifyBridgeReady();
+    return;
+  }
 
   window.__speederPageShadowBridgeInstalled = true;
 
@@ -46,4 +67,22 @@
       return result;
     };
   });
+
+  // Modern Navigation API entries cover same-document navigations that do not
+  // pass through the History wrappers above. The legacy content-side fallback
+  // remains active when this API is unavailable or cannot be registered.
+  if (
+    window.navigation &&
+    typeof window.navigation.addEventListener === "function"
+  ) {
+    try {
+      window.navigation.addEventListener(
+        "currententrychange",
+        notifyLocationChanged
+      );
+      window.__speederPageNavigationApiBridgeInstalled = true;
+    } catch (_error) {}
+  }
+
+  notifyBridgeReady();
 })();

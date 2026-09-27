@@ -55,7 +55,11 @@
       "exclude_matches": [
         "https://plus.google.com/hangouts/*",
         "https://hangouts.google.com/*",
-        "https://meet.google.com/*"
+        "https://meet.google.com/*",
+        "*://*.challenges.cloudflare.com/*",
+        "*://*/cdn-cgi/challenge-platform",
+        "*://*/cdn-cgi/challenge-platform?*",
+        "*://*/cdn-cgi/challenge-platform/*"
       ],
       "css": [
         "content/inject.css"

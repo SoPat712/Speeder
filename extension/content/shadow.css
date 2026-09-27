@@ -9,6 +9,7 @@
 /* Important declarations inside a shadow tree outrank important page styles.
    Repeat the top-layer positioning here so fullscreen cannot fall back to the
    base absolute host rule. */
+:host(.vsc-media-document),
 :host(.vsc-fullscreen-popover) {
   position: fixed !important;
   margin: 0 !important;

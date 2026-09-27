@@ -939,6 +939,144 @@ describe("inject.js media/controller lifecycle regressions", () => {
     expect(document.documentElement.style.isolation).toBe("");
   });
 
+  it.each(["video/mp4", "video/webm", "audio/ogg", "application/ogg"])(
+    "preserves native %s document layout while keeping speed controls",
+    async (contentType) => {
+      bootInject({
+        configureWindow(win) {
+          Object.defineProperty(win.document, "contentType", { value: contentType });
+        }
+      });
+      await settleLifecycle();
+
+      // Firefox centers an absolutely positioned video against the viewport.
+      // Its empty body has no height; positioning it collapses the video.
+      document.body.style.position = "static";
+      const video = document.createElement("video");
+      video.src = "https://example.org/native-media";
+      video.controls = true;
+      video.getBoundingClientRect = () =>
+        document.body.style.position === "static"
+          ? makeRect(80, 100, 640, 360)
+          : makeRect(0, 0, 0, 0);
+      setRect(document.body, makeRect(8, 8, 784, 0));
+      document.body.appendChild(video);
+
+      const controller = window.ensureController(video, document.body);
+      expect(document.body.style.position).toBe("static");
+      expect(document.body.style.isolation).toBe("");
+      expect(controller.div.parentNode).toBe(document.body);
+      expect(hostIsGeometrySuppressed(controller.div)).toBe(false);
+      expect(controller.div.style.top).toBe("100px");
+      expect(controller.div.style.left).toBe("80px");
+      expect(controller.div.style.height).toBe("360px");
+      expect(video.controls).toBe(true);
+      window.setSpeed(video, 1.5, false, false);
+      expect(video.playbackRate).toBe(1.5);
+
+      controller.div.showPopover = vi.fn();
+      controller.div.hidePopover = vi.fn();
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true, value: video
+      });
+      document.dispatchEvent(new Event("fullscreenchange"));
+      expect(controller.div.showPopover).toHaveBeenCalledOnce();
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true, value: null
+      });
+      document.dispatchEvent(new Event("fullscreenchange"));
+      await settleLifecycle();
+      expect(hostIsGeometrySuppressed(controller.div)).toBe(false);
+      expect(document.body.style.position).toBe("static");
+      window.removeController(video);
+      expect(document.body.style.position).toBe("static");
+      expect(document.body.style.isolation).toBe("");
+    }
+  );
+
+  it("keeps the YouTube host in fullscreen through subsequent media events", async () => {
+    bootInject({ url: "https://www.youtube.com/watch?v=fullscreen" });
+    await settleLifecycle();
+    const player = document.createElement("div");
+    player.className = "html5-video-player";
+    const provider = document.createElement("div");
+    const rect = makeRect(0, 0, 640, 360);
+    setRect(player, rect);
+    setRect(provider, rect);
+    setBoxMetrics(player, 640, 360);
+    setBoxMetrics(provider, 640, 360);
+    player.appendChild(provider);
+    document.body.appendChild(player);
+    const { video, wrapper } = createControlledVideo({ mount: provider });
+    expect(wrapper.parentNode).toBe(player);
+    await settleLifecycle(8);
+
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true, value: provider
+    });
+    document.dispatchEvent(new Event("fullscreenchange"));
+    expect(wrapper.parentNode).toBe(provider);
+    await settleLifecycle(8);
+    ["play", "playing", "loadedmetadata", "canplay"].forEach((type) => {
+      video.dispatchEvent(new Event(type));
+    });
+    await settleLifecycle(8);
+    expect(wrapper.parentNode).toBe(provider);
+    expect(hostIsGeometrySuppressed(wrapper)).toBe(false);
+
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true, value: null
+    });
+    document.dispatchEvent(new Event("fullscreenchange"));
+    await settleLifecycle();
+    expect(wrapper.parentNode).toBe(player);
+  });
+
+  it("uses the current player when fullscreen follows a video move before reconciliation", async () => {
+    bootInject({ url: "https://www.youtube.com/watch?v=moved-player" });
+    await settleLifecycle();
+    const first = document.createElement("div");
+    const second = document.createElement("div");
+    const rect = makeRect(0, 0, 640, 360);
+    [first, second].forEach((player) => {
+      player.className = "html5-video-player";
+      setRect(player, rect);
+      setBoxMetrics(player, 640, 360);
+      document.body.appendChild(player);
+    });
+    const { video, wrapper } = createControlledVideo({ mount: first });
+    second.appendChild(video);
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true, value: document.documentElement
+    });
+    document.dispatchEvent(new Event("fullscreenchange"));
+    expect(wrapper.parentNode).toBe(second);
+    expect(video.vsc.normalControllerMount).toBe(second);
+  });
+
+  it("preserves an intentional sibling overlay mount during fullscreen sync", async () => {
+    bootInject({ url: "https://tv.apple.com/" });
+    await settleLifecycle();
+    const scrim = document.createElement("div");
+    scrim.className = "scrim";
+    setRect(scrim, makeRect(0, 0, 640, 360));
+    setBoxMetrics(scrim, 640, 360);
+    document.body.appendChild(scrim);
+    const { video, wrapper, controller } = createControlledVideo();
+    expect(wrapper.parentNode).toBe(scrim);
+    expect(scrim.contains(video)).toBe(false);
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true, value: document.documentElement
+    });
+    document.dispatchEvent(new Event("fullscreenchange"));
+    expect(wrapper.parentNode).toBe(scrim);
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true, value: null
+    });
+    window.syncControllerFullscreenMount(controller);
+    expect(wrapper.parentNode).toBe(scrim);
+  });
+
   it("only promotes the directly-fullscreen video's controller", async () => {
     bootInject();
     await settleLifecycle();

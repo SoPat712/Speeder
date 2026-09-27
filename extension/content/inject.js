@@ -1,3 +1,40 @@
+// Keep in sync with the page-world bridge guard. These checks run before any
+// startup hooks because verification frames inspect native DOM/history APIs.
+function isChallengeUrl(value) {
+  try {
+    var url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    var hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+    return (
+      hostname === "challenges.cloudflare.com" ||
+      hostname.endsWith(".challenges.cloudflare.com") ||
+      url.pathname === "/cdn-cgi/challenge-platform" ||
+      url.pathname.indexOf("/cdn-cgi/challenge-platform/") === 0
+    );
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isChallengeDocument(win) {
+  try {
+    if (isChallengeUrl(win.location.href)) return true;
+    if (!/^about:(blank|srcdoc)(?:[?#]|$)/i.test(win.location.href)) {
+      return false;
+    }
+    if (
+      isChallengeUrl(win.document.baseURI) ||
+      isChallengeUrl(win.document.referrer)
+    ) {
+      return true;
+    }
+    return win.parent !== win && isChallengeDocument(win.parent);
+  } catch (_error) {
+    return false;
+  }
+}
+
+var vscIsChallengeDocument = isChallengeDocument(window);
 var lastToggleSpeed = {}; // Store last toggle speeds per video
 var speederShared =
   typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
@@ -1788,7 +1825,7 @@ function ensureController(node, parent) {
 
     var fullscreenElement = getFullscreenElement(node.ownerDocument);
     var normalMount = getControllerMount(node) || parent || node.parentNode;
-    if (normalMount) existingController.normalControllerMount = normalMount;
+    if (normalMount) setNormalControllerMount(existingController, normalMount);
     if (
       fullscreenElement &&
       (fullscreenElement === node ||
@@ -2870,8 +2907,10 @@ function finishStartupStorageWatch() {
 // catch shadow roots created while chrome.storage.sync.get is pending.
 // Sites like archive.org create Lit/LitElement shadow DOMs during page load;
 // waiting for the storage callback would miss them entirely.
-patchAttachShadow();
-installPageShadowBridge();
+if (!vscIsChallengeDocument) {
+  patchAttachShadow();
+  installPageShadowBridge();
+}
 
 function loadInitialRuntimeSettings(attempt) {
   chrome.storage.sync.get(null, function(rawStorage) {
@@ -3172,9 +3211,11 @@ function loadInitialRuntimeSettings(attempt) {
 
 // Install before async settings hydration so SPA-owned window capture handlers
 // cannot hide later key events from Speeder.
-attachKeydownListeners(document);
-beginStartupStorageWatch();
-loadInitialRuntimeSettings(0);
+if (!vscIsChallengeDocument) {
+  attachKeydownListeners(document);
+  beginStartupStorageWatch();
+  loadInitialRuntimeSettings(0);
+}
 
 function getKeyBindings(action, what = "value") {
   try {
@@ -3329,6 +3370,24 @@ function getControllerGeometryMount(mount) {
   return isShadowRootNode(mount) ? mount.host : mount;
 }
 
+function setNormalControllerMount(videoController, mount) {
+  videoController.normalControllerMount = mount;
+  // Some site integrations deliberately use a sibling overlay (e.g. Apple
+  // TV's scrim). Only invalidate containment for mounts that owned the media.
+  videoController.normalMountContainedMedia = isComposedDescendant(
+    videoController.video,
+    getControllerGeometryMount(mount)
+  );
+}
+
+function isNativeMediaDocument(doc) {
+  return Boolean(
+    doc &&
+      (doc.mozSyntheticDocument === true ||
+        /^(?:video\/|audio\/|application\/ogg(?:;|$))/i.test(doc.contentType || ""))
+  );
+}
+
 function getControllerMount(video, boundary) {
   if (!video) return null;
 
@@ -3355,6 +3414,10 @@ function getControllerMount(video, boundary) {
       return boundary.shadowRoot;
     }
     return boundary;
+  }
+
+  if (isNativeMediaDocument(video.ownerDocument)) {
+    return video.ownerDocument.body;
   }
 
   // YouTube's .html5-video-container is often absolutely laid out and can
@@ -3444,7 +3507,10 @@ function positionControllerHost(wrapper, video, mount) {
   }
   var videoRect = video.getBoundingClientRect();
   cacheVideoRect(wrapper, video, videoRect);
-  if (wrapper.classList.contains("vsc-fullscreen-popover")) {
+  if (
+    wrapper.classList.contains("vsc-fullscreen-popover") ||
+    wrapper.classList.contains("vsc-media-document")
+  ) {
     if (videoRect.width <= 0 || videoRect.height <= 0) {
       wrapper.classList.add("vsc-geometry-hidden");
       wrapper.style.setProperty("display", "none", "important");
@@ -3596,6 +3662,11 @@ function setupControllerHostTracking(videoController, wrapper, mount) {
   var win = doc.defaultView || window;
   var geometryMount = getControllerGeometryMount(mount);
   if (!geometryMount || !geometryMount.style) return;
+  // Firefox's standalone media body can be 0px tall. Making it positioned
+  // replaces the viewport containing block of its absolutely positioned video
+  // and collapses playback. Anchor our own host to the viewport instead.
+  var nativeMediaDocument = isNativeMediaDocument(doc);
+  wrapper.classList.toggle("vsc-media-document", nativeMediaDocument);
   var frameId = null;
   var geometryRetryTimer = null;
   var geometryRetryAttempts = 0;
@@ -3636,7 +3707,7 @@ function setupControllerHostTracking(videoController, wrapper, mount) {
     frameId = win.requestAnimationFrame(update);
   };
 
-  if (win.getComputedStyle(geometryMount).position === "static") {
+  if (!nativeMediaDocument && win.getComputedStyle(geometryMount).position === "static") {
     geometryMount.dataset.vscPositionOwner = "true";
     geometryMount.dataset.vscOriginalPosition =
       geometryMount.style.getPropertyValue("position");
@@ -3646,7 +3717,7 @@ function setupControllerHostTracking(videoController, wrapper, mount) {
     geometryMount.style.setProperty("position", "relative");
   }
 
-  if (!createsControllerStackingContext(geometryMount)) {
+  if (!nativeMediaDocument && !createsControllerStackingContext(geometryMount)) {
     geometryMount.dataset.vscIsolationOwner = "true";
     geometryMount.dataset.vscOriginalIsolation =
       geometryMount.style.getPropertyValue("isolation");
@@ -3844,7 +3915,7 @@ function enableDirectFullscreenPopover(videoController) {
   );
   if (!normalMountIsConnected) {
     normalMount = getControllerMount(videoController.video);
-    videoController.normalControllerMount = normalMount;
+    setNormalControllerMount(videoController, normalMount);
   }
   if (!normalMount) return false;
   if (wrapper.parentNode !== normalMount) {
@@ -3876,12 +3947,22 @@ function syncControllerFullscreenMount(videoController) {
   var doc = video.ownerDocument;
   var fullscreenElement = getFullscreenElement(doc);
   var targetMount = videoController.normalControllerMount;
+  var normalGeometryMount = getControllerGeometryMount(targetMount);
+  if (
+    !normalGeometryMount ||
+    !normalGeometryMount.isConnected ||
+    (videoController.normalMountContainedMedia === true &&
+      !isComposedDescendant(video, normalGeometryMount))
+  ) {
+    targetMount = getControllerMount(video);
+    setNormalControllerMount(videoController, targetMount);
+    normalGeometryMount = getControllerGeometryMount(targetMount);
+  }
   var ownsFullscreen = Boolean(
     fullscreenElement &&
       (fullscreenElement === video ||
         isComposedDescendant(video, fullscreenElement))
   );
-  var normalGeometryMount = getControllerGeometryMount(targetMount);
   var normalMountIsAlreadyFullscreenVisible = Boolean(
     fullscreenElement &&
       fullscreenElement !== video &&
@@ -3891,9 +3972,6 @@ function syncControllerFullscreenMount(videoController) {
 
   if (ownsFullscreen && !normalMountIsAlreadyFullscreenVisible) {
     targetMount = getControllerMount(video, fullscreenElement);
-  } else if (!fullscreenElement && (!targetMount || !targetMount.isConnected)) {
-    targetMount = getControllerMount(video);
-    videoController.normalControllerMount = targetMount;
   }
 
   if (!targetMount) return false;
@@ -4681,7 +4759,7 @@ function defineVideoController() {
     ) {
       log("No suitable parent found, appending to body", 4);
       doc.body.appendChild(wrapper);
-      this.normalControllerMount = doc.body;
+      setNormalControllerMount(this, doc.body);
       setupControllerHostTracking(this, wrapper, doc.body);
       return wrapper;
     }
@@ -4718,14 +4796,14 @@ function defineVideoController() {
           break;
       }
       mountEl.appendChild(wrapper);
-      this.normalControllerMount = mountEl;
+      setNormalControllerMount(this, mountEl);
       setupControllerHostTracking(this, wrapper, mountEl);
       log("Controller successfully inserted into DOM", 4);
     } catch (error) {
       log(`Error inserting controller: ${error.message}`, 2);
       // Fallback to body insertion
       doc.body.appendChild(wrapper);
-      this.normalControllerMount = doc.body;
+      setNormalControllerMount(this, doc.body);
       setupControllerHostTracking(this, wrapper, doc.body);
     }
 
@@ -5342,18 +5420,10 @@ function scheduleMediaLifecycleReconcile(media, videoController) {
       }
 
       var nextMount = getControllerMount(media);
-      if (
-        nextMount &&
-        (nextMount !== videoController.controllerHostMount ||
-          videoController.div.parentNode !== nextMount ||
-          !videoController.div.isConnected)
-      ) {
-        remountControllerHost(videoController, nextMount);
-        return;
-      }
-      if (typeof videoController.controllerHostSchedule === "function") {
-        videoController.controllerHostSchedule();
-      }
+      if (nextMount) setNormalControllerMount(videoController, nextMount);
+      // A play/metadata event can arrive after fullscreenchange. Resolve the
+      // active fullscreen boundary again instead of restoring the normal host.
+      syncControllerFullscreenMount(videoController);
     }
   );
 }

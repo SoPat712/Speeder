@@ -1,6 +1,46 @@
 (function() {
   "use strict";
 
+  function isChallengeUrl(value) {
+    try {
+      var url = new URL(value);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+      var hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+      return (
+        hostname === "challenges.cloudflare.com" ||
+        hostname.endsWith(".challenges.cloudflare.com") ||
+        url.pathname === "/cdn-cgi/challenge-platform" ||
+        url.pathname.indexOf("/cdn-cgi/challenge-platform/") === 0
+      );
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function isChallengeDocument(win) {
+    try {
+      if (isChallengeUrl(win.location.href)) return true;
+      if (!/^about:(blank|srcdoc)(?:[?#]|$)/i.test(win.location.href)) {
+        return false;
+      }
+      // match_about_blank can inherit a challenge document's eligibility.
+      if (
+        isChallengeUrl(win.document.baseURI) ||
+        isChallengeUrl(win.document.referrer)
+      ) {
+        return true;
+      }
+      return win.parent !== win && isChallengeDocument(win.parent);
+    } catch (_error) {
+      // A cross-origin ancestor is inaccessible; use only the URLs we can read.
+      return false;
+    }
+  }
+
+  // Challenge pages inspect native APIs. Leave the page untouched, including
+  // bridge flags and readiness events, even if the manifest was bypassed.
+  if (isChallengeDocument(window)) return;
+
   function dispatchBridgeEvent(eventName) {
     try {
       document.dispatchEvent(

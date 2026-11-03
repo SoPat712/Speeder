@@ -51,7 +51,9 @@
       title: "Open Speeder settings",
       fallbackIcon: "\u2699",
       popupAllowed: false
-    }
+    },
+    previousFrame: { name: "Previous frame", title: "Step backward one frame", fallbackIcon: "\u25C0" },
+    nextFrame: { name: "Next frame", title: "Step forward one frame", fallbackIcon: "\u25B6" }
   };
   Object.keys(BUTTON_DEFS).forEach(function (id) {
     var def = BUTTON_DEFS[id];
@@ -75,7 +77,9 @@
     louder: { label: "Increase volume", defaultValue: 0.1 },
     softer: { label: "Decrease volume", defaultValue: 0.1 },
     mark: { label: "Set marker" },
-    jump: { label: "Jump to marker" }
+    jump: { label: "Jump to marker" },
+    previousFrame: { label: "Previous frame" },
+    nextFrame: { label: "Next frame" }
   };
   Object.keys(ACTION_DEFS).forEach(function (action) {
     ACTION_DEFS[action].hasValue = ACTION_DEFS[action].defaultValue !== undefined;

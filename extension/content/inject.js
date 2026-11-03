@@ -156,6 +156,7 @@ var speederShared =
   typeof SpeederShared === "object" && SpeederShared ? SpeederShared : {};
 var controllerUtils = speederShared.controllerUtils || {};
 var keyBindingUtils = speederShared.keyBindings || {};
+var frameStepper = speederShared.frameStepper || null;
 var siteRuleUtils = speederShared.siteRules || {};
 var sharedSettingsDefaults =
   typeof vscGetSettingsDefaults === "function"
@@ -429,6 +430,9 @@ var tc = {
     keyBindings: getSharedDefault("keyBindings", []),
     siteRules: getSharedDefault("siteRules", []),
     controllerButtons: getSharedDefault("controllerButtons", []),
+    popupControllerButtons: getSharedDefault("popupControllerButtons", []),
+    popupMatchHoverControls: getSharedDefault("popupMatchHoverControls", true),
+    showPopupControlBar: getSharedDefault("showPopupControlBar", true),
     defaultLogLevel: 3,
     logLevel: 3,
     enableSubtitleNudge: getSharedDefault("enableSubtitleNudge", false),
@@ -998,6 +1002,79 @@ function isValidSpeed(speed) {
 function sanitizeSpeed(speed, fallback) {
   var numericSpeed = Number(speed);
   return isValidSpeed(numericSpeed) ? numericSpeed : fallback;
+}
+
+/* This function identifies the video currently represented by a particular
+   <video> element.
+
+   getVideoSourceKey() is usually enough for this, but Youtube Shorts reuses
+   the same video element (and underlying blob URL) sometimes when it switches
+   between Shorts, so identifying a video just by its media URL can cause the
+   FPS estimate to be applied to other subsequent shorts that might actually
+   have a different FPS.
+
+   This function handles this problem by examining the YouTube Shorts renderer
+   and extracting the Short's identifier, and failing back to the page URL when
+   it needs to.
+*/
+function getFrameStepperIdentity(video) {
+  var source = getVideoSourceKey(video);
+  if (!isOnYouTube() || !/^\/shorts\//.test(location.pathname)) {
+    return source;
+  }
+  var renderer = video.closest && video.closest("ytd-reel-video-renderer");
+  var link = renderer && renderer.querySelector(
+    'a[href^="/shorts/"], a[href*="youtube.com/shorts/"]'
+  );
+  var match = null;
+  if (link) {
+    try {
+      match = new URL(link.href, location.href).pathname.match(/^\/shorts\/([^/?#]+)/);
+    } catch (_error) {}
+  }
+  // Some shorts reuse a blob URL for more than one short
+  // Fallback to the page URL only for the currently selected video
+  if (!match && (!renderer || getPrimaryVideoElement() === video)) {
+    match = location.pathname.match(/^\/shorts\/([^/?#]+)/);
+  }
+  return match ? source + "|short:" + match[1] : source;
+}
+
+function isFrameAction(action) {
+  return action === "previousFrame" || action === "nextFrame";
+}
+
+function hasFrameButton(ids) {
+  return Array.isArray(ids) && ids.some(isFrameAction);
+}
+
+function frameSteppingConfigured() {
+  if (!frameStepper || !isSpeederActiveForCurrentPage()) return false;
+  var shortcuts = tc.settings.keyBindings || [];
+  if (shortcuts.some(function(binding) {
+    return isFrameAction(binding.action) && binding.disabled !== true &&
+      typeof binding.code === "string" && binding.code.length > 0;
+  })) {
+    return true;
+  }
+  if (hasFrameButton(tc.settings.controllerButtons)) return true;
+  if (tc.settings.showPopupControlBar !== false) {
+    return hasFrameButton(
+      tc.settings.popupMatchHoverControls !== false
+        ? tc.settings.controllerButtons
+        : tc.settings.popupControllerButtons
+    );
+  }
+  return false;
+}
+
+function syncFrameSteppingOnVideo(video) {
+  if (!frameStepper || !video || video.nodeName !== "VIDEO") return;
+  if (!frameSteppingConfigured()) {
+    frameStepper.dispose(video);
+    return;
+  }
+  frameStepper.start(video, getFrameStepperIdentity);
 }
 
 function getVideoSourceKey(video) {
@@ -2751,6 +2828,11 @@ function hydrateRuntimeSettings(rawStorage, options) {
   tc.settings.controllerButtons = Array.isArray(storage.controllerButtons)
     ? storage.controllerButtons.slice()
     : getSharedDefault("controllerButtons", []);
+  tc.settings.popupControllerButtons = Array.isArray(storage.popupControllerButtons)
+    ? storage.popupControllerButtons.slice()
+    : getSharedDefault("popupControllerButtons", []);
+  tc.settings.popupMatchHoverControls = storage.popupMatchHoverControls !== false;
+  tc.settings.showPopupControlBar = storage.showPopupControlBar !== false;
 
   var addedDefaultBinding = false;
   addedDefaultBinding =
@@ -4313,11 +4395,22 @@ function defineVideoController() {
       log("ERROR: Failed to create controller div!", 2);
       return;
     }
+    // a controller can be attached after the video has already started
+    syncFrameSteppingOnVideo(target);
 
     log(`Controller created and attached to DOM. Hidden: ${this.div.classList.contains("vsc-hidden")}`, 4);
 
     var mediaEventAction = function(event) {
       this.lastActivityAt = Date.now();
+      if (frameStepper && event.target.nodeName === "VIDEO") {
+        if (event.type === "loadstart" || event.type === "emptied") {
+          frameStepper.reset(event.target);
+        } else if (event.type === "pause" || event.type === "ended") {
+          frameStepper.stop(event.target);
+        } else if (["play", "playing", "loadeddata", "canplay"].includes(event.type)) {
+          syncFrameSteppingOnVideo(event.target);
+        }
+      }
       if (event.type === "emptied") {
         var sourceAvailable = hasUsableMediaSource(event.target);
         if (this.div) {
@@ -4417,6 +4510,10 @@ function defineVideoController() {
       (this.handlePlay = mediaEventAction.bind(this))
     );
     target.addEventListener(
+      "playing",
+      (this.handlePlaying = mediaEventAction.bind(this))
+    );
+    target.addEventListener(
       "pause",
       (this.handlePause = mediaEventAction.bind(this))
     );
@@ -4437,6 +4534,7 @@ function defineVideoController() {
       mutations.forEach((mutation) => {
         if (isMediaSourceAttributeMutation(mutation, this.video)) {
           log("mutation of A/V element", 5);
+          if (frameStepper) frameStepper.reset(this.video);
           if (this.div) {
             this.stopSubtitleNudge();
             var sourceAvailable = hasUsableMediaSource(this.video);
@@ -4473,6 +4571,7 @@ function defineVideoController() {
       this.fullscreenPopoverToggle = null;
     }
     this.stopSubtitleNudge();
+    if (frameStepper) frameStepper.dispose(this.video);
     disableDirectFullscreenPopover(this);
     if (this.lifecycleReconcileFrame !== null) {
       var lifecycleWindow =
@@ -4539,6 +4638,7 @@ function defineVideoController() {
       this.video.removeEventListener("loadeddata", this.handleLoadedData);
       this.video.removeEventListener("canplay", this.handleCanPlay);
       this.video.removeEventListener("play", this.handlePlay);
+      this.video.removeEventListener("playing", this.handlePlaying);
       this.video.removeEventListener("pause", this.handlePause);
       this.video.removeEventListener("seeking", this.handleSeeking);
       this.video.removeEventListener("ended", this.handleEnded);
@@ -5011,6 +5111,8 @@ function applySiteRuleOverrides() {
   function finishSiteRuleApplication(result) {
     tc.siteRuleAppliedHref = currentUrl;
     isSpeederActiveForCurrentPage();
+    // update frame-rate measurements after navigation or settings changes
+    if (frameStepper) tc.mediaElements.forEach(syncFrameSteppingOnVideo);
     if (
       (wasForceEnabled && !tc.settings.forceLastSavedSpeed) ||
       (wasRememberEnabled && !tc.settings.rememberSpeed)
@@ -6094,6 +6196,8 @@ function runAction(action, value, e) {
     const userDrivenActionsThatShowController = [
       "rewind",
       "advance",
+      "previousFrame",
+      "nextFrame",
       "faster",
       "slower",
       "louder",
@@ -6133,6 +6237,13 @@ function runAction(action, value, e) {
       case "advance":
         extendSpeedRestoreWindow(v);
         v.currentTime += numValue;
+        break;
+      case "previousFrame":
+      case "nextFrame":
+        if (frameStepper && v.nodeName === "VIDEO") {
+          frameStepper.step(v, action === "nextFrame" ? 1 : -1,
+            getFrameStepperIdentity);
+        }
         break;
       case "faster":
         var fasterStep = numValue;

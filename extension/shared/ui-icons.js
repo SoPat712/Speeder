@@ -11,6 +11,8 @@ var vscUiIconPaths = {
     '<polygon points="11 19 2 12 11 5 11 19"/><polygon points="22 19 13 12 22 5 22 19"/>',
   advance:
     '<polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/>',
+  previousFrame: '<path d="M5 5v14"/><path d="m19 5-11 7 11 7V5Z"/>',
+  nextFrame: '<path d="M19 5v14"/><path d="m5 5 11 7-11 7V5Z"/>',
   reset:
     '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   slower: '<line x1="5" y1="12" x2="19" y2="12"/>',

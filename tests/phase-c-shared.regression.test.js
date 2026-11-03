@@ -60,7 +60,7 @@ describe("Phase C shared contracts", () => {
 
   it("returns independent default and available button lists in the existing UI order", () => {
     const defaults = ["rewind", "slower", "faster", "advance", "display"];
-    const available = defaults.concat(["reset", "fast", "nudge", "pause", "muted", "louder", "softer", "mark", "jump", "settings"]);
+    const available = defaults.concat(["reset", "fast", "nudge", "pause", "muted", "louder", "softer", "mark", "jump", "settings", "previousFrame", "nextFrame"]);
     expect(window.vscGetButtonIds()).toEqual(available);
     expect(window.vscGetDefaultButtonIds()).toEqual(defaults);
     window.vscGetButtonIds().pop();

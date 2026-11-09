@@ -675,3 +675,79 @@ describe("site-rule matching", () => {
     ).toBe(false);
   });
 });
+
+describe("site rules larger than one sync item", () => {
+  beforeEach(() => {
+    bootSettingsCore();
+  });
+
+  function manyRules(count) {
+    return Array.from({ length: count }, (_, index) => ({
+      pattern: "/^https:\\/\\/video-site-number-" + index + "\\.example\\.(com|net)\\/watch/",
+      title: "Example video site with a fairly long descriptive title " + index,
+      rememberSpeed: true
+    }));
+  }
+
+  function itemBytes(key, value) {
+    return Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(value));
+  }
+
+  function applyMutation(raw, mutation) {
+    const next = Object.assign({}, raw, mutation.set);
+    mutation.remove.forEach((key) => delete next[key]);
+    return next;
+  }
+
+  it("splits rules across part keys under the per-item quota and reads them back", () => {
+    const settings = window.vscExpandStoredSettings({});
+    settings.siteRules = settings.siteRules.concat(manyRules(120));
+
+    const mutation = window.vscBuildManagedStorageMutation({}, settings);
+    Object.keys(mutation.set).forEach((key) => {
+      expect(itemBytes(key, mutation.set[key])).toBeLessThanOrEqual(8192);
+    });
+    expect(mutation.set.siteRulesMeta.parts).toBeGreaterThan(0);
+    expect(mutation.set).toHaveProperty("siteRulesPart1");
+
+    const restored = window.vscExpandStoredSettings(mutation.set);
+    expect(restored.siteRules).toEqual(settings.siteRules);
+    expect(restored.siteRulesMeta).not.toHaveProperty("parts");
+    expect(window.vscBuildStoredSettingsDiff(restored)).toEqual(mutation.set);
+  });
+
+  it("drops part keys once the rules fit in one item again", () => {
+    const settings = window.vscExpandStoredSettings({});
+    settings.siteRules = settings.siteRules.concat(manyRules(120));
+    const raw = applyMutation({}, window.vscBuildManagedStorageMutation({}, settings));
+
+    const shrunk = window.vscExpandStoredSettings(raw);
+    shrunk.siteRules = shrunk.siteRules.slice(0, 5);
+    const mutation = window.vscBuildManagedStorageMutation(raw, shrunk);
+    const next = applyMutation(raw, mutation);
+
+    expect(Object.keys(next).some((key) => key.startsWith("siteRulesPart"))).toBe(false);
+    expect(next.siteRulesMeta).not.toHaveProperty("parts");
+    expect(window.vscExpandStoredSettings(next).siteRules).toEqual(shrunk.siteRules);
+  });
+
+  it("ignores leftover part keys that siteRulesMeta does not list", () => {
+    const settings = window.vscExpandStoredSettings({});
+    settings.siteRules = settings.siteRules.concat(manyRules(120));
+    const raw = applyMutation({}, window.vscBuildManagedStorageMutation({}, settings));
+    // An older Speeder rewrites siteRules and siteRulesMeta but not the parts.
+    delete raw.siteRulesMeta.parts;
+
+    expect(window.vscExpandStoredSettings(raw).siteRules).toEqual(
+      window.vscExpandStoredSettings({ ...raw, siteRulesPart1: undefined }).siteRules
+    );
+    expect(window.vscBuildManagedStorageMutation(raw, window.vscExpandStoredSettings(raw)).remove)
+      .toContain("siteRulesPart1");
+  });
+
+  it("lists the part keys as managed sync keys", () => {
+    expect(window.vscGetManagedSyncKeys()).toEqual(
+      expect.arrayContaining(["siteRulesPart1", "siteRulesPart12"])
+    );
+  });
+});

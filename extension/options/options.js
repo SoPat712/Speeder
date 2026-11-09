@@ -1928,20 +1928,6 @@ function initLucideButtonIconsUI() {
       });
     });
   }
-
-  var reloadTags = document.getElementById("lucideIconReloadTags");
-  if (reloadTags && !reloadTags.dataset.lucideBound) {
-    reloadTags.dataset.lucideBound = "1";
-    reloadTags.addEventListener("click", function () {
-      getLucideTagsMap()
-        .then(function () {
-          setLucideStatus("Icon name list refreshed.");
-        })
-        .catch(function (e) {
-          setLucideStatus("Refresh failed: " + e.message);
-        });
-    });
-  }
 }
 
 function restore_options(callback) {

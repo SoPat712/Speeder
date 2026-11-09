@@ -12,10 +12,12 @@ function setToolbarIcon(enabled) {
 var pausedTabIds = new Set();
 
 function getMessageTabId(request, sender) {
-  if (request && Number.isInteger(request.tabId)) return request.tabId;
-  return sender && sender.tab && Number.isInteger(sender.tab.id)
-    ? sender.tab.id
-    : null;
+  // Content scripts may only act on their own tab; only extension pages
+  // (popup, options), which have no sender.tab, may name another one.
+  if (sender && sender.tab) {
+    return Number.isInteger(sender.tab.id) ? sender.tab.id : null;
+  }
+  return request && Number.isInteger(request.tabId) ? request.tabId : null;
 }
 
 chrome.storage.sync.get(["enabled"], function(storage) {

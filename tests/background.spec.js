@@ -59,6 +59,19 @@ describe("background toolbar state", () => {
     listener({ action: "get_tab_pause_state" }, { tab: { id: 42 } }, respond);
     expect(respond).toHaveBeenLastCalledWith({ paused: true });
 
+    listener(
+      { action: "set_tab_paused", tabId: 7, paused: true },
+      { tab: { id: 42 } },
+      respond
+    );
+    expect(chrome.tabs.sendMessage).toHaveBeenLastCalledWith(
+      42,
+      { action: "set_tab_paused", paused: true },
+      expect.any(Function)
+    );
+    listener({ action: "get_tab_pause_state", tabId: 7 }, {}, respond);
+    expect(respond).toHaveBeenLastCalledWith({ paused: false });
+
     chrome.tabs.onRemoved.emit(42);
     listener({ action: "get_tab_pause_state", tabId: 42 }, {}, respond);
     expect(respond).toHaveBeenLastCalledWith({ paused: false });

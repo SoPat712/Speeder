@@ -10,6 +10,13 @@
   // Speeder was off. Kept inside siteRulesMeta so older versions still read
   // the v2 diff, and drop the marker when they rewrite it.
   var ENABLED_TRI_STATE_META = "enabledTriState";
+  // storage.sync rejects any item over 8 KB (QUOTA_BYTES_PER_ITEM), so long
+  // rule lists continue in siteRulesPart1..N; siteRulesMeta.parts says how
+  // many to read. Older versions only see the first chunk.
+  var SITE_RULES_PARTS_META = "parts";
+  var SITE_RULES_PART_PREFIX = "siteRulesPart";
+  var SITE_RULES_MAX_PARTS = 12;
+  var SYNC_ITEM_BUDGET_BYTES = 7900;
   var MIN_SPEED = 0.1;
   var MAX_SPEED = 16;
   var CONTROLLER_LOCATIONS = [
@@ -126,7 +133,12 @@
     "subtitleNudgeInterval",
     "subtitleNudgeAmount"
   ];
+  var SITE_RULES_PART_KEYS = [];
+  for (var partIndex = 1; partIndex <= SITE_RULES_MAX_PARTS; partIndex++) {
+    SITE_RULES_PART_KEYS.push(SITE_RULES_PART_PREFIX + partIndex);
+  }
   var MANAGED_SYNC_KEYS = DIFFABLE_OPTION_KEYS.concat(
+    SITE_RULES_PART_KEYS,
     ["hideWithYouTubeControls"],
     LEGACY_SYNC_KEYS
   );
@@ -801,7 +813,57 @@
       }
     });
 
+    if (Array.isArray(diff.siteRules)) splitSiteRulesForSync(diff);
     return diff;
+  }
+
+  function getUtf8ByteLength(text) {
+    return typeof TextEncoder === "function"
+      ? new TextEncoder().encode(text).length
+      : unescape(encodeURIComponent(text)).length;
+  }
+
+  function splitSiteRulesForSync(diff) {
+    var chunks = [[]];
+    var chunkBytes = 2;
+    diff.siteRules.forEach(function (rule) {
+      var ruleBytes = getUtf8ByteLength(JSON.stringify(rule)) + 1;
+      if (chunks[chunks.length - 1].length && chunkBytes + ruleBytes > SYNC_ITEM_BUDGET_BYTES) {
+        chunks.push([]);
+        chunkBytes = 2;
+      }
+      chunks[chunks.length - 1].push(rule);
+      chunkBytes += ruleBytes;
+    });
+    if (chunks.length === 1) return;
+    if (chunks.length - 1 > SITE_RULES_MAX_PARTS) {
+      // Beyond the part keys the total sync quota (100 KB) is exceeded anyway;
+      // keep one oversized last part so the write fails instead of losing rules.
+      chunks = chunks.slice(0, SITE_RULES_MAX_PARTS).concat([
+        [].concat.apply([], chunks.slice(SITE_RULES_MAX_PARTS))
+      ]);
+    }
+    diff.siteRules = chunks[0];
+    for (var i = 1; i < chunks.length; i++) {
+      diff[SITE_RULES_PART_PREFIX + i] = chunks[i];
+    }
+    diff.siteRulesMeta = diff.siteRulesMeta || {};
+    diff.siteRulesMeta[SITE_RULES_PARTS_META] = chunks.length - 1;
+  }
+
+  function joinSiteRuleParts(raw, alreadyExpanded) {
+    var parts = isPlainObject(raw.siteRulesMeta) ? raw.siteRulesMeta[SITE_RULES_PARTS_META] : 0;
+    if (!alreadyExpanded && Array.isArray(raw.siteRules) && Number.isInteger(parts)) {
+      for (var i = 1; i <= Math.min(parts, SITE_RULES_MAX_PARTS); i++) {
+        if (Array.isArray(raw[SITE_RULES_PART_PREFIX + i])) {
+          raw.siteRules = raw.siteRules.concat(raw[SITE_RULES_PART_PREFIX + i]);
+        }
+      }
+    }
+    if (isPlainObject(raw.siteRulesMeta)) delete raw.siteRulesMeta[SITE_RULES_PARTS_META];
+    SITE_RULES_PART_KEYS.forEach(function (key) {
+      delete raw[key];
+    });
   }
 
   function legacyKeyCodeToCode(keyCode) {
@@ -1012,6 +1074,7 @@
 
   function expandStoredSettings(storage, report, alreadyExpanded) {
     var raw = isPlainObject(storage) ? clonePlainData(storage) : {};
+    joinSiteRuleParts(raw, alreadyExpanded);
     var expanded = deepMergeDefaults(DEFAULT_SETTINGS, raw);
     if (Array.isArray(raw.siteRules)) {
       raw.siteRules = raw.siteRules.map(function(rule, index) {

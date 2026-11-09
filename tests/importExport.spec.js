@@ -199,8 +199,9 @@ describe("options/import-export.js", () => {
       expect.any(Function)
     );
     expect(chrome.storage.sync.clear).not.toHaveBeenCalled();
+    // A pre-tri-state, globally disabled backup keeps its whitelisted built-ins.
     expect(chrome.storage.sync.set).toHaveBeenCalledWith(
-      { rememberSpeed: true, enabled: false },
+      expect.objectContaining({ rememberSpeed: true, enabled: false }),
       expect.any(Function)
     );
     expect(document.querySelector("#status").textContent).toContain(

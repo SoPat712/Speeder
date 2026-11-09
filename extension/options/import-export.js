@@ -118,7 +118,13 @@ function persistImportedSyncSettings(currentRaw, importedRaw, callback, report) 
     }
   }
 
-  vscWriteManagedStorageMutation(mutation, callback);
+  // The Options page tracks its own writes so it does not mistake this
+  // import for a change made elsewhere.
+  if (typeof writeOptionsSyncMutation === "function") {
+    writeOptionsSyncMutation(currentRaw || {}, mutation, callback);
+  } else {
+    vscWriteManagedStorageMutation(mutation, callback);
+  }
 }
 
 function importLocalSettings(localToImport, callback, report) {

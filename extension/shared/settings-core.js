@@ -4,19 +4,83 @@
   var LEGACY_SITE_RULES_DIFF_FORMAT = "defaults-diff-v1";
   var SITE_RULES_DIFF_FORMAT = "defaults-diff-v2";
   var REMOVED_DEFAULT_RULE_KEYS_META = "removedDefaultRuleKeys";
+  // Marks site rules saved with tri-state `enabled` (absent = follow global).
+  // Data without it predates that change: built-in rules then carried
+  // `enabled: true`, and an `enabled: true` rule only mattered while global
+  // Speeder was off. Kept inside siteRulesMeta so older versions still read
+  // the v2 diff, and drop the marker when they rewrite it.
+  var ENABLED_TRI_STATE_META = "enabledTriState";
   var MIN_SPEED = 0.1;
   var MAX_SPEED = 16;
   var CONTROLLER_LOCATIONS = [
     "top-left", "top-center", "top-right", "middle-right", "bottom-right",
     "bottom-center", "bottom-left", "middle-left"
   ];
-  var BUTTON_IDS = new Set([
-    "rewind", "slower", "faster", "advance", "display", "reset", "fast", "nudge",
-    "pause", "muted", "louder", "softer", "mark", "jump", "settings"
-  ]);
-  var KNOWN_ACTIONS = new Set(Array.from(BUTTON_IDS).concat([
-    "move", "blink", "drag", "toggleSubtitleNudge"
-  ]));
+  // Control-bar buttons in UI order. `name` labels the Options editor;
+  // `title` is the tooltip/accessible name on the in-page and popup bars;
+  // `fallbackIcon` is shown only when ui-icons.js has no icon for the id.
+  var BUTTON_DEFS = {
+    rewind: { name: "Rewind", title: "Rewind", fallbackIcon: "\u00AB", className: "rw" },
+    slower: { name: "Decrease speed", title: "Decrease speed", fallbackIcon: "\u2212" },
+    faster: { name: "Increase speed", title: "Increase speed", fallbackIcon: "+" },
+    advance: { name: "Advance", title: "Advance", fallbackIcon: "\u00BB", className: "rw" },
+    display: {
+      name: "Close controller",
+      title: "Show or hide controller",
+      fallbackIcon: "\u00D7",
+      className: "hideButton"
+    },
+    reset: { name: "Reset speed", title: "Reset speed", fallbackIcon: "\u21BB" },
+    fast: { name: "Preferred speed", title: "Toggle preferred speed", fallbackIcon: "\u2605" },
+    nudge: { name: "Subtitle nudge", title: "Toggle subtitle nudge", fallbackIcon: "\u2713" },
+    pause: { name: "Play / Pause", title: "Play or pause", fallbackIcon: "\u23EF" },
+    muted: { name: "Mute / Unmute", title: "Mute or unmute", fallbackIcon: "M" },
+    louder: { name: "Increase volume", title: "Increase volume", fallbackIcon: "+" },
+    softer: { name: "Decrease volume", title: "Decrease volume", fallbackIcon: "\u2212" },
+    mark: { name: "Set marker", title: "Mark position", fallbackIcon: "\u2691" },
+    jump: { name: "Jump to marker", title: "Jump to marked position", fallbackIcon: "\u21E5" },
+    settings: {
+      name: "Settings",
+      title: "Open Speeder settings",
+      fallbackIcon: "\u2699",
+      popupAllowed: false
+    }
+  };
+  Object.keys(BUTTON_DEFS).forEach(function (id) {
+    var def = BUTTON_DEFS[id];
+    if (def.className === undefined) def.className = "";
+    if (def.popupAllowed === undefined) def.popupAllowed = true;
+  });
+  // Shortcut actions in the order Options offers them. `defaultValue` is set
+  // exactly for the actions that take a value.
+  var ACTION_DEFS = {
+    display: { label: "Show/hide controller" },
+    move: { label: "Move controller" },
+    slower: { label: "Decrease speed", defaultValue: 0.1 },
+    faster: { label: "Increase speed", defaultValue: 0.1 },
+    rewind: { label: "Rewind", defaultValue: 10 },
+    advance: { label: "Advance", defaultValue: 10 },
+    reset: { label: "Reset speed" },
+    fast: { label: "Preferred speed", defaultValue: 1.8 },
+    toggleSubtitleNudge: { label: "Toggle subtitle nudge" },
+    pause: { label: "Play / Pause" },
+    muted: { label: "Mute / Unmute" },
+    louder: { label: "Increase volume", defaultValue: 0.1 },
+    softer: { label: "Decrease volume", defaultValue: 0.1 },
+    mark: { label: "Set marker" },
+    jump: { label: "Jump to marker" }
+  };
+  Object.keys(ACTION_DEFS).forEach(function (action) {
+    ACTION_DEFS[action].hasValue = ACTION_DEFS[action].defaultValue !== undefined;
+  });
+  var BUTTON_IDS = new Set(Object.keys(BUTTON_DEFS));
+  var POPUP_BUTTON_IDS = new Set(Object.keys(BUTTON_DEFS).filter(function (id) {
+    return BUTTON_DEFS[id].popupAllowed;
+  }));
+  // "blink" and "drag" are internal controller actions with no UI entry.
+  var KNOWN_ACTIONS = new Set(
+    Object.keys(BUTTON_DEFS).concat(Object.keys(ACTION_DEFS), ["blink", "drag"])
+  );
   var DEFAULT_BUTTONS = ["rewind", "slower", "faster", "advance", "display"];
   var LEGACY_SYNC_KEYS = [
     "resetSpeed",
@@ -163,13 +227,11 @@
     siteRules: [
       {
         title: "YouTube videos",
-        pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/(?!shorts\\/).*/",
-        enabled: true
+        pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/(?!shorts\\/).*/"
       },
       {
         title: "YouTube Shorts",
         pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/shorts\\/.*/",
-        enabled: true,
         rememberSpeed: true,
         controllerMarginTop: 60,
         controllerMarginBottom: 85
@@ -177,7 +239,6 @@
       {
         title: "YouTube Shorts (mobile)",
         pattern: "/^https:\\/\\/m\\.youtube\\.com\\/shorts\\/.*/",
-        enabled: true,
         rememberSpeed: true,
         controllerMarginTop: 60,
         controllerMarginBottom: 85
@@ -296,8 +357,14 @@
       : clonePlainData(current);
   }
 
-  function getDefaultSiteRules() {
-    return clonePlainData(DEFAULT_SETTINGS.siteRules) || [];
+  function getDefaultSiteRules(legacyEnabled) {
+    var rules = clonePlainData(DEFAULT_SETTINGS.siteRules) || [];
+    if (legacyEnabled) {
+      rules.forEach(function (rule) {
+        rule.enabled = true;
+      });
+    }
+    return rules;
   }
 
   function getDefaultSiteRulesByPattern() {
@@ -335,7 +402,7 @@
   function normalizeButtonIds(value, fallback, popup) {
     if (!Array.isArray(value)) return clonePlainData(fallback);
     return value.filter(function(id, index) {
-      return BUTTON_IDS.has(id) && (!popup || id !== "settings") && value.indexOf(id) === index;
+      return (popup ? POPUP_BUTTON_IDS : BUTTON_IDS).has(id) && value.indexOf(id) === index;
     });
   }
 
@@ -441,7 +508,7 @@
     return normalized;
   }
 
-  function compressSiteRules(siteRules) {
+  function compressSiteRules(siteRules, settings) {
     if (!Array.isArray(siteRules)) {
       return {};
     }
@@ -494,8 +561,8 @@
         return;
       }
 
-      // A custom pattern-only rule is meaningful: it can whitelist a site while
-      // global Speeder is disabled. Never discard it as an "empty" rule.
+      // Never discard a custom pattern-only rule as "empty": the user added it
+      // (for example from the popup) and may still customize it.
       exportRules.push(normalizedRule);
     });
 
@@ -526,8 +593,31 @@
       }
       result.siteRulesFormat = SITE_RULES_DIFF_FORMAT;
     }
+    // Without stored rules, legacy and tri-state data only differ while global
+    // Speeder is off (legacy built-ins were whitelisted), so mark that case too.
+    if (result.siteRulesFormat || (settings && settings.enabled === false)) {
+      result.siteRulesMeta = result.siteRulesMeta || {};
+      result.siteRulesMeta[ENABLED_TRI_STATE_META] = true;
+      result.siteRulesFormat = SITE_RULES_DIFF_FORMAT;
+    }
 
     return result;
+  }
+
+  function hasTriStateSiteRules(raw) {
+    return (
+      raw.siteRulesFormat === SITE_RULES_DIFF_FORMAT &&
+      isPlainObject(raw.siteRulesMeta) &&
+      raw.siteRulesMeta[ENABLED_TRI_STATE_META] === true
+    );
+  }
+
+  function migrateLegacySiteRuleEnabled(siteRules, globalEnabled) {
+    if (globalEnabled === false) return siteRules;
+    siteRules.forEach(function (rule) {
+      if (rule.enabled === true) delete rule.enabled;
+    });
+    return siteRules;
   }
 
   function getRemovedDefaultRuleKeysByPattern(siteRulesMeta) {
@@ -553,8 +643,13 @@
     return byPattern;
   }
 
-  function expandSiteRules(siteRules, siteRulesMeta, supportsRemovedKeys) {
-    var defaultRules = getDefaultSiteRules();
+  function expandSiteRules(
+    siteRules,
+    siteRulesMeta,
+    supportsRemovedKeys,
+    legacyEnabled
+  ) {
+    var defaultRules = getDefaultSiteRules(legacyEnabled);
     var defaultRulesByPattern = getDefaultSiteRulesByPattern();
     if (defaultRules.length === 0) {
       return Array.isArray(siteRules) ? clonePlainData(siteRules) : [];
@@ -631,7 +726,7 @@
 
   function migrateLegacyFullSiteRules(siteRules) {
     var rules = clonePlainData(siteRules) || [];
-    var defaults = getDefaultSiteRules();
+    var defaults = getDefaultSiteRules(true);
     var mobileShortsDefault = defaults[2];
     if (!mobileShortsDefault || !mobileShortsDefault.pattern) return rules;
 
@@ -763,16 +858,6 @@
     }
   }
 
-  var defaultActionValues = {
-    slower: 0.1,
-    faster: 0.1,
-    rewind: 10,
-    advance: 10,
-    fast: 1.8,
-    louder: 0.1,
-    softer: 0.1
-  };
-
   function getActionValueError(action, value) {
     var numericValue = finiteNumberOr(value, NaN);
     if (!Number.isFinite(numericValue)) return "must be a finite number";
@@ -806,8 +891,8 @@
   function sanitizeActionValue(action, value, fallback) {
     if (!getActionValueError(action, value)) return Number(value);
     if (!getActionValueError(action, fallback)) return Number(fallback);
-    if (Object.prototype.hasOwnProperty.call(defaultActionValues, action)) {
-      return defaultActionValues[action];
+    if (hasOwn(ACTION_DEFS, action) && ACTION_DEFS[action].hasValue) {
+      return ACTION_DEFS[action].defaultValue;
     }
     return 0;
   }
@@ -1027,32 +1112,38 @@
       expanded.keyBindings = clonePlainData(DEFAULT_SETTINGS.keyBindings);
     }
 
+    var legacyEnabled = !alreadyExpanded && !hasTriStateSiteRules(raw);
     if (alreadyExpanded) {
       expanded.siteRules = raw.siteRules || getDefaultSiteRules();
     } else if (raw.siteRulesFormat === SITE_RULES_DIFF_FORMAT) {
       expanded.siteRules = expandSiteRules(
         raw.siteRules,
         raw.siteRulesMeta,
-        true
+        true,
+        legacyEnabled
       );
     } else if (raw.siteRulesFormat === LEGACY_SITE_RULES_DIFF_FORMAT) {
       expanded.siteRules = expandSiteRules(
         raw.siteRules,
         raw.siteRulesMeta,
-        false
+        false,
+        true
       );
     } else if (hasOwn(raw, "siteRules") && Array.isArray(raw.siteRules)) {
       expanded.siteRules = migrateLegacyFullSiteRules(raw.siteRules);
     } else if (hasOwn(raw, "blacklist")) {
-      expanded.siteRules = getDefaultSiteRules().concat(
+      expanded.siteRules = getDefaultSiteRules(true).concat(
         migrateLegacyBlacklist(raw, report)
       );
     } else {
-      expanded.siteRules = getDefaultSiteRules();
+      expanded.siteRules = getDefaultSiteRules(true);
     }
     expanded.siteRules = expanded.siteRules
       .map(normalizeSiteRule)
       .filter(Boolean);
+    if (legacyEnabled) {
+      migrateLegacySiteRuleEnabled(expanded.siteRules, expanded.enabled);
+    }
 
     if (report) {
       Object.keys(raw).forEach(function(key) {
@@ -1066,78 +1157,6 @@
       });
     }
     return expanded;
-  }
-
-  function escapeStringRegExp(str) {
-    var matcher = /[|\\{}()[\]^$+*?.]/g;
-    return String(str).replace(matcher, "\\$&");
-  }
-
-  function siteRuleMatchesUrl(rule, currentUrl) {
-    if (!rule || !rule.pattern || !currentUrl) {
-      return false;
-    }
-
-    if (typeof rule.pattern !== "string" || rule.pattern.length > 2048) return false;
-    var pattern = rule.pattern.trim();
-    if (!pattern) {
-      return false;
-    }
-
-    var regex;
-    if (pattern.startsWith("/") && pattern.lastIndexOf("/") === 0) {
-      return false;
-    }
-    if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
-      try {
-        var lastSlash = pattern.lastIndexOf("/");
-        regex = new RegExp(
-          pattern.substring(1, lastSlash),
-          pattern.substring(lastSlash + 1)
-        );
-      } catch (_error) {
-        return false;
-      }
-    } else {
-      regex = new RegExp(escapeStringRegExp(pattern));
-    }
-
-    return Boolean(regex && regex.test(currentUrl));
-  }
-
-  function mergeMatchingSiteRules(currentUrl, siteRules) {
-    if (!currentUrl || !Array.isArray(siteRules)) {
-      return null;
-    }
-
-    var matchedRules = [];
-    for (var i = 0; i < siteRules.length; i++) {
-      if (siteRuleMatchesUrl(siteRules[i], currentUrl)) {
-        matchedRules.push(siteRules[i]);
-      }
-    }
-
-    if (!matchedRules.length) {
-      return null;
-    }
-
-    var mergedRule = {};
-    matchedRules.forEach(function (rule) {
-      Object.keys(rule).forEach(function (key) {
-        var value = rule[key];
-        if (Array.isArray(value)) {
-          mergedRule[key] = clonePlainData(value);
-          return;
-        }
-        if (isPlainObject(value)) {
-          mergedRule[key] = clonePlainData(value);
-          return;
-        }
-        mergedRule[key] = value;
-      });
-    });
-
-    return mergedRule;
   }
 
   function normalizeLocalSettings(local, report) {
@@ -1203,6 +1222,15 @@
   global.vscGetButtonIds = function () {
     return Array.from(BUTTON_IDS);
   };
+  global.vscGetButtonDefs = function () {
+    return clonePlainData(BUTTON_DEFS);
+  };
+  global.vscGetActionDefs = function () {
+    return clonePlainData(ACTION_DEFS);
+  };
+  global.vscGetSpeedLimits = function () {
+    return { min: MIN_SPEED, max: MAX_SPEED };
+  };
   global.vscGetDefaultButtonIds = function () {
     return DEFAULT_BUTTONS.slice();
   };
@@ -1223,13 +1251,5 @@
   };
   global.vscGetSiteRulesDiffFormat = function () {
     return SITE_RULES_DIFF_FORMAT;
-  };
-  global.vscMatchSiteRule = function (url, rules) {
-    var shared = global.SpeederShared && global.SpeederShared.siteRules;
-    // Every shipped page loads site-rules.js before using these accessors.
-    // Keep the legacy standalone fallback for callers outside those pages.
-    return shared && typeof shared.matchSiteRule === "function"
-      ? shared.matchSiteRule(url, rules)
-      : mergeMatchingSiteRules(url, rules);
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

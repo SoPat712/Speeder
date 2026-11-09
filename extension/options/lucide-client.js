@@ -63,7 +63,7 @@ function fetchLucideSvg(slug) {
 }
 
 /** @returns {Promise<Object<string, string[]>>} slug -> tags */
-function getLucideTagsMap(chromeLocal, bypassCache) {
+function getLucideTagsMap() {
   return loadLucideBundle().then(function (data) {
     return data.tags;
   });

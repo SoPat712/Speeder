@@ -83,8 +83,13 @@ describe("popup UI", () => {
 
     document.getElementById("disable").click();
 
+    // The tri-state marker keeps built-in rules following the global switch.
     expect(chrome.storage.sync.set).toHaveBeenCalledWith(
-      { enabled: false },
+      {
+        enabled: false,
+        siteRulesFormat: "defaults-diff-v2",
+        siteRulesMeta: { enabledTriState: true }
+      },
       expect.any(Function)
     );
     expect(document.getElementById("enable").classList.contains("hide")).toBe(

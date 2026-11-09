@@ -368,7 +368,234 @@ describe("options.js", () => {
       document.querySelector('.shortcut-row.customs[data-action="pause"]')
     ).not.toBeNull();
     expect(document.querySelectorAll(".site-rule")).toHaveLength(1);
-    expect(document.querySelector(".site-rule .site-enabled").checked).toBe(false);
+    expect(document.querySelector(".site-rule .site-enabled-mode").value).toBe("off");
+  });
+
+  it("seeds site-rule button editors from the stored global bars on load", async () => {
+    vi.useFakeTimers();
+    const chrome = bootOptions({
+      syncData: {
+        controllerButtons: ["rewind", "fast", "display"],
+        popupMatchHoverControls: false,
+        popupControllerButtons: ["advance", "pause"],
+        siteRules: [
+          { pattern: "popup-only.test", showPopupControlBar: false },
+          { pattern: "plain.test", rememberSpeed: true }
+        ]
+      }
+    });
+    await flushAsyncWork(3);
+
+    const ruleFor = (pattern) =>
+      Array.from(document.querySelectorAll(".site-rule")).find(
+        (el) => el.querySelector(".site-pattern").value === pattern
+      );
+    const order = (zone) =>
+      Array.from(zone.querySelectorAll(".cb-block")).map((b) => b.dataset.buttonId);
+
+    const popupOnly = ruleFor("popup-only.test");
+    expect(order(popupOnly.querySelector(".site-popup-cb-active"))).toEqual([
+      "advance",
+      "pause"
+    ]);
+    const plain = ruleFor("plain.test");
+    expect(order(plain.querySelector(".site-cb-active"))).toEqual([
+      "rewind",
+      "fast",
+      "display"
+    ]);
+
+    // Turning on the hover override and autosaving must not store an empty bar.
+    const override = plain.querySelector(".override-controlbar");
+    override.checked = true;
+    override.dispatchEvent(new window.Event("change", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(400);
+
+    const saved = window.vscExpandStoredSettings(chrome.storage.sync._dump());
+    const savedRule = (pattern) =>
+      saved.siteRules.find((rule) => rule.pattern === pattern);
+    expect(savedRule("plain.test").controllerButtons).toEqual([
+      "rewind",
+      "fast",
+      "display"
+    ]);
+    expect(savedRule("popup-only.test").popupControllerButtons).toEqual([
+      "advance",
+      "pause"
+    ]);
+  });
+
+  it("reloads on external storage changes and ignores its own saves", async () => {
+    vi.useFakeTimers();
+    const chrome = bootOptions({ syncData: { rememberSpeed: true } });
+    await flushAsyncWork(3);
+    const restoreSpy = vi.spyOn(chrome.storage.sync, "get");
+
+    // Own autosave: no reload, and the saved value stays.
+    const remember = document.getElementById("rememberSpeed");
+    remember.checked = false;
+    remember.dispatchEvent(new window.Event("change", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(400);
+    expect(chrome.storage.sync._dump().rememberSpeed).toBeUndefined();
+    const readsAfterSave = restoreSpy.mock.calls.length;
+
+    // Runtime-only writes (lastSpeed) are not settings edits.
+    chrome.storage.sync.set({ lastSpeed: 1.5 });
+    expect(restoreSpy.mock.calls.length).toBe(readsAfterSave);
+
+    // The popup disables Speeder: the page reloads instead of reverting it.
+    const ruleEl = document.querySelector(".site-rule");
+    window.setSiteRuleExpandedState(ruleEl, true);
+    chrome.storage.sync.set({ enabled: false });
+    expect(document.getElementById("enabled").checked).toBe(false);
+    expect(document.getElementById("externalChangeNotice").hidden).toBe(true);
+    expect(
+      document.querySelector(".site-rule").classList.contains("collapsed")
+    ).toBe(false);
+
+    // A later local edit must not resurrect the old value.
+    document.getElementById("audioBoolean").checked = true;
+    document
+      .getElementById("audioBoolean")
+      .dispatchEvent(new window.Event("change", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(400);
+    const saved = window.vscExpandStoredSettings(chrome.storage.sync._dump());
+    expect(saved.enabled).toBe(false);
+    expect(saved.audioBoolean).toBe(true);
+  });
+
+  it("asks before replacing pending local edits with external changes", async () => {
+    vi.useFakeTimers();
+    const chrome = bootOptions();
+    await flushAsyncWork(3);
+
+    // An unsaved edit: the invalid regex blocks autosave.
+    window.createSiteRule({ pattern: "ok.test" });
+    const rules = document.querySelectorAll(".site-rule");
+    const pattern = rules[rules.length - 1].querySelector(".site-pattern");
+    pattern.value = "/[bad/";
+    pattern.dispatchEvent(new window.Event("change", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(400);
+
+    chrome.storage.sync.set({ enabled: false });
+    const notice = document.getElementById("externalChangeNotice");
+    expect(notice.hidden).toBe(false);
+    expect(document.getElementById("enabled").checked).toBe(true);
+    expect(pattern.isConnected).toBe(true);
+
+    // Autosave stays paused while the notice is up.
+    document.getElementById("audioBoolean").checked = true;
+    document
+      .getElementById("audioBoolean")
+      .dispatchEvent(new window.Event("change", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(400);
+    expect(chrome.storage.sync._dump().audioBoolean).toBeUndefined();
+
+    document.getElementById("externalChangeReload").click();
+    expect(notice.hidden).toBe(true);
+    expect(document.getElementById("enabled").checked).toBe(false);
+    expect(document.getElementById("audioBoolean").checked).toBe(false);
+    expect(pattern.isConnected).toBe(false);
+
+    // Keeping local edits saves them over the external change.
+    document.getElementById("rememberSpeed").checked = true;
+    document.getElementById("rememberSpeed").focus();
+    chrome.storage.sync.set({ forceLastSavedSpeed: true });
+    expect(notice.hidden).toBe(true);
+    const text = document.getElementById("hideWithControlsTimer");
+    text.focus();
+    chrome.storage.sync.set({ startHidden: true });
+    expect(notice.hidden).toBe(false);
+    document.getElementById("startHidden").checked = false;
+    document.getElementById("externalChangeKeep").click();
+    expect(notice.hidden).toBe(true);
+    const kept = window.vscExpandStoredSettings(chrome.storage.sync._dump());
+    expect(kept.startHidden).toBe(false);
+    expect(kept.enabled).toBe(false);
+  });
+
+  it("reveals the site rule the popup asked for", async () => {
+    const chrome = bootOptions({
+      syncData: { siteRules: [{ pattern: "https://a.test" }] },
+      localData: { optionsIntent: { siteRulePattern: "https://a.test" } }
+    });
+    await flushAsyncWork(3);
+
+    const ruleFor = (value) =>
+      Array.from(document.querySelectorAll(".site-rule")).find(
+        (el) => el.querySelector(".site-pattern").value === value
+      );
+    expect(ruleFor("https://a.test").classList.contains("collapsed")).toBe(false);
+    expect(chrome.storage.local._dump()).not.toHaveProperty("optionsIntent");
+
+    // Already open: the new rule arrives through sync, the intent through local.
+    const raw = chrome.storage.sync._dump();
+    const settings = window.vscExpandStoredSettings(raw);
+    settings.siteRules.push({ pattern: "https://b.test" });
+    const mutation = window.vscBuildManagedStorageMutation(raw, settings);
+    chrome.storage.sync.set(mutation.set);
+    chrome.storage.local.set({ optionsIntent: { siteRulePattern: "https://b.test" } });
+    expect(ruleFor("https://b.test").classList.contains("collapsed")).toBe(false);
+    expect(chrome.storage.local._dump()).not.toHaveProperty("optionsIntent");
+  });
+
+  it("restores and saves the tri-state site enable mode", async () => {
+    const chrome = bootOptions({
+      syncData: {
+        enabled: false,
+        siteRulesFormat: "defaults-diff-v2",
+        siteRulesMeta: { enabledTriState: true },
+        siteRules: [
+          { pattern: "on.test", enabled: true },
+          { pattern: "off.test", enabled: false },
+          { pattern: "follow.test" },
+          { pattern: "legacy-off.test", disableExtension: true }
+        ]
+      }
+    });
+    await flushAsyncWork(3);
+
+    const modeFor = (pattern) =>
+      Array.from(document.querySelectorAll(".site-rule"))
+        .find((el) => el.querySelector(".site-pattern").value === pattern)
+        .querySelector(".site-enabled-mode");
+    expect(modeFor("on.test").value).toBe("on");
+    expect(modeFor("off.test").value).toBe("off");
+    expect(modeFor("follow.test").value).toBe("inherit");
+    expect(modeFor("legacy-off.test").value).toBe("off");
+    expect(
+      modeFor("off.test").closest(".site-rule").querySelector(".site-rule-content")
+        .classList.contains("disabled-rule")
+    ).toBe(true);
+    // Built-in rules follow the global switch by default.
+    expect(
+      modeFor(window.vscGetSettingsDefaults().siteRules[0].pattern).value
+    ).toBe("inherit");
+
+    window.createSiteRule(null);
+    const newRule = document.querySelectorAll(".site-rule");
+    expect(newRule[newRule.length - 1].querySelector(".site-enabled-mode").value).toBe(
+      "inherit"
+    );
+
+    modeFor("on.test").value = "inherit";
+    modeFor("follow.test").value = "off";
+    modeFor("off.test").value = "on";
+    window.save_options();
+
+    const enabledByPattern = Object.fromEntries(
+      window.vscExpandStoredSettings(chrome.storage.sync._dump()).siteRules.map(
+        (rule) => [rule.pattern, rule.enabled]
+      )
+    );
+    expect(enabledByPattern).toEqual(
+      expect.objectContaining({
+        "on.test": undefined,
+        "off.test": true,
+        "follow.test": false,
+        "legacy-off.test": false
+      })
+    );
   });
 
   it("saves normalized settings and site rule overrides", async () => {
@@ -425,7 +652,6 @@ describe("options.js", () => {
       expect.arrayContaining([
         expect.objectContaining({
           pattern: "youtube.com",
-          enabled: true,
           controllerLocation: "top-right",
           controllerMarginTop: 200,
           controllerMarginBottom: 0,

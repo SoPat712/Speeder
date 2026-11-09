@@ -20,7 +20,7 @@ describe("lucide-client.js", () => {
     expect(bundle.version).toBe(pkg.devDependencies["lucide-static"]);
     expect(bundle.version).toBe(window.LUCIDE_STATIC_VERSION);
     const [tags, svg] = await Promise.all([
-      window.getLucideTagsMap(null, true), window.fetchLucideSvg("Alarm-Clock")
+      window.getLucideTagsMap(), window.fetchLucideSvg("Alarm-Clock")
     ]);
     expect(tags).toEqual(bundle.tags);
     expect(svg).toBe(bundle.icons["alarm-clock"]);
@@ -32,7 +32,7 @@ describe("lucide-client.js", () => {
     await expect(window.fetchLucideSvg("does-not-exist")).rejects.toThrow("Icon not found");
     await expect(window.fetchLucideSvg("constructor")).rejects.toThrow("Icon not found");
     expect(window.lucideIconSvgUrl("constructor")).toBe("");
-    await window.getLucideTagsMap({ get: vi.fn() }, false);
+    await window.getLucideTagsMap();
     expect(window.fetch).toHaveBeenCalledTimes(1);
     expect(window.fetch.mock.calls[0][0]).toBe("moz-extension://speeder/options/vendor/lucide-icons.json");
   });

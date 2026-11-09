@@ -1096,6 +1096,28 @@ button.lucide-result-tile.lucide-picked {
   display: none;
 }
 
+.external-change-notice:not([hidden]) {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.16);
+}
+
+.external-change-notice span {
+  flex: 1 1 220px;
+}
+
 .support-cta {
   margin-top: 14px;
   padding: 14px 16px;

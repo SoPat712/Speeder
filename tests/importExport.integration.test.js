@@ -43,6 +43,67 @@ describe("import/export flows", () => {
     ]);
   });
 
+  it("imports pre-tri-state backups by their own global switch", async () => {
+    const chrome = await setupImportExport();
+    const youtube = globalThis.vscGetSettingsDefaults().siteRules[0].pattern;
+    const oldBackup = (enabled) =>
+      window.SpeederShared.importExport.parseImportText(
+        JSON.stringify({
+          version: "1.1",
+          settings: {
+            enabled: enabled,
+            siteRulesFormat: "defaults-diff-v2",
+            siteRules: [
+              { pattern: youtube, title: "YouTube videos" },
+              { pattern: "custom.test", title: "Custom", enabled: true },
+              { pattern: "blocked.test", enabled: false }
+            ]
+          },
+          localSettings: {}
+        })
+      ).settings;
+    const importBackup = (backup) => {
+      Object.keys(chrome.storage.sync.__state).forEach(
+        (key) => delete chrome.storage.sync.__state[key]
+      );
+      globalThis.persistImportedSyncSettings({}, backup, () => {});
+      return globalThis.vscExpandStoredSettings(chrome.storage.sync.__state);
+    };
+    const enabledByPattern = (settings) =>
+      Object.fromEntries(
+        settings.siteRules.map((rule) => [rule.pattern, rule.enabled])
+      );
+
+    expect(enabledByPattern(importBackup(oldBackup(true)))).toEqual(
+      expect.objectContaining({
+        [youtube]: undefined,
+        "custom.test": undefined,
+        "blocked.test": false
+      })
+    );
+    expect(enabledByPattern(importBackup(oldBackup(false)))).toEqual(
+      expect.objectContaining({
+        [youtube]: true,
+        "custom.test": true,
+        "blocked.test": false
+      })
+    );
+
+    // Current exports round-trip their tri-state rules unchanged.
+    const current = globalThis.vscGetSettingsDefaults();
+    current.siteRules[1].enabled = true;
+    current.siteRules.push({ pattern: "follow.test" });
+    const exported = JSON.parse(
+      JSON.stringify(
+        globalThis.normalizedSettingsForExport(
+          globalThis.vscBuildStoredSettingsDiff(current)
+        )
+      )
+    );
+    expect(exported.siteRulesMeta).toEqual({ enabledTriState: true });
+    expect(importBackup(exported).siteRules).toEqual(current.siteRules);
+  });
+
   it("exports sync and local settings as a JSON download", async () => {
     vi.useFakeTimers();
     const exportTime = new Date(2026, 3, 4, 8, 9, 10);

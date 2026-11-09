@@ -6,27 +6,13 @@ document.addEventListener("DOMContentLoaded", function () {
   var siteRuleUtils = speederShared.siteRules || {};
   var popupControlUtils = speederShared.popupControls || {};
 
-  /* `label` is only used if shared/ui-icons.js has no path for this action (fallback). */
-  var controllerButtonDefs = {
-    rewind:   { label: "", className: "rw" },
-    slower:   { label: "", className: "" },
-    faster:   { label: "", className: "" },
-    advance:  { label: "", className: "rw" },
-    display:  { label: "", className: "hideButton" },
-    reset:    { label: "\u21BB", className: "" },
-    fast:     { label: "", className: "" },
-    nudge:    { label: "", className: "" },
-    pause:    { label: "", className: "" },
-    muted:    { label: "", className: "" },
-    louder:   { label: "", className: "" },
-    softer:   { label: "", className: "" },
-    mark:     { label: "", className: "" },
-    jump:     { label: "", className: "" },
-    settings: { label: "", className: "" }
-  };
-
+  var controllerButtonDefs = vscGetButtonDefs();
   var defaultButtons = vscGetDefaultButtonIds();
-  var popupExcludedButtonIds = new Set(["settings"]);
+  var popupExcludedButtonIds = new Set(
+    Object.keys(controllerButtonDefs).filter(function (id) {
+      return !controllerButtonDefs[id].popupAllowed;
+    })
+  );
   var renderToken = 0;
   var forceLastSavedSpeedControlledBySiteRule = null;
   var selectedFrameToken = null;
@@ -85,6 +71,28 @@ document.addEventListener("DOMContentLoaded", function () {
       tabPaused: diagnosticContext.tabPaused,
       frame: diagnosticContext.frame
     });
+  }
+
+  // openOptionsPage reuses an open Options tab but cannot carry a URL hash,
+  // so a site rule to reveal is handed over through storage.local.
+  function openOptionsPage(siteRulePattern) {
+    function open() {
+      if (typeof chrome.runtime.openOptionsPage === "function") {
+        chrome.runtime.openOptionsPage(function () {
+          void chrome.runtime.lastError;
+        });
+      } else {
+        window.open(chrome.runtime.getURL("options/options.html"));
+      }
+    }
+    if (typeof siteRulePattern !== "string") {
+      open();
+      return;
+    }
+    chrome.storage.local.set(
+      { optionsIntent: { siteRulePattern: siteRulePattern } },
+      open
+    );
   }
 
   function persistExpandedSettings(rawStorage, settings, callback) {
@@ -271,7 +279,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (customSpan) {
           btn.appendChild(customSpan);
         } else {
-          btn.textContent = def.label || "?";
+          btn.textContent = def.fallbackIcon || "?";
         }
       } else if (typeof vscIconSvgString === "function") {
         var svgStr = vscIconSvgString(btnId, 16);
@@ -280,23 +288,19 @@ document.addEventListener("DOMContentLoaded", function () {
           if (iconSpan) {
             btn.appendChild(iconSpan);
           } else {
-            btn.textContent = def.label || "?";
+            btn.textContent = def.fallbackIcon || "?";
           }
         } else {
-          btn.textContent = def.label || "?";
+          btn.textContent = def.fallbackIcon || "?";
         }
       } else {
-        btn.textContent = def.label || "?";
+        btn.textContent = def.fallbackIcon || "?";
       }
       if (def.className) btn.className = def.className;
-      btn.title = btnId.charAt(0).toUpperCase() + btnId.slice(1);
-      btn.setAttribute("aria-label", btn.title);
+      btn.title = def.title;
+      btn.setAttribute("aria-label", def.title);
 
       btn.addEventListener("click", function () {
-        if (btnId === "settings") {
-          window.open(chrome.runtime.getURL("options/options.html"));
-          return;
-        }
         var message = { action: "run_action", actionName: btnId };
         if (shortcutTargetMode !== "all" && selectedFrameToken) {
           message.targetFrameToken = selectedFrameToken;
@@ -320,7 +324,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   document.querySelector("#config").addEventListener("click", function () {
-    window.open(chrome.runtime.getURL("options/options.html"));
+    openOptionsPage();
   });
 
   document.querySelector("#about").addEventListener("click", function () {
@@ -371,11 +375,11 @@ document.addEventListener("DOMContentLoaded", function () {
         ) {
           return;
         }
+        // A plain rule to customize in Options; it follows the global switch.
         settings.siteRules = rules.concat([
           {
             title: details.title,
-            pattern: details.pattern,
-            enabled: true
+            pattern: details.pattern
           }
         ]);
         added = true;
@@ -390,7 +394,7 @@ document.addEventListener("DOMContentLoaded", function () {
             ? "Site rule added. Opening settings..."
             : "Site rule already exists. Opening settings..."
         );
-        window.open(chrome.runtime.getURL("options/options.html"));
+        openOptionsPage(details.pattern);
       }
     );
   });

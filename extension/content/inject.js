@@ -584,28 +584,19 @@ var controllerLocationStyles = {
   }
 };
 
-/* `label` fallback only when ui-icons has no path for the action. */
-var controllerButtonDefs = {
-  rewind: { label: "", name: "Rewind", className: "rw" },
-  slower: { label: "", name: "Decrease speed", className: "" },
-  faster: { label: "", name: "Increase speed", className: "" },
-  advance: { label: "", name: "Advance", className: "rw" },
-  display: {
-    label: "",
-    name: "Show or hide controller",
-    className: "hideButton"
-  },
-  reset: { label: "\u21BB", name: "Reset speed", className: "" },
-  fast: { label: "", name: "Toggle preferred speed", className: "" },
-  nudge: { label: "", name: "Toggle subtitle nudge", className: "" },
-  pause: { label: "", name: "Play or pause", className: "" },
-  muted: { label: "", name: "Mute or unmute", className: "" },
-  louder: { label: "", name: "Increase volume", className: "" },
-  softer: { label: "", name: "Decrease volume", className: "" },
-  mark: { label: "", name: "Mark position", className: "" },
-  jump: { label: "", name: "Jump to marked position", className: "" },
-  settings: { label: "", name: "Open Speeder settings", className: "" }
-};
+/* From the shared table in settings-core.js (loaded first by the manifest).
+ * `label` is the fallback when ui-icons has no path for the action. */
+var controllerButtonDefs = (function() {
+  var defs = typeof vscGetButtonDefs === "function" ? vscGetButtonDefs() : {};
+  Object.keys(defs).forEach(function(id) {
+    defs[id] = {
+      label: defs[id].fallbackIcon,
+      name: defs[id].title,
+      className: defs[id].className
+    };
+  });
+  return defs;
+})();
 
 function createDefaultBinding(action, code, value) {
   return {

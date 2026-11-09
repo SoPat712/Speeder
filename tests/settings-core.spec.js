@@ -27,12 +27,12 @@ describe("canonical settings storage", () => {
     expect(shortsRule).toEqual(
       expect.objectContaining({
         title: "YouTube Shorts",
-        enabled: true,
         rememberSpeed: true,
         controllerMarginTop: 60,
         controllerMarginBottom: 85
       })
     );
+    expect(settings.siteRules.every((rule) => !("enabled" in rule))).toBe(true);
     expect(settings.shortcutTargetMode).toBe("closest");
     expect(settings.showAmbientLoopControls).toBe(false);
     expect(settings.subtitleNudgeInterval).toBe(250);
@@ -346,13 +346,281 @@ describe("canonical settings storage", () => {
   });
 });
 
+describe("shared button and action tables", () => {
+  beforeEach(() => {
+    bootSettingsCore();
+    evaluateScript("extension/shared/ui-icons.js");
+  });
+
+  it("describes every button once, in UI order, with an icon", () => {
+    const defs = window.vscGetButtonDefs();
+    expect(Object.keys(defs)).toEqual(window.vscGetButtonIds());
+    expect(Object.keys(defs).slice(0, 5)).toEqual(window.vscGetDefaultButtonIds());
+    Object.keys(defs).forEach((id) => {
+      expect(Object.keys(defs[id]).sort()).toEqual(
+        ["className", "fallbackIcon", "name", "popupAllowed", "title"]
+      );
+      expect(defs[id].name).toBeTruthy();
+      expect(defs[id].title).toBeTruthy();
+      expect(window.vscIconSvgString(id, 16)).toBeTruthy();
+    });
+    expect(
+      Object.keys(defs).filter((id) => !defs[id].popupAllowed)
+    ).toEqual(["settings"]);
+    expect(defs.display.title).toBe("Show or hide controller");
+    expect(defs.fast.title).toBe("Toggle preferred speed");
+
+    defs.rewind.name = "mutated";
+    expect(window.vscGetButtonDefs().rewind.name).toBe("Rewind");
+  });
+
+  it("derives known actions, value defaults and popup filtering from the tables", () => {
+    const actions = window.vscGetActionDefs();
+    expect(
+      Object.keys(actions).filter((action) => actions[action].hasValue)
+    ).toEqual(["slower", "faster", "rewind", "advance", "fast", "louder", "softer"]);
+    expect(window.vscSanitizeActionValue("fast", "bad")).toBe(1.8);
+    expect(window.vscSanitizeActionValue("pause", "bad")).toBe(0);
+
+    const expanded = window.vscExpandStoredSettings({
+      keyBindings: ["display", "nudge", "settings", "blink", "drag", "toggleSubtitleNudge", "bogus"]
+        .map((action) => ({ action: action, code: "KeyQ" })),
+      popupControllerButtons: ["settings", "rewind", "bogus"],
+      controllerButtons: ["settings", "rewind"]
+    });
+    expect(expanded.keyBindings.map((binding) => binding.action)).toEqual(
+      ["display", "nudge", "settings", "blink", "drag", "toggleSubtitleNudge"]
+    );
+    expect(expanded.popupControllerButtons).toEqual(["rewind"]);
+    expect(expanded.controllerButtons).toEqual(["settings", "rewind"]);
+    expect(window.SpeederShared).toBeDefined();
+  });
+});
+
+describe("tri-state site-rule enabled migration", () => {
+  const YT = "/^https:\\/\\/(www\\.)?youtube\\.com\\/(?!shorts\\/).*/";
+  const WATCH_URL = "https://www.youtube.com/watch?v=1";
+
+  beforeEach(() => {
+    bootSettingsCore();
+  });
+
+  function persist(raw, update) {
+    const settings = window.vscExpandStoredSettings(raw);
+    if (update) update(settings);
+    const mutation = window.vscBuildManagedStorageMutation(raw, settings);
+    const next = Object.assign({}, raw, mutation.set);
+    mutation.remove.forEach((key) => delete next[key]);
+    return next;
+  }
+
+  function activeOn(settings, url) {
+    const siteRules = window.SpeederShared.siteRules;
+    return siteRules.isSpeederActiveForSite(
+      settings.enabled,
+      siteRules.matchSiteRule(url, settings.siteRules)
+    );
+  }
+
+  function expectStable(raw) {
+    const once = persist(raw);
+    const twice = persist(once);
+    expect(window.vscExpandStoredSettings(twice)).toEqual(
+      window.vscExpandStoredSettings(once)
+    );
+    expect(persist(twice)).toEqual(twice);
+    // Writing the migrated rules must not change what they mean (legacy full
+    // lists may be reordered built-ins first, as before).
+    const byPattern = (rules) =>
+      rules.slice().sort((a, b) => a.pattern.localeCompare(b.pattern));
+    expect(byPattern(window.vscExpandStoredSettings(twice).siteRules)).toEqual(
+      byPattern(window.vscExpandStoredSettings(raw).siteRules)
+    );
+    return once;
+  }
+
+  it("turns legacy whitelist entries into inherit rules while global Speeder is on", () => {
+    const raw = {
+      siteRulesFormat: "defaults-diff-v2",
+      siteRules: [
+        { pattern: YT, controllerOpacity: 0.5 },
+        { pattern: "custom.test", enabled: true, rememberSpeed: true },
+        { pattern: "blocked.test", enabled: false },
+        { pattern: "legacy.test", disableExtension: false }
+      ]
+    };
+    const expanded = window.vscExpandStoredSettings(raw);
+
+    expect(expanded.siteRules.filter((rule) => rule.enabled === true)).toEqual([]);
+    expect(expanded.siteRules.find((rule) => rule.pattern === YT)).toEqual({
+      title: "YouTube videos",
+      pattern: YT,
+      controllerOpacity: 0.5
+    });
+    expect(
+      expanded.siteRules.find((rule) => rule.pattern === "blocked.test").enabled
+    ).toBe(false);
+
+    const stored = expectStable(raw);
+    expect(stored.siteRulesMeta).toEqual({ enabledTriState: true });
+    expect(stored.siteRules).toEqual([
+      { pattern: YT, controllerOpacity: 0.5 },
+      { pattern: "custom.test", rememberSpeed: true },
+      { pattern: "blocked.test", enabled: false },
+      { pattern: "legacy.test" }
+    ]);
+
+    const disabled = persist(stored, (settings) => {
+      settings.enabled = false;
+    });
+    const afterDisable = window.vscExpandStoredSettings(disabled);
+    expect(activeOn(afterDisable, WATCH_URL)).toBe(false);
+    expect(activeOn(afterDisable, "https://custom.test/")).toBe(false);
+  });
+
+  it("keeps legacy whitelist entries, including built-ins, while global Speeder is off", () => {
+    const raw = {
+      enabled: false,
+      siteRulesFormat: "defaults-diff-v2",
+      siteRules: [{ pattern: "custom.test", enabled: true }]
+    };
+    const expanded = window.vscExpandStoredSettings(raw);
+
+    expect(expanded.siteRules.map((rule) => rule.enabled)).toEqual([
+      true,
+      true,
+      true,
+      true
+    ]);
+    expect(activeOn(expanded, WATCH_URL)).toBe(true);
+    expect(activeOn(expanded, "https://custom.test/")).toBe(true);
+    expect(activeOn(expanded, "https://other.test/")).toBe(false);
+
+    const stored = expectStable(raw);
+    expect(stored.siteRulesMeta).toEqual({ enabledTriState: true });
+    expect(stored.siteRules).toEqual(
+      expect.arrayContaining([
+        { pattern: YT, enabled: true },
+        { pattern: "custom.test", enabled: true }
+      ])
+    );
+
+    // Re-enabling globally afterwards must not resurrect the migration.
+    const enabled = persist(stored, (settings) => {
+      settings.enabled = true;
+    });
+    expect(
+      window.vscExpandStoredSettings(enabled).siteRules.map((rule) => rule.enabled)
+    ).toEqual([true, true, true, true]);
+  });
+
+  it("migrates untouched storage by the global switch alone", () => {
+    expect(
+      window.vscExpandStoredSettings({}).siteRules.some((rule) => "enabled" in rule)
+    ).toBe(false);
+    expect(activeOn(window.vscExpandStoredSettings({ enabled: false }), WATCH_URL)).toBe(true);
+    expect(expectStable({})).toEqual({});
+
+    // A fresh install disabled from the popup must not whitelist YouTube.
+    const disabled = persist({}, (settings) => {
+      settings.enabled = false;
+    });
+    expect(disabled).toEqual({
+      enabled: false,
+      siteRulesFormat: "defaults-diff-v2",
+      siteRulesMeta: { enabledTriState: true }
+    });
+    expect(activeOn(window.vscExpandStoredSettings(disabled), WATCH_URL)).toBe(false);
+    expectStable(disabled);
+  });
+
+  it("migrates legacy full lists, v1 diffs and blacklists", () => {
+    const fullList = {
+      siteRules: [
+        { pattern: YT, enabled: true },
+        {
+          pattern: "/^https:\\/\\/(www\\.)?youtube\\.com\\/shorts\\/.*/",
+          enabled: true,
+          rememberSpeed: true
+        },
+        { pattern: "off.test", disableExtension: true }
+      ]
+    };
+    const on = window.vscExpandStoredSettings(fullList);
+    expect(on.siteRules.map((rule) => rule.enabled)).toEqual([
+      undefined,
+      undefined,
+      false,
+      undefined
+    ]);
+    const off = window.vscExpandStoredSettings(
+      Object.assign({ enabled: false }, fullList)
+    );
+    expect(off.siteRules.map((rule) => rule.enabled)).toEqual([
+      true,
+      true,
+      false,
+      true
+    ]);
+    expectStable(fullList);
+    expectStable(Object.assign({ enabled: false }, fullList));
+
+    const v1 = window.vscExpandStoredSettings({
+      enabled: false,
+      siteRulesFormat: "defaults-diff-v1",
+      siteRules: [{ pattern: YT, enabled: false }]
+    });
+    expect(v1.siteRules.map((rule) => rule.enabled)).toEqual([false, true, true]);
+
+    const blacklist = window.vscExpandStoredSettings({ blacklist: "a.test\nb.test" });
+    expect(blacklist.siteRules.map((rule) => rule.enabled)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      false,
+      false
+    ]);
+  });
+
+  it("preserves explicit Always on rules in tri-state data while global Speeder is on", () => {
+    const raw = {
+      siteRulesFormat: "defaults-diff-v2",
+      siteRulesMeta: { enabledTriState: true },
+      siteRules: [
+        { pattern: YT, enabled: true },
+        { pattern: "custom.test", enabled: true },
+        { pattern: "follow.test" }
+      ]
+    };
+    const expanded = window.vscExpandStoredSettings(raw);
+
+    expect(expanded.siteRules.map((rule) => rule.enabled)).toEqual([
+      true,
+      undefined,
+      undefined,
+      true,
+      undefined
+    ]);
+    expect(expectStable(raw)).toEqual(raw);
+
+    const disabled = window.vscExpandStoredSettings(
+      persist(raw, (settings) => {
+        settings.enabled = false;
+      })
+    );
+    expect(activeOn(disabled, WATCH_URL)).toBe(true);
+    expect(activeOn(disabled, "https://custom.test/")).toBe(true);
+    expect(activeOn(disabled, "https://follow.test/")).toBe(false);
+  });
+});
+
 describe("site-rule matching", () => {
   beforeEach(() => {
     bootSettingsCore();
   });
 
   it("merges all matches in order so a later specific rule wins", () => {
-    const matched = window.vscMatchSiteRule(
+    const matched = window.SpeederShared.siteRules.matchSiteRule(
       "https://www.youtube.com/shorts/abc",
       [
         {

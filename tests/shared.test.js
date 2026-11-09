@@ -92,6 +92,29 @@ describe("shared helpers", () => {
     expect(siteRules.isSpeederActiveForSite(false, allowSite)).toBe(true);
   });
 
+  it("lets a rule without `enabled` follow the global switch", () => {
+    const inheritSite = { pattern: "follow.test", rememberSpeed: true };
+
+    expect(siteRules.isSpeederActiveForSite(true, inheritSite)).toBe(true);
+    expect(siteRules.isSpeederActiveForSite(false, inheritSite)).toBe(false);
+    expect(siteRules.isSpeederActiveForSite(undefined, inheritSite)).toBe(true);
+    expect(
+      siteRules.isSpeederActiveForSite(false, { pattern: "x", disableExtension: true })
+    ).toBe(false);
+    expect(
+      siteRules.isSpeederActiveForSite(false, { pattern: "x", disableExtension: false })
+    ).toBe(true);
+    expect(
+      siteRules.isSpeederActiveForSite(
+        false,
+        siteRules.matchSiteRule("https://www.youtube.com/watch?v=1", [
+          { pattern: "youtube.com", enabled: true },
+          { pattern: "youtube.com/watch" }
+        ])
+      )
+    ).toBe(true);
+  });
+
   it("sanitizes and resolves popup button orders", () => {
     const controllerButtonDefs = {
       rewind: {},
@@ -262,6 +285,12 @@ describe("shared helpers", () => {
     expect(importExportUtils.isRecognizedRawSettingsObject({ wat: true })).toBe(
       false
     );
+    // The recognized keys come from settings-core's managed keys.
+    ["lastSpeed", "speed"].concat(globalThis.vscGetManagedSyncKeys()).forEach((key) => {
+      expect(importExportUtils.isRecognizedRawSettingsObject({ [key]: 1 })).toBe(true);
+    });
+    expect(keyBindingUtils.MIN_SPEED).toBe(globalThis.vscGetSpeedLimits().min);
+    expect(keyBindingUtils.MAX_SPEED).toBe(16);
     expect(
       importExportUtils.isRecognizedRawSettingsObject({
         siteRulesFormat: "defaults-diff-v2"

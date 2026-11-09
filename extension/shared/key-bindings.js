@@ -9,9 +9,6 @@
   root.SpeederShared = root.SpeederShared || {};
   root.SpeederShared.keyBindings = exports;
 })(typeof globalThis !== "undefined" ? globalThis : this, function(root) {
-  var MIN_SPEED = 0.1;
-  var MAX_SPEED = 16;
-
   function normalizeBindingKey(key) {
     if (typeof key !== "string" || key.length === 0) return null;
     if (key === "Spacebar") return " ";
@@ -92,9 +89,7 @@
     return root.vscSanitizeActionValue(action, value, fallback);
   }
 
-  return {
-    MAX_SPEED: MAX_SPEED,
-    MIN_SPEED: MIN_SPEED,
+  var exports = {
     getActionValueError: getActionValueError,
     getLegacyKeyCode: getLegacyKeyCode,
     inferBindingCode: inferBindingCode,
@@ -103,4 +98,19 @@
     normalizeBindingKey: normalizeBindingKey,
     sanitizeActionValue: sanitizeActionValue
   };
+
+  // Speed limits live in settings-core.js, which pages load after this file;
+  // read them on access rather than copying them here.
+  ["MIN_SPEED", "MAX_SPEED"].forEach(function(name) {
+    Object.defineProperty(exports, name, {
+      enumerable: true,
+      get: function() {
+        return typeof root.vscGetSpeedLimits === "function"
+          ? root.vscGetSpeedLimits()[name === "MIN_SPEED" ? "min" : "max"]
+          : undefined;
+      }
+    });
+  });
+
+  return exports;
 });

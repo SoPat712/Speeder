@@ -256,13 +256,17 @@ function createChromeMock(options) {
       lastError: null,
       getManifest: vi.fn(() => clone(config.manifest) || { version: "0.0.0-test" }),
       getURL: vi.fn((relPath) => `moz-extension://${relPath}`),
+      openOptionsPage: vi.fn((callback) => {
+        if (callback) callback();
+      }),
       sendMessage: vi.fn((message, callback) => {
         if (config.runtimeSendMessageImpl) {
           return config.runtimeSendMessageImpl(message, callback);
         }
         if (callback) callback({ paused: false });
       }),
-      onMessage: runtimeOnMessage
+      onMessage: runtimeOnMessage,
+      onInstalled: createChromeEvent()
     },
     browserAction: {
       setIcon: vi.fn()

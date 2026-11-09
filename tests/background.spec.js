@@ -63,4 +63,38 @@ describe("background toolbar state", () => {
     listener({ action: "get_tab_pause_state", tabId: 42 }, {}, respond);
     expect(respond).toHaveBeenLastCalledWith({ paused: false });
   });
+
+  it("drops the retired Lucide network cache once on update", () => {
+    loadHtmlString("<!doctype html><html><body></body></html>");
+    const chrome = createChromeMock({
+      localData: {
+        lucideTagsCacheV1: { a: [] },
+        lucideTagsCacheV1At: 1,
+        customButtonIcons: { faster: { slug: "rocket", svg: "<svg></svg>" } }
+      }
+    });
+    global.chrome = chrome;
+    window.chrome = chrome;
+
+    evaluateScript("extension/background/background.js");
+    chrome.runtime.onInstalled.emit({ reason: "install" });
+    expect(chrome.storage.local._dump()).toHaveProperty("lucideTagsCacheV1");
+    chrome.runtime.onInstalled.emit({ reason: "update", previousVersion: "6.1.0.0" });
+    expect(chrome.storage.local._dump()).toEqual({
+      customButtonIcons: { faster: { slug: "rocket", svg: "<svg></svg>" } }
+    });
+  });
+
+  it("opens the single Options page from the in-page settings button", () => {
+    loadHtmlString("<!doctype html><html><body></body></html>");
+    const chrome = createChromeMock();
+    global.chrome = chrome;
+    window.chrome = chrome;
+
+    evaluateScript("extension/background/background.js");
+    chrome.runtime.onMessage.listeners[0]({ action: "openOptions" }, {}, vi.fn());
+
+    expect(chrome.runtime.openOptionsPage).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.create).not.toHaveBeenCalled();
+  });
 });

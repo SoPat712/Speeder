@@ -268,7 +268,7 @@
             <label for="enabled"
               >Enable<br />
               <em
-                >On: site rules can block sites (blacklist). Off: only matched rules keep Speeder on (whitelist).</em
+                >On: runs everywhere except sites whose rule is Always off. Off: runs only on sites whose rule is Always on.</em
               >
             </label>
             <input id="enabled" type="checkbox" />
@@ -673,18 +673,19 @@
               <button type="button" class="remove-site-rule">Remove</button>
             </div>
             <div class="site-rule-body">
-              <div class="site-rule-option site-rule-option-checkbox">
-                <label class="site-rule-split-label">
-                  <span
-                    >Enable Speeder on this site<br /><em
-                      >For this URL pattern only: off blocks when global Speeder
-                      is on (blacklist); on allows when global is off
-                      (whitelist)&mdash;same pairing as Defaults &rarr;
-                      Enable.</em
-                    ></span
-                  >
-                  <input type="checkbox" class="site-enabled" />
-                </label>
+              <div class="site-rule-option site-rule-option-field">
+                <label
+                  >Speeder on this site<br /><em
+                    >Follow global uses Defaults &rarr; Enable. Always on runs
+                    here even when Enable is off; Always off blocks this site
+                    even when Enable is on.</em
+                  ></label
+                >
+                <select class="site-enabled-mode">
+                  <option value="inherit">Follow global setting</option>
+                  <option value="on">Always on</option>
+                  <option value="off">Always off</option>
+                </select>
               </div>
               <div class="site-rule-content">
                 <div class="site-rule-override-section">
@@ -1035,6 +1036,11 @@
           </div>
 
           <div id="status" role="status" aria-live="polite"></div>
+          <div id="externalChangeNotice" class="external-change-notice" role="status" hidden>
+            <span>Settings were changed in another window or on another device.</span>
+            <button type="button" id="externalChangeReload">Load their changes</button>
+            <button type="button" id="externalChangeKeep">Keep my edits</button>
+          </div>
         </section>
 
         <section id="faq" class="settings-card info-card">

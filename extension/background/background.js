@@ -28,9 +28,22 @@ chrome.storage.onChanged.addListener(function(changes, areaName) {
   }
 });
 
+if (chrome.runtime.onInstalled) {
+  chrome.runtime.onInstalled.addListener(function(details) {
+    if (!details || details.reason !== "update") return;
+    // Lucide icons are bundled now; drop the old network cache.
+    chrome.storage.local.remove(["lucideTagsCacheV1", "lucideTagsCacheV1At"], function() {
+      void chrome.runtime.lastError;
+    });
+  });
+}
+
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   if (request.action === "openOptions") {
-    chrome.tabs.create({ url: chrome.runtime.getURL("options/options.html") });
+    // Reuse an open Options tab instead of opening another one.
+    chrome.runtime.openOptionsPage(function () {
+      void chrome.runtime.lastError;
+    });
     return false;
   }
   if (request.action === "get_tab_pause_state") {

@@ -391,21 +391,30 @@
     );
   }
 
+  function isSiteRuleForcedOn(rule) {
+    return Boolean(
+      rule &&
+      (
+        rule.enabled === true ||
+        (typeof rule.enabled === "undefined" && rule.disableExtension === false)
+      )
+    );
+  }
+
   /**
    * Whether Speeder should run on this URL given global enabled and the matched rule (if any).
-   * - No rule: follows global (enabled unless explicitly false).
-   * - Rule with site "off" / disableExtension: always inactive (blacklist).
-   * - Rule with site "on": active even when global is off (whitelist).
+   * - No rule, or a rule without `enabled`: follows global (enabled unless explicitly false).
+   * - Rule with `enabled: false` / disableExtension: always inactive (blacklist).
+   * - Rule with `enabled: true`: active even when global is off (whitelist).
    */
   function isSpeederActiveForSite(globalEnabled, siteRule) {
-    var globalOn = globalEnabled !== false;
-    if (!siteRule) {
-      return globalOn;
-    }
     if (isSiteRuleDisabled(siteRule)) {
       return false;
     }
-    return true;
+    if (isSiteRuleForcedOn(siteRule)) {
+      return true;
+    }
+    return globalEnabled !== false;
   }
 
   return {
@@ -413,6 +422,7 @@
     compileSiteRulePattern: compileSiteRulePattern,
     escapeStringRegExp: escapeStringRegExp,
     isSiteRuleDisabled: isSiteRuleDisabled,
+    isSiteRuleForcedOn: isSiteRuleForcedOn,
     isSpeederActiveForSite: isSpeederActiveForSite,
     matchSiteRule: matchSiteRule,
     plainSitePatternMatchesUrl: plainSitePatternMatchesUrl,

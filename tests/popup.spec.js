@@ -132,6 +132,9 @@ describe("popup.js", () => {
       document.querySelectorAll("#popupControlBar button[data-action]")
     ).map((button) => button.dataset.action);
     expect(buttons).toEqual(["faster", "rewind"]);
+    const faster = document.querySelector('#popupControlBar button[data-action="faster"]');
+    expect(faster.title).toBe("Increase speed");
+    expect(faster.getAttribute("aria-label")).toBe("Increase speed");
     expect(document.querySelector("#popupSpeed").textContent).toBe("1.50");
 
     document.querySelector('#popupControlBar button[data-action="faster"]').click();
@@ -241,13 +244,18 @@ describe("popup.js", () => {
     expect(rules).toEqual([
       {
         title: "courses.example:8443",
-        pattern: "https://courses.example:8443",
-        enabled: true
+        pattern: "https://courses.example:8443"
       }
     ]);
-    expect(window.open).toHaveBeenCalledWith(
-      "moz-extension://options/options.html"
-    );
+    expect(window.open).not.toHaveBeenCalled();
+    expect(chrome.runtime.openOptionsPage).toHaveBeenCalledTimes(2);
+    expect(chrome.storage.local._dump().optionsIntent).toEqual({
+      siteRulePattern: "https://courses.example:8443"
+    });
+
+    document.querySelector("#config").click();
+    expect(chrome.runtime.openOptionsPage).toHaveBeenCalledTimes(3);
+    expect(window.open).not.toHaveBeenCalled();
   });
 
   it("pauses only the active tab for the browser session", async () => {

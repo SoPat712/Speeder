@@ -52,24 +52,13 @@ var modifierKeys = new Set([
   "Shift"
 ]);
 
-var controllerButtonDefs = {
-  rewind:   { icon: "\u00AB", name: "Rewind" },
-  slower:   { icon: "\u2212", name: "Decrease speed" },
-  faster:   { icon: "+",      name: "Increase speed" },
-  advance:  { icon: "\u00BB", name: "Advance" },
-  display:  { icon: "\u00D7", name: "Close controller" },
-  reset:    { icon: "\u21BB", name: "Reset speed" },
-  fast:     { icon: "\u2605", name: "Preferred speed" },
-  nudge:    { icon: "\u2713", name: "Subtitle nudge" },
-  pause:    { icon: "\u23EF", name: "Play / Pause" },
-  muted:    { icon: "M",      name: "Mute / Unmute" },
-  louder:   { icon: "+",      name: "Increase volume" },
-  softer:   { icon: "\u2212", name: "Decrease volume" },
-  mark:     { icon: "\u2691", name: "Set marker" },
-  jump:     { icon: "\u21E5", name: "Jump to marker" },
-  settings: { icon: "\u2699", name: "Settings" },
-};
-var popupExcludedButtonIds = new Set(["settings"]);
+var controllerButtonDefs = vscGetButtonDefs();
+var popupExcludedButtonIds = new Set(
+  Object.keys(controllerButtonDefs).filter(function (id) {
+    return !controllerButtonDefs[id].popupAllowed;
+  })
+);
+var actionDefs = vscGetActionDefs();
 
 /** Lucide picker only — not control-bar blocks (chip uses subtitleNudgeOn/Off). */
 var lucideSubtitleNudgeActionLabels = {
@@ -136,7 +125,7 @@ function fillControlBarIconElement(icon, buttonId) {
   }
   vscClearElement(icon);
   var def = controllerButtonDefs[buttonId];
-  icon.textContent = (def && def.icon) || "?";
+  icon.textContent = (def && def.fallbackIcon) || "?";
 }
 
 function createDefaultBinding(action, code, value) {
@@ -153,9 +142,175 @@ var tcDefaults = vscGetSettingsDefaults();
 var optionsSyncSettingsLoaded = false;
 var autoSaveTimer = null;
 var saveStatusTimer = null;
+// Managed settings this page last loaded or wrote; storage changes that still
+// match it are echoes of our own writes.
+var optionsSyncBaseline = null;
+var optionsSyncWritesInFlight = 0;
+var optionsSyncCheckQueued = false;
+var optionsEditVersion = 0;
+var optionsSavedEditVersion = 0;
+var pendingSiteRuleReveal = null;
+var OPTIONS_INTENT_KEY = "optionsIntent";
+
+function buildOptionsSyncBaseline(rawStorage) {
+  return vscBuildStoredSettingsDiff(vscExpandStoredSettings(rawStorage || {}));
+}
+
+function writeOptionsSyncMutation(rawStorage, mutation, callback) {
+  var nextRaw = Object.assign({}, rawStorage || {}, mutation.set);
+  mutation.remove.forEach(function (key) {
+    delete nextRaw[key];
+  });
+  optionsSyncBaseline = buildOptionsSyncBaseline(nextRaw);
+  optionsSyncWritesInFlight += 1;
+  vscWriteManagedStorageMutation(mutation, function (error) {
+    optionsSyncWritesInFlight -= 1;
+    if (callback) callback(error);
+    if (optionsSyncWritesInFlight === 0 && optionsSyncCheckQueued) {
+      optionsSyncCheckQueued = false;
+      checkForExternalSyncChange();
+    }
+  });
+}
+
+function isEditingTextField() {
+  var el = document.activeElement;
+  if (!el || el.closest("#lucideIconSettings")) return false;
+  if (el.tagName === "TEXTAREA") return true;
+  return el.tagName === "INPUT" &&
+    ["text", "number", "search", ""].indexOf(el.getAttribute("type") || "") !== -1;
+}
+
+function hasPendingOptionsEdits() {
+  return (
+    autoSaveTimer !== null ||
+    optionsEditVersion !== optionsSavedEditVersion ||
+    isEditingTextField()
+  );
+}
+
+function isExternalChangeNoticeVisible() {
+  var notice = document.getElementById("externalChangeNotice");
+  return Boolean(notice && !notice.hidden);
+}
+
+function setExternalChangeNoticeVisible(visible) {
+  var notice = document.getElementById("externalChangeNotice");
+  if (!notice) return;
+  notice.hidden = !visible;
+  if (visible) {
+    // Let the user choose which side wins instead of autosaving over it.
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+  }
+}
+
+function revealPendingSiteRule() {
+  if (!pendingSiteRuleReveal) return;
+  var ruleEl = Array.from(document.querySelectorAll(".site-rule")).find(
+    function (el) {
+      return el.querySelector(".site-pattern").value === pendingSiteRuleReveal;
+    }
+  );
+  if (!ruleEl) return;
+  pendingSiteRuleReveal = null;
+  setSiteRuleExpandedState(ruleEl, true);
+  if (typeof ruleEl.scrollIntoView === "function") {
+    ruleEl.scrollIntoView({ block: "start" });
+  }
+}
+
+function consumeOptionsIntent() {
+  chrome.storage.local.get([OPTIONS_INTENT_KEY], function (local) {
+    var intent = !chrome.runtime.lastError && local && local[OPTIONS_INTENT_KEY];
+    if (!intent || typeof intent !== "object") return;
+    chrome.storage.local.remove(OPTIONS_INTENT_KEY);
+    if (typeof intent.siteRulePattern !== "string") return;
+    pendingSiteRuleReveal = intent.siteRulePattern;
+    revealPendingSiteRule();
+  });
+}
+
+function reloadOptionsPreservingView(callback) {
+  var scrollY = window.scrollY;
+  var focusedId = document.activeElement && document.activeElement.id;
+  var expandedPatterns = Array.from(
+    document.querySelectorAll(".site-rule:not(.collapsed)")
+  ).map(function (el) {
+    return el.querySelector(".site-pattern").value;
+  });
+  setExternalChangeNoticeVisible(false);
+  restore_options(function (error) {
+    document.querySelectorAll(".site-rule").forEach(function (ruleEl) {
+      var index = expandedPatterns.indexOf(
+        ruleEl.querySelector(".site-pattern").value
+      );
+      if (index === -1) return;
+      expandedPatterns.splice(index, 1);
+      setSiteRuleExpandedState(ruleEl, true);
+    });
+    revealPendingSiteRule();
+    if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+    var focusTarget = focusedId && document.getElementById(focusedId);
+    if (focusTarget && focusTarget !== document.activeElement) {
+      focusTarget.focus({ preventScroll: true });
+    }
+    if (callback) callback(error);
+  });
+}
+
+function checkForExternalSyncChange() {
+  if (optionsSyncWritesInFlight > 0) {
+    optionsSyncCheckQueued = true;
+    return;
+  }
+  chrome.storage.sync.get(null, function (rawStorage) {
+    if (chrome.runtime.lastError || !optionsSyncSettingsLoaded) return;
+    if (optionsSyncWritesInFlight > 0) {
+      optionsSyncCheckQueued = true;
+      return;
+    }
+    if (
+      vscAreComparableValuesEqual(
+        buildOptionsSyncBaseline(rawStorage),
+        optionsSyncBaseline
+      )
+    ) {
+      return;
+    }
+    if (hasPendingOptionsEdits() || isExternalChangeNoticeVisible()) {
+      setExternalChangeNoticeVisible(true);
+    } else {
+      reloadOptionsPreservingView();
+    }
+  });
+}
+
+function handleOptionsStorageChange(changes, areaName) {
+  if (areaName === "local") {
+    if (changes.customButtonIcons) {
+      customButtonIconsLive = vscNormalizeLocalSettings({
+        customButtonIcons: changes.customButtonIcons.newValue || {}
+      }).customButtonIcons;
+      repaintAllCbIconsFromCustomMap();
+    }
+    if (changes[OPTIONS_INTENT_KEY] && changes[OPTIONS_INTENT_KEY].newValue) {
+      consumeOptionsIntent();
+    }
+    return;
+  }
+  if (areaName !== "sync" || !optionsSyncSettingsLoaded) return;
+  var managedKeys = vscGetManagedSyncKeys();
+  var touchesManagedKey = Object.keys(changes).some(function (key) {
+    return managedKeys.indexOf(key) !== -1;
+  });
+  if (touchesManagedKey) checkForExternalSyncChange();
+}
 
 function scheduleAutoSave() {
   if (!optionsSyncSettingsLoaded) return;
+  optionsEditVersion += 1;
+  if (isExternalChangeNoticeVisible()) return;
   clearTimeout(autoSaveTimer);
   var sourceSaveButton = document.getElementById("save");
   var scheduledTimer = setTimeout(function () {
@@ -202,7 +357,7 @@ function persistManagedSyncSettings(settings, callback, existingStorage) {
       completeSettings
     );
 
-    vscWriteManagedStorageMutation(mutation, callback);
+    writeOptionsSyncMutation(rawStorage, mutation, callback);
   }
 
   if (existingStorage && typeof existingStorage === "object") {
@@ -219,23 +374,10 @@ function persistManagedSyncSettings(settings, callback, existingStorage) {
   });
 }
 
-const actionLabels = {
-  display: "Show/hide controller",
-  move: "Move controller",
-  slower: "Decrease speed",
-  faster: "Increase speed",
-  rewind: "Rewind",
-  advance: "Advance",
-  reset: "Reset speed",
-  fast: "Preferred speed",
-  toggleSubtitleNudge: "Toggle subtitle nudge",
-  pause: "Play / Pause",
-  muted: "Mute / Unmute",
-  louder: "Increase volume",
-  softer: "Decrease volume",
-  mark: "Set marker",
-  jump: "Jump to marker"
-};
+const actionLabels = {};
+Object.keys(actionDefs).forEach(function (action) {
+  actionLabels[action] = actionDefs[action].label;
+});
 
 const speedBindingActions = ["slower", "faster", "fast", "softer", "louder"];
 const requiredShortcutActions = new Set(["slower", "faster"]);
@@ -252,16 +394,9 @@ function formatSpeedBindingDisplay(action, value) {
 }
 
 function getDefaultShortcutValue(action) {
-  if (action === "louder" || action === "softer") {
-    return 0.1;
-  }
-  var defaultBinding = tcDefaults.keyBindings.find(function (binding) {
-    return binding.action === action;
-  });
-  if (defaultBinding && Number.isFinite(Number(defaultBinding.value))) {
-    return Number(defaultBinding.value);
-  }
-  return 0;
+  return actionDefs[action] && actionDefs[action].hasValue
+    ? actionDefs[action].defaultValue
+    : 0;
 }
 
 function resolveShortcutValue(action, value) {
@@ -272,16 +407,9 @@ function resolveShortcutValue(action, value) {
   );
 }
 
-const customActionsNoValues = [
-  "reset",
-  "display",
-  "move",
-  "muted",
-  "pause",
-  "mark",
-  "jump",
-  "toggleSubtitleNudge"
-];
+const customActionsNoValues = Object.keys(actionDefs).filter(function (action) {
+  return !actionDefs[action].hasValue;
+});
 
 function refreshAddShortcutSelector() {
   const selector = document.getElementById("addShortcutSelector");
@@ -584,14 +712,6 @@ function inputFilterNumbersOnly(event) {
   }
 }
 
-function inputFocus(event) {
-  event.target.value = "";
-}
-
-function inputBlur(event) {
-  setShortcutInputBinding(event.target, event.target.vscBinding || null);
-}
-
 function updateCustomShortcutInputText(inputItem, bindingOrKeyCode) {
   if (
     bindingOrKeyCode &&
@@ -628,7 +748,7 @@ function labelShortcutRow(row) {
 }
 
 function add_shortcut(action, value) {
-  if (!action) return;
+  if (!action) return null;
 
   var div = document.createElement("div");
   div.setAttribute("class", "shortcut-row customs");
@@ -672,10 +792,11 @@ function add_shortcut(action, value) {
   customsElement.appendChild(div);
   
   refreshAddShortcutSelector();
+  return div;
 }
 
 function createKeyBindings(item) {
-  var action = item.dataset.action || item.querySelector(".customDo").value;
+  var action = item.dataset.action;
   var input = item.querySelector(".customKey");
   var valueInput = item.querySelector(".customValue");
   var predefined = !!item.id;
@@ -763,10 +884,12 @@ function save_options(isAutoSave) {
       "Error: Settings have not loaded. Retry before saving.";
     return;
   }
+  if (isAutoSave === true && isExternalChangeNoticeVisible()) return;
   if (validate() === false) return;
 
   keyBindings = [];
   var saveError = null;
+  var editVersion = optionsEditVersion;
 
   // Collect shortcuts from the main shortcuts section (both default and custom)
   Array.from(document.querySelectorAll("#customs .shortcut-row")).forEach((item) => {
@@ -854,8 +977,10 @@ function save_options(isAutoSave) {
     else delete rule.title;
     delete rule.disableExtension;
 
-    // Handle Enable toggle
-    rule.enabled = ruleEl.querySelector(".site-enabled").checked;
+    var enabledMode = ruleEl.querySelector(".site-enabled-mode").value;
+    if (enabledMode === "on") rule.enabled = true;
+    else if (enabledMode === "off") rule.enabled = false;
+    else delete rule.enabled;
 
     if (ruleEl.querySelector(".override-shortcut-target").checked) {
       rule.shortcutTargetMode =
@@ -1060,11 +1185,13 @@ function save_options(isAutoSave) {
     return;
   }
 
+  setExternalChangeNoticeVisible(false);
   persistManagedSyncSettings(settings, function (error) {
     if (error) {
       status.textContent = "Error: Unable to save options - " + error.message;
       return;
     }
+    optionsSavedEditVersion = editVersion;
     status.textContent = isAutoSave === true ? "Auto-saved" : "Options saved";
     saveStatusTimer = setTimeout(function () {
       status.textContent = "";
@@ -1209,30 +1336,17 @@ function createSiteRule(rule) {
   // Make the rule body collapsed by default
   setSiteRuleExpandedState(ruleEl, false);
 
-  var enabledCheckbox = ruleEl.querySelector(".site-enabled");
+  var enabledSelect = ruleEl.querySelector(".site-enabled-mode");
   var contentEl = ruleEl.querySelector(".site-rule-content");
 
   function updateDisabledState() {
-    if (enabledCheckbox.checked) {
-      contentEl.classList.remove("disabled-rule");
-    } else {
-      contentEl.classList.add("disabled-rule");
-    }
+    contentEl.classList.toggle("disabled-rule", enabledSelect.value === "off");
   }
 
-  enabledCheckbox.addEventListener("change", updateDisabledState);
-
-  if (rule) {
-    if (rule.enabled !== undefined) {
-      enabledCheckbox.checked = rule.enabled;
-    } else if (rule.disableExtension !== undefined) {
-      enabledCheckbox.checked = !rule.disableExtension;
-    } else {
-      enabledCheckbox.checked = true;
-    }
-  } else {
-    enabledCheckbox.checked = true;
-  }
+  enabledSelect.addEventListener("change", updateDisabledState);
+  enabledSelect.value = siteRuleUtils.isSiteRuleDisabled(rule)
+    ? "off"
+    : siteRuleUtils.isSiteRuleForcedOn(rule) ? "on" : "inherit";
   updateDisabledState();
 
   ruleEl.querySelector(".override-shortcut-target").checked = Boolean(
@@ -1743,7 +1857,7 @@ function initLucideButtonIconsUI() {
     searchInput.addEventListener("input", function () {
       clearTimeout(lucideSearchTimer);
       lucideSearchTimer = setTimeout(function () {
-        getLucideTagsMap(chrome.storage.local, false)
+        getLucideTagsMap()
           .then(function (map) {
             var q = searchInput.value;
             if (!q.trim()) {
@@ -1819,7 +1933,7 @@ function initLucideButtonIconsUI() {
   if (reloadTags && !reloadTags.dataset.lucideBound) {
     reloadTags.dataset.lucideBound = "1";
     reloadTags.addEventListener("click", function () {
-      getLucideTagsMap(chrome.storage.local, true)
+      getLucideTagsMap()
         .then(function () {
           setLucideStatus("Icon name list refreshed.");
         })
@@ -1843,6 +1957,7 @@ function restore_options(callback) {
       return;
     }
     var storage = vscExpandStoredSettings(rawStorage || {});
+    optionsSyncBaseline = vscBuildStoredSettingsDiff(storage);
     chrome.storage.local.get(["customButtonIcons"], function (loc) {
       var localError = chrome.runtime.lastError;
       customButtonIconsLive = vscNormalizeLocalSettings({
@@ -1896,8 +2011,7 @@ function restore_options(callback) {
       var normalizedBinding = normalizeStoredBinding(item);
 
       if (!row || usedDefaultShortcutRows.has(item.action)) {
-        add_shortcut(item.action, item.value);
-        row = document.querySelector(".shortcut-row.customs:last-of-type");
+        row = add_shortcut(item.action, item.value);
       } else {
         usedDefaultShortcutRows.add(item.action);
       }
@@ -1922,17 +2036,8 @@ function restore_options(callback) {
 
     refreshAddShortcutSelector();
 
-    var siteRules = Array.isArray(storage.siteRules) ? storage.siteRules : [];
-
-    vscClearElement(document.getElementById("siteRulesContainer"));
-    if (siteRules.length > 0) {
-      siteRules.forEach((rule) => {
-        if (rule && rule.pattern) {
-          createSiteRule(rule);
-        }
-      });
-    }
-
+    // Site rules without their own button lists start from the global
+    // editors, so those must be filled first.
     var controllerButtons = Array.isArray(storage.controllerButtons)
       ? storage.controllerButtons
       : tcDefaults.controllerButtons;
@@ -1947,7 +2052,18 @@ function restore_options(callback) {
     populatePopupControlBarEditor(popupButtons);
     updatePopupEditorDisabledState();
 
+    var siteRules = Array.isArray(storage.siteRules) ? storage.siteRules : [];
+
+    vscClearElement(document.getElementById("siteRulesContainer"));
+    siteRules.forEach((rule) => {
+      if (rule && rule.pattern) {
+        createSiteRule(rule);
+      }
+    });
+
     initLucideButtonIconsUI();
+    optionsSavedEditVersion = optionsEditVersion;
+    setExternalChangeNoticeVisible(false);
     setOptionsSyncSettingsLoaded(true);
     if (localError) {
       status.textContent =
@@ -2040,6 +2156,8 @@ function restore_defaults() {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
+  if (document.vscOptionsPageInitialized) return;
+  document.vscOptionsPageInitialized = true;
   var manifest = chrome.runtime.getManifest();
   var versionElement = document.getElementById("app-version");
   if (versionElement) {
@@ -2048,8 +2166,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
   document.querySelectorAll("#customs .shortcut-row").forEach(labelShortcutRow);
 
-  restore_options();
+  restore_options(consumeOptionsIntent);
   initControlBarEditor();
+  chrome.storage.onChanged.addListener(handleOptionsStorageChange);
+
+  document
+    .getElementById("externalChangeReload")
+    .addEventListener("click", function () {
+      reloadOptionsPreservingView();
+    });
+  document
+    .getElementById("externalChangeKeep")
+    .addEventListener("click", function () {
+      save_options();
+    });
 
   document.getElementById("popupMatchHoverControls")
     .addEventListener("change", updatePopupEditorDisabledState);
@@ -2119,12 +2249,6 @@ document.addEventListener("DOMContentLoaded", function () {
   document.addEventListener("keypress", (event) =>
     eventCaller(event, "customValue", inputFilterNumbersOnly)
   );
-  document.addEventListener("focus", (event) =>
-    eventCaller(event, "customKey", inputFocus)
-  );
-  document.addEventListener("blur", (event) =>
-    eventCaller(event, "customKey", inputBlur)
-  );
   document.addEventListener("keydown", (event) =>
     eventCaller(event, "customKey", recordKeyPress)
   );
@@ -2160,16 +2284,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
   document.addEventListener("change", (event) => {
-    if (event.target.classList.contains("customDo")) {
-      var valueInput = event.target.nextElementSibling.nextElementSibling;
-      if (customActionsNoValues.includes(event.target.value)) {
-        valueInput.disabled = true;
-        valueInput.value = 0;
-      } else {
-        valueInput.disabled = false;
-      }
-    }
-
     if (event.target.classList.contains("site-add-shortcut-selector")) {
       var action = event.target.value;
       if (!action) return;

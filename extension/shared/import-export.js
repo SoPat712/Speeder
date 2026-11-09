@@ -1,5 +1,6 @@
 (function(root, factory) {
-  var exports = factory();
+  if (typeof module === "object" && module.exports) require("./settings-core.js");
+  var exports = factory(root);
 
   if (typeof module === "object" && module.exports) {
     module.exports = exports;
@@ -7,58 +8,17 @@
 
   root.SpeederShared = root.SpeederShared || {};
   root.SpeederShared.importExport = exports;
-})(typeof globalThis !== "undefined" ? globalThis : this, function() {
-  var rawSettingsKeys = new Set([
-    "audioBoolean",
-    "controllerButtons",
-    "controllerLocation",
-    "controllerMarginBottom",
-    "controllerMarginLeft",
-    "controllerMarginRight",
-    "controllerMarginTop",
-    "controllerOpacity",
-    "enableSubtitleNudge",
-    "enabled",
-    "forceLastSavedSpeed",
-    "hideWithControls",
-    "hideWithControlsTimer",
-    "hideWithYouTubeControls",
-    "keyBindings",
-    "lastSpeed",
-    "popupControllerButtons",
-    "popupMatchHoverControls",
-    "rememberSpeed",
-    "shortcutTargetMode",
-    "showAmbientLoopControls",
-    "showPopupControlBar",
-    "siteRules",
-    "siteRulesFormat",
-    "siteRulesMeta",
-    "speed",
-    "startHidden",
-    "subtitleNudgeAmount",
-    "subtitleNudgeEnabledByDefault",
-    "subtitleNudgeInterval",
-    "resetSpeed",
-    "speedStep",
-    "fastSpeed",
-    "rewindTime",
-    "advanceTime",
-    "resetKeyCode",
-    "slowerKeyCode",
-    "fasterKeyCode",
-    "rewindKeyCode",
-    "advanceKeyCode",
-    "fastKeyCode",
-    "displayKeyCode",
-    "blacklist"
-  ]);
+})(typeof globalThis !== "undefined" ? globalThis : this, function(root) {
+  function getRawSettingsKeys() {
+    return new Set(root.vscGetManagedSyncKeys().concat(["lastSpeed", "speed"]));
+  }
 
   function isRecognizedRawSettingsObject(backup) {
     if (!backup || typeof backup !== "object" || Array.isArray(backup)) {
       return false;
     }
 
+    var rawSettingsKeys = getRawSettingsKeys();
     return Object.keys(backup).some(function(key) {
       return rawSettingsKeys.has(key);
     });

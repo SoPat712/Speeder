@@ -113,7 +113,6 @@ function expectInertBridge(win) {
   expect(win.history.replaceState).toBe(original.replaceState);
   expect(win.document.querySelector("script")).toBeNull();
   expect(win.vscKeydownListenerAttached).toBeUndefined();
-  expect(win.vscAttachShadowPatched).toBeUndefined();
   expect(win.vscPageBridgeListenersAttached).toBeUndefined();
   expect(getSettings).not.toHaveBeenCalled();
   expect(addListener).not.toHaveBeenCalled();

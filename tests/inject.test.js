@@ -167,14 +167,22 @@ describe("inject runtime", () => {
 
     vi.useFakeTimers();
 
-    expect(window.vscAttachShadowPatched).toBe(true);
+    // Page shadow-root discovery is owned by the page-world bridge; the
+    // content script only listens for its events.
+    loadScript("extension/content/shadow-bridge.js");
+    expect(window.vscPageShadowBridgeLoaded).toBe(true);
 
+    // Attach the root to an already-connected host and add media afterwards,
+    // so only the bridge's speeder-shadow-root-attached event can find it.
     const host = document.createElement("custom-player");
+    document.body.appendChild(host);
+    await flushAsyncWork();
+    vi.runAllTimers();
+    await flushAsyncWork();
     const shadow = host.attachShadow({ mode: "open" });
     const video = document.createElement("video");
     video.src = "https://example.org/dynamic.mp4";
     shadow.appendChild(video);
-    document.body.appendChild(host);
 
     // Flush MutationObserver microtasks so that the observer callback runs
     // and schedules requestIdleCallback's setTimeout.

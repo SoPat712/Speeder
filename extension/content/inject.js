@@ -60,11 +60,11 @@ var vscPageHooksInactive = false;
 var vscPageHooksStateScheduled = false;
 var vscPageHooksDesiredActive = true;
 var vscChallengeObserver = null;
-var vscAttachShadowDescriptor = null;
-var vscAttachShadowWrapper = null;
-var vscDetachedShadowPending = 0;
 var vscDetachedShadowRecentUntil = 0;
 var vscLastActionShadowRescanAt = null;
+// Set while root observers are parked for an inactive page; the next active
+// reconcile must then rediscover everything inserted in the meantime.
+var vscMediaDiscoveryDeactivated = false;
 
 function suspendPageHooks(reason) {
   if (vscPageHooksSuspended) return;
@@ -75,10 +75,6 @@ function suspendPageHooks(reason) {
     vscPageHooksSuspended = true;
   }
   document.dispatchEvent(new Event("speeder-restore-page-hooks"));
-  if (vscAttachShadowWrapper && Element.prototype.attachShadow === vscAttachShadowWrapper) {
-    Object.defineProperty(Element.prototype, "attachShadow", vscAttachShadowDescriptor);
-  }
-  delete window.vscAttachShadowPatched;
   window.vscPageShadowBridgeRequested = false;
   window.vscPageShadowBridgeLoaded = false;
   window.vscPageNavigationApiBridgeLoaded = false;
@@ -92,8 +88,11 @@ function suspendPageHooks(reason) {
     });
     window.vscBoundedShadowFallbackTimers.length = 0;
   }
+  // The location watch is what lets a later enabled route reactivate us. The
+  // bounded shadow fallback only matters while Speeder may control media;
+  // reactivation runs its own full discovery.
   startLocationWatchFallback();
-  startBoundedShadowFallback();
+  if (!vscPageHooksInactive) startBoundedShadowFallback();
 }
 
 // Use the same site-activity decision as controllers, excluding the temporary
@@ -111,7 +110,6 @@ function schedulePageHooksState(active) {
       vscPageHooksInactive = false;
       window.vscPageShadowBridgeRetries = 0;
       installPageShadowBridge();
-      patchAttachShadow();
       rescanOpenShadowRoots(document);
     }
   });
@@ -419,10 +417,6 @@ var tc = {
       false
     ),
     startHidden: getSharedDefault("startHidden", false),
-    hideWithYouTubeControls: getSharedDefault(
-      "hideWithYouTubeControls",
-      false
-    ),
     hideWithControls: getSharedDefault("hideWithControls", false),
     hideWithControlsTimer: getSharedDefault("hideWithControlsTimer", 2.0),
     controllerLocation: getSharedDefault("controllerLocation", "top-left"),
@@ -447,7 +441,6 @@ var tc = {
     customButtonIcons: {}
   },
   mediaElements: [],
-  isNudging: false,
   pendingLastSpeedSave: null,
   pendingLastSpeedValue: null,
   lastSpeedSaveRetries: 0,
@@ -486,15 +479,36 @@ function isSpeederActiveForCurrentPage() {
   return tc.tabPaused !== true && active;
 }
 
+// After hydration, a disabled site, disabled global setting or paused tab
+// means Speeder leaves the page alone: no root observers, scans or fallback
+// walks. Reactivation always goes through a full discovery pass.
+function isDiscoveryInactive() {
+  return tc.runtimeSettingsHydrated === true && !isSpeederActiveForCurrentPage();
+}
+
+function deactivateMediaDiscovery(doc) {
+  clearDeferredMediaCandidates();
+  tc.pendingMediaCandidates.length = 0;
+  tc.pendingMediaCandidateNodes = new WeakSet();
+  tc.mediaElements.slice().forEach(function(media) {
+    removeController(media);
+  });
+  // Park every observed root; resumeSuspendedObservedRoots() reattaches and
+  // rescans shadow roots, and the flag forces a document scan on reactivation.
+  vscMediaDiscoveryDeactivated = true;
+  if (doc) suspendRootMutationObserver(doc, false);
+  forEachTrackedObservedRoot(function(root) {
+    suspendRootMutationObserver(root, true);
+    return true;
+  });
+}
+
 function applyTabPausedState(paused) {
   tc.tabPaused = paused === true;
   if (!tc.runtimeSettingsHydrated) return;
   if (tc.tabPaused) {
     clearAllSpeedRestoreEnforcement();
-    clearDeferredMediaCandidates();
-    tc.mediaElements.slice().forEach(function(media) {
-      removeController(media);
-    });
+    deactivateMediaDiscovery(document);
     return;
   }
   initializeWhenReady(document, true);
@@ -521,6 +535,13 @@ var vscSourceObjectIds = new WeakMap();
 var vscNextSourceObjectId = 1;
 var vscControllersByMount = new WeakMap();
 var vscDeferredMediaCandidates = new Set();
+// Per-video hasInteractivePlayerChrome verdicts. The check forces layout on the
+// video and up to four ancestors, and each media load fires ~6 lifecycle
+// events. Entries are dropped on source/parent/size change and the whole map is
+// replaced on navigation and settings changes (removeIneligibleMediaControllers).
+var vscPlayerChromeVerdicts = new WeakMap();
+var vscPlayerChromeSizes = new WeakMap();
+var vscPlayerChromeResizeObserver = null;
 var requestIdle =
   typeof window.requestIdleCallback === "function"
     ? window.requestIdleCallback.bind(window)
@@ -767,12 +788,7 @@ function applyControllerLocationToElement(controller, location) {
     top = "calc(100% - " + lift + "px)";
   }
   // If in fullscreen, move the controller down to avoid overlapping video titles
-  if (
-    document.fullscreenElement ||
-    document.webkitFullscreenElement ||
-    document.mozFullScreenElement ||
-    document.msFullscreenElement
-  ) {
+  if (getFullscreenElement(controller.ownerDocument)) {
     if (normalizedLocation.startsWith("top-")) {
       var insetTopFs = normalizeControllerMarginPx(
         tc.settings.controllerMarginTop,
@@ -783,27 +799,7 @@ function applyControllerLocationToElement(controller, location) {
   }
 
   controller.style.top = top;
-
-  var left = styles.left;
-  switch (normalizedLocation) {
-    case "top-left":
-    case "middle-left":
-    case "bottom-left":
-      left = "15px";
-      break;
-    case "top-right":
-    case "middle-right":
-    case "bottom-right":
-      left = "calc(100% - 10px)";
-      break;
-    case "top-center":
-    case "bottom-center":
-      left = "50%";
-      break;
-    default:
-      break;
-  }
-  controller.style.left = left;
+  controller.style.left = styles.left;
   controller.style.transform = styles.transform;
 
   applyControllerMargins(controller);
@@ -1713,12 +1709,7 @@ function isMediaElement(node) {
 
 function isMediaSourceAttributeMutation(mutation, media) {
   if (!mutation || mutation.type !== "attributes" || !media) return false;
-  if (mutation.target === media) {
-    return (
-      mutation.attributeName === "src" ||
-      mutation.attributeName === "currentSrc"
-    );
-  }
+  if (mutation.target === media) return mutation.attributeName === "src";
   return Boolean(
     mutation.attributeName === "src" &&
       mutation.target &&
@@ -1751,7 +1742,7 @@ function observeMediaSourceNodes(media) {
   observer.observe(media, {
     attributes: true,
     subtree: true,
-    attributeFilter: ["src", "currentSrc"]
+    attributeFilter: ["src"]
   });
 }
 
@@ -1768,10 +1759,72 @@ function clearDeferredMediaCandidates() {
   vscDeferredMediaCandidates.clear();
 }
 
+function forgetPlayerChromeVerdict(node) {
+  if (!node) return;
+  vscPlayerChromeVerdicts.delete(node);
+  vscPlayerChromeSizes.delete(node);
+  if (vscPlayerChromeResizeObserver) {
+    vscPlayerChromeResizeObserver.unobserve(node);
+  }
+}
+
+function handlePlayerChromeResize(entries) {
+  entries.forEach(function(entry) {
+    var target = entry.target;
+    if (!target.isConnected) {
+      forgetPlayerChromeVerdict(target);
+      return;
+    }
+    var rect = entry.contentRect;
+    var size = rect ? rect.width + "x" + rect.height : "";
+    var previous = vscPlayerChromeSizes.get(target);
+    vscPlayerChromeSizes.set(target, size);
+    // The first notification after observe() only reports the current size.
+    if (previous !== undefined && previous !== size) {
+      vscPlayerChromeVerdicts.delete(target);
+    }
+  });
+}
+
+// Returns false when size changes cannot be observed; callers must not cache.
+function watchPlayerChromeSize(node) {
+  if (vscPlayerChromeSizes.has(node)) return true;
+  if (!vscPlayerChromeResizeObserver) {
+    if (typeof ResizeObserver !== "function") return false;
+    vscPlayerChromeResizeObserver = new ResizeObserver(handlePlayerChromeResize);
+  }
+  // Observing an already-observed target would queue another initial
+  // notification, so register each video once until it is forgotten.
+  vscPlayerChromeSizes.set(node, undefined);
+  vscPlayerChromeResizeObserver.observe(node);
+  return true;
+}
+
 function hasInteractivePlayerChrome(node) {
   if (!node || node.nodeName !== "VIDEO") return false;
   if (node.controls === true) return true;
 
+  var sourceKey = node.currentSrc || node.src || "";
+  var cached = vscPlayerChromeVerdicts.get(node);
+  if (
+    cached &&
+    cached.parent === node.parentElement &&
+    cached.sourceKey === sourceKey
+  ) {
+    return cached.value;
+  }
+  var value = measureInteractivePlayerChrome(node);
+  if (watchPlayerChromeSize(node)) {
+    vscPlayerChromeVerdicts.set(node, {
+      parent: node.parentElement,
+      sourceKey: sourceKey,
+      value: value
+    });
+  }
+  return value;
+}
+
+function measureInteractivePlayerChrome(node) {
   if (typeof node.closest === "function") {
     var knownPlayer = node.closest(
       ".html5-video-player, .video-js, .jwplayer, .plyr, " +
@@ -2004,19 +2057,11 @@ function flushPendingMediaCandidates() {
   });
 }
 
-function ensureControllerForMediaChild(node) {
-  if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
-  if (node.nodeName !== "SOURCE") return null;
-
-  var media = node.parentElement;
-  if (!isMediaElement(media)) return null;
-  return ensureController(media, media.parentElement || media.parentNode);
-}
-
 function removeController(node) {
   if (!node) return;
   vscDeferredMediaCandidates.delete(node);
   disconnectBootstrapMediaSourceObserver(node);
+  if (!node.isConnected) forgetPlayerChromeVerdict(node);
   if (!node.vsc) return;
   var controller = node.vsc;
   cleanupControllerFullscreenSettle(controller);
@@ -2070,14 +2115,11 @@ function scanNodeForMedia(node, parent, added) {
   } else if (node.nodeName === "SOURCE") {
     // Players such as Vidstack often connect an empty <video> and append its
     // <source> later. Retry the owning video when that source becomes usable.
+    // A removed <source> reports its former parent as the mutation target.
     var owningMedia = isMediaElement(parent)
       ? parent
       : node.parentElement;
-    if (owningMedia) {
-      ensureController(owningMedia, owningMedia.parentNode);
-    } else if (added) {
-      ensureControllerForMediaChild(node);
-    }
+    if (owningMedia) ensureController(owningMedia, owningMedia.parentNode);
   }
 
   // Use querySelectorAll instead of recursive child walking — the browser's
@@ -2102,13 +2144,15 @@ function scanNodeForMedia(node, parent, added) {
     added &&
     (!vscSupportsWeakRootReferences ||
       vscPageHooksSuspended || !window.vscPageShadowBridgeLoaded ||
-      vscDetachedShadowPending || Date.now() < vscDetachedShadowRecentUntil) &&
+      Date.now() < vscDetachedShadowRecentUntil) &&
     typeof node.querySelectorAll === "function"
   ) {
     // Without active page hooks, inserted subtrees remain our discovery signal.
-    // Active bridges only need this for detached roots or engines without WeakRef.
-    var discoveredRoots = rescanOpenShadowRoots(node, undefined, false);
-    vscDetachedShadowPending = Math.max(0, vscDetachedShadowPending - discoveredRoots);
+    // Active bridges only need this for engines without WeakRef, or briefly
+    // after a root was attached to a detached host (it is usually inserted
+    // right away). A time window, not a counter, so one never-inserted host
+    // cannot keep every insertion on the TreeWalk path forever.
+    rescanOpenShadowRoots(node, undefined, false);
   } else if (shadowRoot) {
     observeRoot(shadowRoot);
   }
@@ -2418,6 +2462,15 @@ function attachShadowBridgeListener(root) {
 
 function observeRoot(root) {
   if (!root || isSpeederControllerShadowRoot(root)) return;
+  if (isDiscoveryInactive()) {
+    // Remember the root without observing it, so reactivation can resume it.
+    // The document itself is rescanned via vscMediaDiscoveryDeactivated.
+    if (root.nodeType !== Node.DOCUMENT_NODE) {
+      trackObservedRoot(root);
+      trackSuspendedObservedRoot(root);
+    }
+    return;
+  }
   attachShadowBridgeListener(root);
 
   var isConnected = isObservedRootConnected(root);
@@ -2445,33 +2498,6 @@ function observeRoot(root) {
       scanRootForMedia(root);
     }
   }
-}
-
-function patchAttachShadow() {
-  if (
-    vscPageHooksSuspended || vscPageHooksInactive ||
-    window.vscAttachShadowPatched ||
-    typeof Element === "undefined" ||
-    typeof Element.prototype.attachShadow !== "function"
-  ) {
-    return;
-  }
-
-  var originalAttachShadow = Element.prototype.attachShadow;
-  vscAttachShadowDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, "attachShadow");
-  vscAttachShadowWrapper = function() {
-    var shadowRoot = originalAttachShadow.apply(this, arguments);
-    try {
-      if (shadowRoot) {
-        observeRoot(shadowRoot);
-      }
-    } catch (error) {
-      log(`Unable to observe shadow root: ${error.message}`, 3);
-    }
-    return shadowRoot;
-  };
-  Element.prototype.attachShadow = vscAttachShadowWrapper;
-  window.vscAttachShadowPatched = true;
 }
 
 function markPageShadowBridgeReady() {
@@ -2506,7 +2532,6 @@ function installPageShadowBridge() {
       true
     );
     document.addEventListener("speeder-detached-shadow-root-attached", function() {
-      vscDetachedShadowPending += 1;
       vscDetachedShadowRecentUntil = Date.now() + 30000;
     }, true);
     document.addEventListener(
@@ -2599,6 +2624,7 @@ function startBoundedShadowFallback() {
     return setTimeout(function() {
       requestIdle(function() {
         if (!document.body || window.vscPageShadowBridgeLoaded) return;
+        if (isDiscoveryInactive()) return;
         rescanOpenShadowRoots(document, undefined, false);
       }, { timeout: 2000 });
     }, delay);
@@ -2607,7 +2633,7 @@ function startBoundedShadowFallback() {
 
 /* Log levels */
 function log(message, level) {
-  verbosity = tc.settings.logLevel;
+  var verbosity = tc.settings.logLevel;
   if (typeof level === "undefined") level = tc.settings.defaultLogLevel;
   if (verbosity >= level) {
     let prefix = "[VSC] ";
@@ -2701,7 +2727,6 @@ function hydrateRuntimeSettings(rawStorage, options) {
   ].forEach(function(key) {
     tc.settings[key] = storage[key];
   });
-  tc.settings.hideWithYouTubeControls = tc.settings.hideWithControls;
   tc.settings.controllerMarginTop = normalizeControllerMarginPx(
     storage.controllerMarginTop,
     getSharedDefault("controllerMarginTop", 0)
@@ -3018,13 +3043,13 @@ function finishStartupStorageWatch() {
   return changes;
 }
 
-// Patch attachShadow immediately — before any async operations — so we
-// catch shadow roots created while chrome.storage.sync.get is pending.
-// Sites like archive.org create Lit/LitElement shadow DOMs during page load;
-// waiting for the storage callback would miss them entirely.
+// Install the page-world bridge immediately — before any async operations — so
+// we catch shadow roots created while chrome.storage.sync.get is pending.
+// Sites like archive.org create Lit/LitElement shadow DOMs during page load.
+// Content scripts only see Xray-wrapped prototypes, so the attachShadow hook
+// must live in the page world (shadow-bridge.js) to observe page calls.
 if (!vscIsChallengeDocument) {
   watchChallengeResources();
-  patchAttachShadow();
   installPageShadowBridge();
 }
 
@@ -3045,7 +3070,6 @@ function loadInitialRuntimeSettings(attempt) {
       }
     });
   }
-  // patchAttachShadow() is now called at top-level before this callback
   // Add a listener for messages from the popup.
   // We use a global flag to ensure the listener is only attached once.
   if (!window.vscMessageListener) {
@@ -3344,13 +3368,54 @@ function getKeyBindings(action, what = "value") {
   }
 }
 
-function setKeyBindings(action, value) {
-  var binding = tc.settings.keyBindings.find(function(item) {
-    return item.action === action;
-  });
-  if (!binding) return false;
-  binding.value = value;
-  return true;
+// The controller's shadow root is open, so a <link> to a moz-extension:// URL
+// would expose the per-install UUID to the page (and require the stylesheet to
+// be web-accessible). Load the CSS text once from the content script instead.
+var vscShadowCssText = null;
+var vscShadowCssRequest = null;
+var vscPendingShadowStyles = new Set();
+// Until the real stylesheet arrives, keep the controller invisible rather than
+// flashing unstyled buttons over the video. The host is already positioned by
+// inject.css and its inline styles.
+var vscShadowCssPlaceholder = "#controller{visibility:hidden!important}";
+
+function loadControllerShadowCss() {
+  if (vscShadowCssText !== null || vscShadowCssRequest) return;
+  if (typeof fetch !== "function") return;
+  try {
+    vscShadowCssRequest = fetch(chrome.runtime.getURL("content/shadow.css"))
+      .then(function(response) {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.text();
+      })
+      .then(function(text) {
+        vscShadowCssText = text;
+        vscPendingShadowStyles.forEach(function(style) {
+          style.textContent = text;
+        });
+        vscPendingShadowStyles.clear();
+      })
+      .catch(function(error) {
+        // Let the next controller creation retry.
+        vscShadowCssRequest = null;
+        log(`Unable to load controller stylesheet: ${error.message}`, 3);
+      });
+  } catch (error) {
+    vscShadowCssRequest = null;
+    log(`Unable to load controller stylesheet: ${error.message}`, 3);
+  }
+}
+
+function createControllerShadowStyle(doc) {
+  var style = doc.createElement("style");
+  if (vscShadowCssText !== null) {
+    style.textContent = vscShadowCssText;
+    return style;
+  }
+  style.textContent = vscShadowCssPlaceholder;
+  vscPendingShadowStyles.add(style);
+  loadControllerShadowCss();
+  return style;
 }
 
 function createControllerButton(doc, action, label, className) {
@@ -3515,8 +3580,8 @@ function getControllerGeometryMount(mount) {
 
 function setNormalControllerMount(videoController, mount) {
   videoController.normalControllerMount = mount;
-  // Some site integrations deliberately use a sibling overlay (e.g. Apple
-  // TV's scrim). Only invalidate containment for mounts that owned the media.
+  // A fallback mount may not contain the media (e.g. a detached parent
+  // hint). Only invalidate containment for mounts that owned the media.
   videoController.normalMountContainedMedia = isComposedDescendant(
     videoController.video,
     getControllerGeometryMount(mount)
@@ -3791,15 +3856,42 @@ function attachSharedViewportScrollTracking(win) {
   win.vscViewportScrollTrackingAttached = true;
 }
 
+// Only fullscreen/top-layer controllers need the multi-pass settle on resize;
+// in-page hosts are kept in shape by their ResizeObserver.
+function controllerNeedsFullscreenSettle(controller) {
+  var wrapper = controller.div;
+  if (!wrapper) return false;
+  if (getFullscreenElement(controller.video.ownerDocument)) return true;
+  return Boolean(
+    wrapper.classList.contains("vsc-fullscreen-popover") ||
+      isControllerPopoverOpen(wrapper) ||
+      (controller.controllerHostMount &&
+        controller.normalControllerMount &&
+        controller.controllerHostMount !== controller.normalControllerMount)
+  );
+}
+
 function attachSharedControllerResizeListener(win) {
   if (!win || win.vscControllerResizeListenerAttached) return;
+  var resizeTimer = null;
+  var settleAfterResize = function() {
+    resizeTimer = null;
+    tc.mediaElements.forEach(function(media) {
+      var controller = media && media.vsc;
+      if (!controller) return;
+      if (controllerNeedsFullscreenSettle(controller)) {
+        scheduleControllerFullscreenSettle(controller);
+      } else if (controller.controllerHostResetGeometry) {
+        controller.controllerHostResetGeometry();
+      }
+    });
+  };
   win.addEventListener(
     "resize",
     function() {
-      tc.mediaElements.forEach(function(media) {
-        var controller = media && media.vsc;
-        if (controller) scheduleControllerFullscreenSettle(controller);
-      });
+      // A drag-resize fires every frame; act once it pauses.
+      if (resizeTimer !== null) win.clearTimeout(resizeTimer);
+      resizeTimer = win.setTimeout(settleAfterResize, 150);
     },
     { passive: true }
   );
@@ -4190,6 +4282,10 @@ function defineVideoController() {
     this.controllerLocation = normalizeControllerLocation(
       tc.settings.controllerLocation
     );
+    // The effective location setting this controller was last anchored from.
+    // P-cycling and dragging diverge from it on purpose; see
+    // refreshAllControllerGeometry.
+    this.anchoredLocationSetting = this.controllerLocation;
     this.structureSignature = getControllerStructureSignature();
     attachFullscreenListeners(target.ownerDocument);
 
@@ -4203,9 +4299,6 @@ function defineVideoController() {
         ? "policy"
         : "initial";
     this.mediaSourceKey = getVideoSourceKey(target);
-    if (!tc.settings.rememberSpeed && !tc.settings.forceLastSavedSpeed) {
-      setKeyBindings("reset", getKeyBindings("fast"));
-    }
 
     log("Explicitly setting playbackRate to: " + storedSpeed, 5);
     try {
@@ -4264,10 +4357,6 @@ function defineVideoController() {
         applySourceTransitionPolicy(event.target, false);
         extendSpeedRestoreWindow(event.target);
 
-        if (!tc.settings.rememberSpeed && !tc.settings.forceLastSavedSpeed) {
-          setKeyBindings("reset", getKeyBindings("fast"));
-        }
-
         var playSpeed = sanitizeSpeed(resolveTargetSpeed(event.target), 1.0);
         if (Math.abs(event.target.playbackRate - playSpeed) > 0.01) {
           log("Play event: setting playbackRate to: " + playSpeed, 4);
@@ -4280,13 +4369,11 @@ function defineVideoController() {
       } else if (event.type === "pause") {
         extendSpeedRestoreWindow(event.target);
         this.stopSubtitleNudge();
-        tc.isNudging = false;
       } else if (event.type === "seeking") {
         extendSpeedRestoreWindow(event.target);
       } else if (event.type === "ended") {
         this.speedRestoreUntil = 0;
         this.stopSubtitleNudge();
-        tc.isNudging = false;
       } else if (event.type === "seeked") {
         extendSpeedRestoreWindow(event.target);
         var expectedSpeed = sanitizeSpeed(resolveTargetSpeed(event.target), 1.0);
@@ -4373,7 +4460,7 @@ function defineVideoController() {
     srcObserver.observe(target, {
       attributes: true,
       subtree: true,
-      attributeFilter: ["src", "currentSrc"]
+      attributeFilter: ["src"]
     });
     if (!target.paused && target.playbackRate !== 1.0)
       this.startSubtitleNudge();
@@ -4508,8 +4595,8 @@ function defineVideoController() {
         return;
       }
 
-      // Set flag to prevent ratechange listener from interfering
-      tc.isNudging = true;
+      // Both the nudge and its revert fire async ratechange events; the
+      // suppression counter keeps them from being treated as external changes.
       suppressNextNudgeRateChanges(this, 2);
 
       // Cache values to avoid repeated property access
@@ -4523,7 +4610,6 @@ function defineVideoController() {
       try {
         this.video.playbackRate = targetSpeed + nudgeAmount;
       } catch (error) {
-        tc.isNudging = false;
         this.suppressedRateChangeCount = 0;
         this.stopSubtitleNudge();
         log(`Subtitle nudge failed: ${error.message}`, 3);
@@ -4540,8 +4626,6 @@ function defineVideoController() {
           this.suppressedRateChangeCount = 0;
           this.stopSubtitleNudge();
           log(`Subtitle nudge restore failed: ${error.message}`, 3);
-        } finally {
-          tc.isNudging = false;
         }
       });
 
@@ -4570,52 +4654,6 @@ function defineVideoController() {
     }
     // Clear the animation state, but PRESERVE targetSpeed so getDesiredSpeed
     // doesn't lose the user's intended speed if the site hijacks it.
-  };
-
-  tc.videoController.prototype.performImmediateNudge = function() {
-    if (
-      !isSubtitleNudgeSupported(this.video) ||
-      !isSubtitleNudgeEnabledForVideo(this.video) ||
-      !this.video ||
-      this.video.paused ||
-      this.video.playbackRate === 1.0 ||
-      document.hidden
-    ) {
-      return;
-    }
-
-    const targetRate = this.targetSpeed || this.video.playbackRate;
-    const nudgeAmount = Math.min(
-      0.1,
-      Math.max(0.000001, Number(tc.settings.subtitleNudgeAmount) || 0.001)
-    );
-
-    tc.isNudging = true;
-    suppressNextNudgeRateChanges(this, 2);
-    try {
-      this.video.playbackRate = targetRate + nudgeAmount;
-    } catch (error) {
-      tc.isNudging = false;
-      this.suppressedRateChangeCount = 0;
-      log(`Immediate subtitle nudge failed: ${error.message}`, 3);
-      return;
-    }
-
-    // Revert synchronously via microtask
-    Promise.resolve().then(() => {
-      try {
-        if (this.video) {
-          this.video.playbackRate = targetRate;
-        }
-      } catch (error) {
-        this.suppressedRateChangeCount = 0;
-        log(`Immediate subtitle nudge restore failed: ${error.message}`, 3);
-      } finally {
-        tc.isNudging = false;
-      }
-    });
-
-    log(`Immediate nudge performed at rate ${targetRate.toFixed(2)}`, 5);
   };
 
   tc.videoController.prototype.setupYouTubeAutoHide = function(wrapper) {
@@ -4807,10 +4845,7 @@ function defineVideoController() {
     // Normal mounts stay in the player stacking context; direct-video
     // fullscreen uses a popover in the browser top layer.
     var shadow = wrapper.attachShadow({ mode: "open" });
-    var shadowStylesheet = doc.createElement("link");
-    shadowStylesheet.rel = "stylesheet";
-    shadowStylesheet.href = chrome.runtime.getURL("content/shadow.css");
-    shadow.appendChild(shadowStylesheet);
+    shadow.appendChild(createControllerShadowStyle(doc));
 
     var controller = doc.createElement("div");
     controller.id = "controller";
@@ -4934,7 +4969,7 @@ function defineVideoController() {
       this.parent || this.video.parentElement || this.video.parentNode;
     var mountEl = getControllerMount(this.video) || parentEl;
 
-    log(`Inserting controller: parentEl=${!!parentEl}, hostname=${location.hostname}`, 4);
+    log(`Inserting controller: parentEl=${!!parentEl}`, 4);
 
     if (
       !mountEl ||
@@ -4948,37 +4983,10 @@ function defineVideoController() {
       return wrapper;
     }
 
+    // Use the same mount resolver as every later remount (lifecycle events,
+    // fullscreen sync); a constructor-only site override would be undone by
+    // the first media event anyway.
     try {
-      switch (true) {
-        case location.hostname === "www.amazon.com":
-        case location.hostname === "www.reddit.com":
-        case /hbogo\./.test(location.hostname):
-          mountEl = parentEl.parentElement || mountEl;
-          break;
-        case location.hostname === "www.facebook.com":
-          var facebookMount = parentEl;
-          for (var facebookDepth = 0; facebookDepth < 7; facebookDepth += 1) {
-            if (!facebookMount.parentElement) break;
-            facebookMount = facebookMount.parentElement;
-          }
-          mountEl = facebookMount || mountEl;
-          break;
-        case location.hostname === "tv.apple.com":
-          var appleRoot = parentEl.getRootNode();
-          var appleScrim =
-            appleRoot && appleRoot.querySelector
-              ? appleRoot.querySelector(".scrim")
-              : null;
-          mountEl = appleScrim || mountEl;
-          break;
-        case location.hostname === "www.youtube.com":
-        case location.hostname === "m.youtube.com":
-        case location.hostname === "music.youtube.com":
-          mountEl =
-            (parentEl.closest && parentEl.closest(".html5-video-player")) ||
-            mountEl;
-          break;
-      }
       mountEl.appendChild(wrapper);
       setNormalControllerMount(this, mountEl);
       setupControllerHostTracking(this, wrapper, mountEl);
@@ -5093,6 +5101,8 @@ function applySiteRuleOverrides() {
 }
 
 function removeIneligibleMediaControllers() {
+  // Settings or the route changed; re-measure player chrome on the next check.
+  vscPlayerChromeVerdicts = new WeakMap();
   tc.mediaElements.slice().forEach(function(media) {
     if (!media) return;
     if (media.nodeName === "AUDIO" && !tc.settings.audioBoolean) {
@@ -5108,10 +5118,24 @@ function removeIneligibleMediaControllers() {
 
 /** Apply current tc.settings controller layout/opacity to every attached controller (after site rules). */
 function refreshAllControllerGeometry() {
+  var settingLocation = normalizeControllerLocation(
+    tc.settings.controllerLocation
+  );
   tc.mediaElements.forEach(function(video) {
     if (!video || !video.vsc) return;
-    applyControllerLocation(video.vsc, tc.settings.controllerLocation);
     var controllerEl = getControllerElement(video.vsc);
+    if (video.vsc.anchoredLocationSetting !== settingLocation) {
+      // A changed setting (options, site rule, route) wins over a P-cycled
+      // or dragged position. Otherwise this runs on every navigation signal
+      // and must not undo the user's per-controller placement.
+      video.vsc.anchoredLocationSetting = settingLocation;
+      applyControllerLocation(video.vsc, settingLocation);
+    } else if (controllerEl && controllerEl.dataset.positionMode === "manual") {
+      applyControllerMargins(controllerEl);
+    } else {
+      // Margins or the fullscreen offset may have changed; keep the anchor.
+      applyControllerLocation(video.vsc, video.vsc.controllerLocation);
+    }
     if (controllerEl) {
       controllerEl.style.opacity = String(tc.settings.controllerOpacity);
     }
@@ -5211,7 +5235,6 @@ function setupListener(root) {
   root.addEventListener(
     "ratechange",
     function(event) {
-      if (tc.isNudging) return;
       var video = event.target;
       if (!video || typeof video.playbackRate === "undefined" || !video.vsc)
         return;
@@ -5353,59 +5376,50 @@ function isEditableShortcutTarget(event) {
 function attachKeydownListeners(doc) {
   // Content scripts already run in every frame. Keeping each listener scoped
   // to its own frame avoids duplicate shortcuts and stale iframe ownership.
-  var docs = [doc];
+  var keyTarget = doc.defaultView || doc;
+  if (keyTarget.vscKeydownListenerAttached) return;
+  keyTarget.addEventListener(
+    "keydown",
+    function(event) {
+      if (!tc.runtimeSettingsHydrated) return;
+      if (
+        !event.getModifierState ||
+        event.getModifierState("Alt") ||
+        event.getModifierState("Control") ||
+        event.getModifierState("Fn") ||
+        event.getModifierState("Meta") ||
+        event.getModifierState("Hyper") ||
+        event.getModifierState("OS")
+      ) {
+        return;
+      }
 
-  docs.forEach(function(keyDoc) {
-    var keyTarget = keyDoc.defaultView || keyDoc;
-    if (keyTarget.vscKeydownListenerAttached) return;
-    keyTarget.addEventListener(
-      "keydown",
-      function(event) {
-        if (!tc.runtimeSettingsHydrated) return;
-        if (
-          !event.getModifierState ||
-          event.getModifierState("Alt") ||
-          event.getModifierState("Control") ||
-          event.getModifierState("Fn") ||
-          event.getModifierState("Meta") ||
-          event.getModifierState("Hyper") ||
-          event.getModifierState("OS")
-        ) {
-          return;
-        }
+      // Cheapest rejection first: most keystrokes match no binding, so skip
+      // the site-rule check and composedPath walk for them.
+      var item = tc.settings.keyBindings.find(function(binding) {
+        return matchesKeyBinding(binding, event);
+      });
+      if (!item) return;
+      if (!isSpeederActiveForCurrentPage()) return;
+      if (isEditableShortcutTarget(event)) return;
 
-        if (isEditableShortcutTarget(event)) return;
+      if (!tc.mediaElements.length) {
+        rescanShadowRootsForAction();
+        if (!tc.mediaElements.length) return;
+      }
+      runAction(item.action, item.value, event);
 
-        if (
-          !isSpeederActiveForCurrentPage()
-        ) {
-          return;
-        }
-
-        var item = tc.settings.keyBindings.find(function(binding) {
-          return matchesKeyBinding(binding, event);
-        });
-
-        if (item) {
-          if (!tc.mediaElements.length) {
-            rescanShadowRootsForAction();
-            if (!tc.mediaElements.length) return;
-          }
-          runAction(item.action, item.value, event);
-
-          // The per-site "Block site from capturing keypress" option owns
-          // propagation. Speeder still runs unblocked shortcuts, but the page
-          // can receive them too when the user left that option off.
-          if (item.force === true || item.force === "true") {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-          }
-        }
-      },
-      true
-    );
-    keyTarget.vscKeydownListenerAttached = true;
-  });
+      // The per-site "Block site from capturing keypress" option owns
+      // propagation. Speeder still runs unblocked shortcuts, but the page
+      // can receive them too when the user left that option off.
+      if (item.force === true || item.force === "true") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },
+    true
+  );
+  keyTarget.vscKeydownListenerAttached = true;
 }
 
 function attachMediaTargetTracking(doc) {
@@ -5558,6 +5572,7 @@ function attachMutationObserver(root) {
             if (!media || media.isConnected) return;
             vscDeferredMediaCandidates.delete(media);
             disconnectBootstrapMediaSourceObserver(media);
+            forgetPlayerChromeVerdict(media);
           });
           reconcileObservedRootConnections(
             getObservedRootDocument(root),
@@ -5623,6 +5638,8 @@ function attachMediaDetectionListeners(root) {
   var handleDetectedMedia = function(event) {
     var target = event.target;
     if (!isMediaElement(target)) return;
+    // A (re)load can swap the player around the element; re-measure its chrome.
+    if (event.type === "loadstart") vscPlayerChromeVerdicts.delete(target);
 
     var existingController = target.vsc;
     var geometryMount =
@@ -5737,17 +5754,16 @@ function reconcileAfterNavigation(doc, forceDiscovery) {
     return;
   }
 
-  observeRoot(doc);
-  resumeSuspendedObservedRoots(doc);
   if (!isActive) {
-    clearDeferredMediaCandidates();
-    tc.mediaElements.slice().forEach(function(media) {
-      removeController(media);
-    });
+    deactivateMediaDiscovery(doc);
     vscInitializedDocuments.add(doc);
     return;
   }
 
+  // Resuming roots parked while inactive rescans them, so media inserted while
+  // disabled is found even when this route needs no full discovery.
+  observeRoot(doc);
+  resumeSuspendedObservedRoots(doc);
   removeIneligibleMediaControllers();
   var discoveryScopeExpanded = Boolean(
     !wasActive ||
@@ -5758,9 +5774,11 @@ function reconcileAfterNavigation(doc, forceDiscovery) {
   var needsFullDiscovery = Boolean(
     forceDiscovery ||
       discoveryScopeExpanded ||
+      vscMediaDiscoveryDeactivated ||
       !vscInitializedDocuments.has(doc) ||
       !window.vscPageShadowBridgeLoaded
   );
+  vscMediaDiscoveryDeactivated = false;
 
   if (needsFullDiscovery) {
     scanRootForMedia(doc);
@@ -5769,6 +5787,7 @@ function reconcileAfterNavigation(doc, forceDiscovery) {
     Array.from(vscDeferredMediaCandidates).forEach(function(media) {
       if (!media || !media.isConnected) {
         vscDeferredMediaCandidates.delete(media);
+        forgetPlayerChromeVerdict(media);
         return;
       }
       ensureController(media, media.parentElement || media.parentNode);
@@ -5825,31 +5844,31 @@ function initializeNow(doc, forceReinit = false) {
   if (tc.siteRuleAppliedHref !== location.href) applySiteRuleOverrides();
   var isActive = isSpeederActiveForCurrentPage();
 
-  // Keep observing while inactive so dynamically-created media/shadow roots
-  // are available to the next forced SPA rescan, but remove stale controls.
-  observeRoot(doc);
-  resumeSuspendedObservedRoots(doc);
+  // Leave disabled pages untouched. Navigation listeners and the location
+  // watch stay alive; every reactivation path (settings reload, tab un-pause,
+  // SPA route) re-enters here or reconcileAfterNavigation and resumes roots.
   if (!isActive) {
-    clearDeferredMediaCandidates();
-    tc.mediaElements.slice().forEach(function(video) {
-      removeController(video);
-    });
+    deactivateMediaDiscovery(doc);
     vscInitializedDocuments.add(doc);
     return;
   }
 
+  var rediscoverAfterInactive = vscMediaDiscoveryDeactivated;
+  vscMediaDiscoveryDeactivated = false;
+  observeRoot(doc);
+  resumeSuspendedObservedRoots(doc);
   removeIneligibleMediaControllers();
+  // Warm the stylesheet so the first controller is rarely created unstyled.
+  loadControllerShadowCss();
 
-  if (!doc.body.classList.contains("vsc-initialized")) {
-    doc.body.classList.add("vsc-initialized");
-  }
   attachKeydownListeners(doc);
   attachMediaTargetTracking(doc);
 
-  if (forceReinit) {
+  if (forceReinit || rediscoverAfterInactive) {
     log("Force re-initialization requested", 4);
     // A root is normally scanned only once. A user-requested rescan must also
-    // revisit media that was present but source-less during the initial scan.
+    // revisit media that was present but source-less during the initial scan,
+    // and reactivation must find media inserted while observers were parked.
     scanRootForMedia(doc);
     rescanObservedMediaRoots(doc);
     refreshAllControllerGeometry();
@@ -6101,7 +6120,6 @@ function runAction(action, value, e) {
     ) {
       showController(controller, 2000, true);
     }
-    if (v.classList.contains("vsc-cancelled")) return;
     const numValue = keyBindingUtils.sanitizeActionValue(
       action,
       value,

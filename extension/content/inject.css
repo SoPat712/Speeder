@@ -27,10 +27,10 @@
   background: transparent !important;
 }
 
-.vsc-nosource {
-  display: none !important;
-}
-.vsc-hidden {
+/* Scoped to Speeder's host so page elements sharing these class names are
+   never affected, including on pages where Speeder is disabled. */
+.vsc-controller.vsc-nosource,
+.vsc-controller.vsc-hidden {
   display: none !important;
 }
 
@@ -49,24 +49,4 @@
 .vsc-controller.vsc-forced-show:not(.vsc-hidden) {
   visibility: visible !important;
   opacity: 1 !important;
-}
-
-/* Original overrides removed to avoid interference with the new anchoring system.
-   The .vsc-controller wrapper now fills the player container exactly, 
-   allowing #controller (inside shadow root) to anchor correctly to all 8 positions. */
-
-/* disable Vimeo video overlay */
-div.video-wrapper + div.target {
-  height: 0;
-}
-
-/* Fix black overlay on Kickstarter */
-div.video-player.has_played.vertically_center:before,
-div.legacy-video-player.has_played.vertically_center:before {
-  content: none !important;
-}
-
-/* Fix black overlay on openai.com */
-.Shared-Video-player > .vsc-controller {
-  height: 0;
 }

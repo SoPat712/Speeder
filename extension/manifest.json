@@ -74,7 +74,6 @@
     }
   ],
   "web_accessible_resources": [
-    "content/shadow-bridge.js",
-    "content/shadow.css"
+    "content/shadow-bridge.js"
   ]
 }

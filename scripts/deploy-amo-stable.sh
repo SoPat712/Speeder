@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Squash beta onto main, set manifest version, one release commit, push stable tag (v* without -beta).
+# Make main's tree match beta, set manifest version, one release commit, push stable tag (v* without -beta).
 # Does not merge dev or push to beta — promote only what is already on beta.
 # Triggers .github/workflows/deploy.yml: listed AMO submission.
 
@@ -51,6 +51,29 @@ validate_semver() {
   fi
 }
 
+# Firefox compares up to four numeric parts; missing parts count as zero.
+normalize_version_parts() {
+  local IFS=.
+  local -a parts=($1)
+  local -a out=()
+  local part
+  for part in "${parts[@]}"; do
+    out+=("$((10#$part))")
+  done
+  while ((${#out[@]} < 4)); do
+    out+=(0)
+  done
+  printf '%s' "${out[*]}"
+}
+
+# Succeeds when version $1 is strictly greater than version $2.
+version_gt() {
+  local a b
+  a="$(normalize_version_parts "$1")"
+  b="$(normalize_version_parts "$2")"
+  [[ "$a" != "$b" && "$(printf '%s\n%s\n' "$b" "$a" | sort -V | tail -n 1)" == "$a" ]]
+}
+
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "Error: working tree is not clean. Commit or stash before releasing." >&2
   exit 1
@@ -64,8 +87,8 @@ echo "Current version on beta ($MANIFEST_PATH): $CURRENT_VERSION"
 read -r -p "Release version for $MANIFEST_PATH + tag (e.g. 5.0.4): " SEMVER_IN
 SEMVER="$(normalize_semver "$SEMVER_IN")"
 validate_semver "$SEMVER"
-if [[ "$SEMVER" == "$CURRENT_VERSION" ]]; then
-  echo "Error: release version must differ from the current manifest version $CURRENT_VERSION." >&2
+if ! version_gt "$SEMVER" "$CURRENT_VERSION"; then
+  echo "Error: release version must be greater than the current manifest version $CURRENT_VERSION." >&2
   exit 1
 fi
 
@@ -83,8 +106,8 @@ fi
 
 echo
 echo "This will:"
-echo "  1. checkout main, merge --squash origin/beta (single release commit on main)"
-echo "  2. set $MANIFEST_PATH to $SEMVER in that commit (if anything else changed, it is included too)"
+echo "  1. checkout main and make its files exactly match beta (files deleted on beta are deleted on main)"
+echo "  2. set $MANIFEST_PATH to $SEMVER and commit everything as one release commit on main"
 echo "  3. push origin main, create tag $TAG, push tag (triggers listed AMO submit)"
 echo "  4. checkout dev (merge main→dev yourself if you want them aligned)"
 read -r -p "Continue? [y/N] " confirm
@@ -94,7 +117,9 @@ echo "🚀 Releasing stable $TAG to AMO (listed)"
 
 git checkout main
 git pull origin main
-git merge --squash beta
+# main only receives these release commits and shares no recent history with
+# beta, so a squash merge conflicts. Take beta's tree as-is instead.
+git read-tree -u --reset beta
 bump_manifest "$SEMVER"
 git add -A
 git commit -m "chore(release): prepare $TAG"
@@ -106,4 +131,4 @@ git push origin "$TAG"
 
 git checkout dev
 
-echo "✅ Done: main squashed from beta, tagged $TAG (manifest $SEMVER)"
+echo "✅ Done: main set to beta's tree, tagged $TAG (manifest $SEMVER)"

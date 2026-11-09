@@ -50,6 +50,29 @@ validate_semver() {
   fi
 }
 
+# Firefox compares up to four numeric parts; missing parts count as zero.
+normalize_version_parts() {
+  local IFS=.
+  local -a parts=($1)
+  local -a out=()
+  local part
+  for part in "${parts[@]}"; do
+    out+=("$((10#$part))")
+  done
+  while ((${#out[@]} < 4)); do
+    out+=(0)
+  done
+  printf '%s' "${out[*]}"
+}
+
+# Succeeds when version $1 is strictly greater than version $2.
+version_gt() {
+  local a b
+  a="$(normalize_version_parts "$1")"
+  b="$(normalize_version_parts "$2")"
+  [[ "$a" != "$b" && "$(printf '%s\n%s\n' "$b" "$a" | sort -V | tail -n 1)" == "$a" ]]
+}
+
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "Error: working tree is not clean. Commit or stash before releasing." >&2
   exit 1
@@ -63,8 +86,8 @@ echo "Current version in $MANIFEST_PATH: $CURRENT_VERSION"
 read -r -p "New version for $MANIFEST_PATH (e.g. 5.0.4): " SEMVER_IN
 SEMVER="$(normalize_semver "$SEMVER_IN")"
 validate_semver "$SEMVER"
-if [[ "$SEMVER" == "$CURRENT_VERSION" ]]; then
-  echo "Error: release version must differ from the current manifest version $CURRENT_VERSION." >&2
+if ! version_gt "$SEMVER" "$CURRENT_VERSION"; then
+  echo "Error: release version must be greater than the current manifest version $CURRENT_VERSION." >&2
   exit 1
 fi
 

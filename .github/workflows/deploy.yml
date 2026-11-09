@@ -6,6 +6,12 @@ on:
       - "v*"
     branches:
       - dev
+  pull_request:
+
+# The GitHub release step needs to create releases. Pull requests from forks
+# still get a read-only token.
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -33,27 +39,31 @@ jobs:
 
       # Beta tag (v*-beta) → Sign as unlisted on AMO, attach signed XPI to GitHub Prerelease
       # Firefox blocks all unsigned XPIs, even for self-hosted installs — unlisted signing is required
+      # web-ext reads WEB_EXT_API_KEY / WEB_EXT_API_SECRET from the environment.
       - name: Sign XPI via AMO (unlisted, beta)
-        if: contains(github.ref_name, '-beta')
+        if: startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-beta')
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
         run: |
           web-ext sign \
-            --api-key ${{ secrets.FIREFOX_API_KEY }} \
-            --api-secret ${{ secrets.FIREFOX_API_SECRET }} \
             --source-dir extension \
             --artifacts-dir web-ext-artifacts \
             --channel unlisted
 
       - name: Get signed XPI path (beta)
-        if: contains(github.ref_name, '-beta')
+        if: startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-beta')
         id: xpi
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
           FILE=$(ls web-ext-artifacts/*.xpi | head -n 1)
-          XPI="web-ext-artifacts/speeder-${{ github.ref_name }}.xpi"
+          XPI="web-ext-artifacts/speeder-${REF_NAME}.xpi"
           mv "$FILE" "$XPI"
-          echo "file=$XPI" >> $GITHUB_OUTPUT
+          echo "file=$XPI" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Prerelease (beta)
-        if: contains(github.ref_name, '-beta')
+        if: startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-beta')
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
@@ -75,10 +85,11 @@ jobs:
         if:
           startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name,
           '-beta')
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
         run: |
           web-ext sign \
-            --api-key ${{ secrets.FIREFOX_API_KEY }} \
-            --api-secret ${{ secrets.FIREFOX_API_SECRET }} \
             --source-dir extension \
             --artifacts-dir web-ext-artifacts \
             --channel listed

@@ -1,140 +1,157 @@
-import { readFileSync } from "node:fs";
-import { runInNewContext } from "node:vm";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import testUtils from "./helpers/extension-test-utils.js";
 
-function source(relativePath) {
-  return readFileSync(relativePath, "utf8");
+const {
+  createChromeMock,
+  evaluateScript,
+  loadHtmlString,
+  readWorkspaceFile
+} = testUtils;
+
+let stepper;
+
+function createVideo(source) {
+  const video = document.createElement("video");
+  document.body.appendChild(video);
+  Object.defineProperty(video, "currentSrc", {
+    configurable: true,
+    value: source
+  });
+  // Speeder targets videos that have a controller attached.
+  video.vsc = { div: document.createElement("div") };
+  return video;
 }
 
-function between(text, begin, end) {
-  const start = text.indexOf(begin);
-  const finish = text.indexOf(end, start + begin.length);
-  if (start < 0 || finish < 0) {
-    throw new Error(`Missing Speeder function boundary: ${begin} / ${end}`);
+beforeEach(() => {
+  loadHtmlString("<!doctype html><html><head></head><body></body></html>");
+
+  window.chrome = createChromeMock();
+  // Keep startup hydration pending: the tests explicitly configure the
+  // controller and settings, without starting discovery or page-wide timers.
+  window.chrome.storage.sync.get = vi.fn();
+
+  evaluateScript("extension/shared/settings-core.js");
+
+  window.SpeederShared = {
+    siteRules: { isSpeederActiveForSite: vi.fn(() => true) },
+    keyBindings: {
+      sanitizeActionValue: vi.fn((_action, value) => value)
+    }
+  };
+  evaluateScript("extension/shared/frame-stepper.js");
+  stepper = window.SpeederShared.frameStepper;
+  vi.spyOn(stepper, "start").mockReturnValue(true);
+  vi.spyOn(stepper, "dispose").mockImplementation(() => {});
+  vi.spyOn(stepper, "step").mockReturnValue(true);
+
+  // Execute the whole content script, rather than copying function bodies or
+  // relying on their order in inject.js.
+  evaluateScript("extension/content/inject.js");
+});
+
+afterEach(() => {
+  // The real content script installs a bounded shadow-root fallback. Cancel
+  // its scheduled work before closing the jsdom document.
+  for (const timer of window.vscBoundedShadowFallbackTimers || []) {
+    window.clearTimeout(timer);
   }
-  return text.slice(start, finish);
-}
+  if (window.vscPageShadowBridgeRetryTimer) {
+    window.clearTimeout(window.vscPageShadowBridgeRetryTimer);
+  }
+  if (window.vscLocationWatchTimer) {
+    window.clearInterval(window.vscLocationWatchTimer);
+  }
+  window.close();
+  vi.restoreAllMocks();
+});
 
 describe("frame stepping integration", () => {
-  it("loads the engine before inject.js and registers optional buttons", () => {
-    const manifest = JSON.parse(source("extension/manifest.json"));
+  it("loads the frame stepper before inject.js and registers optional actions and buttons", () => {
+    const manifest = JSON.parse(readWorkspaceFile("extension/manifest.json"));
     const scripts = manifest.content_scripts.flatMap((entry) => entry.js || []);
-    expect(scripts.indexOf("shared/frame-stepper.js")).toBeGreaterThan(-1);
+
+    expect(scripts).toContain("shared/frame-stepper.js");
     expect(scripts.indexOf("shared/frame-stepper.js")).toBeLessThan(
       scripts.indexOf("content/inject.js")
     );
 
-    const context = {};
-    runInNewContext(source("extension/shared/settings-core.js"), context);
-    expect(Array.from(context.vscGetButtonIds())).toEqual(
-      expect.arrayContaining(["previousFrame", "nextFrame"])
-    );
-    expect(Array.from(context.vscGetDefaultButtonIds())).not.toContain("nextFrame");
-    expect(Array.from(context.vscGetDefaultButtonIds())).not.toContain("previousFrame");
+    for (const action of ["previousFrame", "nextFrame"]) {
+      expect(window.vscGetButtonIds()).toContain(action);
+      expect(window.vscGetDefaultButtonIds()).not.toContain(action);
+      expect(window.vscGetActionDefs()[action]).toMatchObject({ hasValue: false });
+    }
   });
 
-  it("enables estimation only for configured shortcuts or controller buttons", () => {
-    const code = source("extension/content/inject.js");
-    const calls = [];
-    let active = true;
-    const settings = {
-      keyBindings: [],
-      controllerButtons: [],
-      popupControllerButtons: [],
-      popupMatchHoverControls: true,
-      showPopupControlBar: true
-    };
-    const context = {
-      tc: { settings },
-      frameStepper: {
-        start: (video, identity) => calls.push(["start", video, identity(video)]),
-        dispose: (video) => calls.push(["dispose", video])
-      },
-      isSpeederActiveForCurrentPage: () => active,
-      isOnYouTube: () => false,
-      getVideoSourceKey: (video) => video.currentSrc
-    };
-    runInNewContext(between(code, "function getFrameStepperIdentity(",
-      "function getVideoSourceKey("), context);
-    const video = { nodeName: "VIDEO", currentSrc: "example.mp4" };
+  it("starts measurement only when a shortcut or controller button enables frame stepping", () => {
+    const video = createVideo("https://example.org/clip.mp4");
+    const settings = window.tc.settings;
+    settings.keyBindings = [];
+    settings.controllerButtons = [];
+    settings.popupControllerButtons = [];
+    settings.popupMatchHoverControls = true;
+    settings.showPopupControlBar = true;
 
-    context.syncFrameSteppingOnVideo(video);
-    expect(calls.pop()[0]).toBe("dispose");
+    window.syncFrameSteppingOnVideo(video);
+    expect(stepper.dispose).toHaveBeenCalledWith(video);
+    expect(stepper.start).not.toHaveBeenCalled();
+
     settings.keyBindings = [{ action: "nextFrame", code: "Period", disabled: false }];
-    context.syncFrameSteppingOnVideo(video);
-    expect(calls.pop()).toEqual(["start", video, "example.mp4"]);
+    window.syncFrameSteppingOnVideo(video);
+    expect(stepper.start).toHaveBeenCalledOnce();
+    expect(stepper.start).toHaveBeenCalledWith(video, expect.any(Function));
+    const identity = stepper.start.mock.calls[0][1];
+    expect(identity(video)).toBe("https://example.org/clip.mp4");
+
     settings.keyBindings[0].disabled = true;
-    context.syncFrameSteppingOnVideo(video);
-    expect(calls.pop()[0]).toBe("dispose");
+    window.syncFrameSteppingOnVideo(video);
+    expect(stepper.dispose).toHaveBeenCalledTimes(2);
 
     settings.popupMatchHoverControls = false;
     settings.popupControllerButtons = ["previousFrame"];
-    context.syncFrameSteppingOnVideo(video);
-    expect(calls.pop()[0]).toBe("start");
+    window.syncFrameSteppingOnVideo(video);
+    expect(stepper.start).toHaveBeenCalledTimes(2);
+
     settings.showPopupControlBar = false;
-    context.syncFrameSteppingOnVideo(video);
-    expect(calls.pop()[0]).toBe("dispose");
-    active = false;
+    window.syncFrameSteppingOnVideo(video);
+    expect(stepper.dispose).toHaveBeenCalledTimes(3);
+
     settings.controllerButtons = ["nextFrame"];
-    context.syncFrameSteppingOnVideo(video);
-    expect(calls.pop()[0]).toBe("dispose");
+    window.tc.tabPaused = true;
+    window.syncFrameSteppingOnVideo(video);
+    expect(stepper.dispose).toHaveBeenCalledTimes(4);
   });
 
-  it("routes actions through the existing closest/all targeting behavior", () => {
-    const code = source("extension/content/inject.js");
-    const calls = [];
-    const document = {};
-    const makeVideo = (src) => ({
-      nodeName: "VIDEO",
-      currentSrc: src,
-      ownerDocument: document,
-      isConnected: true,
-      vsc: { div: { classList: { contains: () => false } } },
-      classList: { contains: () => false }
-    });
-    const first = makeVideo("one.mp4");
-    const second = makeVideo("two.mp4");
-    const context = {
-      document,
-      tc: {
-        mediaElements: [first, second],
-        settings: { shortcutTargetMode: "all" },
-        lastPointerPosition: null,
-        lastInteractedMedia: second
-      },
-      frameStepper: {
-        step: (video, direction, identity) => {
-          calls.push([video.currentSrc, direction, identity(video)]);
-        }
-      },
-      getFrameStepperIdentity: (video) => video.currentSrc,
-      log: () => {},
-      getMediaFromControllerEvent: () => null,
-      isOnYouTube: () => false,
-      getClosestMediaToPointer: () => null,
-      getPrimaryVideoElement: () => first,
-      rescanShadowRootsForAction: () => false,
-      showController: () => {},
-      getKeyBindings: () => 0,
-      keyBindingUtils: { sanitizeActionValue: () => 0 }
-    };
-    runInNewContext(
-      between(code, "function resolveActionMediaTargets(", "function pause(v)"),
-      context
-    );
-    const event = { target: { ownerDocument: document } };
+  it("uses Speeder's all, closest, and explicit-video targeting for frame actions", () => {
+    const first = createVideo("https://example.org/one.mp4");
+    const second = createVideo("https://example.org/two.mp4");
+    window.tc.mediaElements = [first, second];
+    window.tc.lastPointerPosition = null;
+    window.tc.lastInteractedMedia = second;
+    window.tc.settings.shortcutTargetMode = "all";
 
-    context.runAction("nextFrame", 0, event);
-    expect(calls).toEqual([
-      ["one.mp4", 1, "one.mp4"],
-      ["two.mp4", 1, "two.mp4"]
-    ]);
-    calls.length = 0;
-    context.tc.settings.shortcutTargetMode = "closest";
-    context.runAction("previousFrame", 0, event);
-    expect(calls).toEqual([["two.mp4", -1, "two.mp4"]]);
-    calls.length = 0;
-    context.runAction("nextFrame", 0, event, first);
-    expect(calls).toEqual([["one.mp4", 1, "one.mp4"]]);
+    const event = { target: document.body };
+    window.runAction("nextFrame", 0, event);
+    expect(stepper.step).toHaveBeenCalledTimes(2);
+    expect(stepper.step).toHaveBeenNthCalledWith(
+      1, first, 1, expect.any(Function)
+    );
+    expect(stepper.step).toHaveBeenNthCalledWith(
+      2, second, 1, expect.any(Function)
+    );
+
+    stepper.step.mockClear();
+    window.tc.settings.shortcutTargetMode = "closest";
+    window.runAction("previousFrame", 0, event);
+    expect(stepper.step).toHaveBeenCalledTimes(1);
+    expect(stepper.step).toHaveBeenCalledWith(
+      second, -1, expect.any(Function)
+    );
+
+    stepper.step.mockClear();
+    window.runAction("nextFrame", 0, event, first);
+    expect(stepper.step).toHaveBeenCalledTimes(1);
+    expect(stepper.step).toHaveBeenCalledWith(
+      first, 1, expect.any(Function)
+    );
   });
 });

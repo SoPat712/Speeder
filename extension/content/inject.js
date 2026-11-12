@@ -1016,7 +1016,40 @@ function sanitizeSpeed(speed, fallback) {
    This function handles this problem by examining the YouTube Shorts renderer
    and extracting the Short's identifier, and failing back to the page URL when
    it needs to.
+
+   The fallback only needs the visually primary video when a renderer doesn't
+   have a usable Short link. Cache that selection across frame callbacks and
+   refresh it when navigation or media selection changes.
 */
+var frameStepperShortPrimaryCache = {
+  href: null,
+  mediaCount: -1,
+  lastInteractedMedia: null,
+  video: null
+};
+
+function isFrameStepperShortPrimaryVideo(video) {
+  if (tc.mediaElements.length === 1) {
+    return tc.mediaElements[0] === video;
+  }
+
+  var cache = frameStepperShortPrimaryCache;
+  if (
+    cache.href !== location.href ||
+    cache.mediaCount !== tc.mediaElements.length ||
+    cache.lastInteractedMedia !== tc.lastInteractedMedia ||
+    !cache.video ||
+    !cache.video.isConnected ||
+    !cache.video.vsc
+  ) {
+    cache.href = location.href;
+    cache.mediaCount = tc.mediaElements.length;
+    cache.lastInteractedMedia = tc.lastInteractedMedia;
+    cache.video = getPrimaryVideoElement();
+  }
+  return cache.video === video;
+}
+
 function getFrameStepperIdentity(video) {
   var source = getVideoSourceKey(video);
   if (!isOnYouTube() || !/^\/shorts\//.test(location.pathname)) {
@@ -1034,7 +1067,7 @@ function getFrameStepperIdentity(video) {
   }
   // Some shorts reuse a blob URL for more than one short
   // Fallback to the page URL only for the currently selected video
-  if (!match && (!renderer || getPrimaryVideoElement() === video)) {
+  if (!match && (!renderer || isFrameStepperShortPrimaryVideo(video))) {
     match = location.pathname.match(/^\/shorts\/([^/?#]+)/);
   }
   return match ? source + "|short:" + match[1] : source;

@@ -676,6 +676,7 @@ function recordKeyPress(event) {
 
   if (event.key === "Backspace") {
     setShortcutInputBinding(event.target, null);
+    refreshShortcutConflicts();
     scheduleAutoSave();
     event.preventDefault();
     event.stopPropagation();
@@ -684,6 +685,7 @@ function recordKeyPress(event) {
 
   if (event.key === "Escape") {
     setShortcutInputBinding(event.target, createDisabledBinding());
+    refreshShortcutConflicts();
     scheduleAutoSave();
     event.preventDefault();
     event.stopPropagation();
@@ -694,6 +696,7 @@ function recordKeyPress(event) {
   if (!binding) return;
 
   setShortcutInputBinding(event.target, binding);
+  refreshShortcutConflicts();
   scheduleAutoSave();
   event.preventDefault();
   event.stopPropagation();
@@ -745,6 +748,85 @@ function labelShortcutRow(row) {
   if (removeButton) {
     removeButton.setAttribute("aria-label", "Remove " + name + " shortcut");
   }
+}
+
+var shortcutConflictNoteId = 0;
+
+function setShortcutRowConflict(row, otherActions) {
+  var keyInput = row.querySelector(".customKey");
+  var note = row.querySelector(".shortcut-conflict-note");
+  var conflicting = otherActions.length > 0;
+  row.classList.toggle("shortcut-conflict", conflicting);
+  if (!conflicting) {
+    if (note) note.remove();
+    if (keyInput) {
+      keyInput.removeAttribute("aria-invalid");
+      keyInput.removeAttribute("aria-describedby");
+    }
+    return;
+  }
+  if (!note) {
+    note = document.createElement("p");
+    note.className = "shortcut-conflict-note";
+    note.id = "shortcutConflict" + ++shortcutConflictNoteId;
+    row.appendChild(note);
+  }
+  note.textContent =
+    "Same key as " +
+    otherActions.map(function (action) {
+      return actionLabels[action] || action;
+    }).join(", ") +
+    ". Only one will work.";
+  if (keyInput) {
+    keyInput.setAttribute("aria-invalid", "true");
+    keyInput.setAttribute("aria-describedby", note.id);
+  }
+}
+
+// Speeder runs the first binding that matches a key, so a second one on the
+// same key (Shift counts as a different key) silently never fires.
+function markShortcutConflicts(rows) {
+  var rowsByKey = {};
+  var keys = rows.map(function (row) {
+    var keyInput = row.querySelector(".customKey");
+    var binding = normalizeStoredBinding(keyInput && keyInput.vscBinding);
+    if (!binding || binding.disabled) return null;
+    var key = (binding.shiftKey ? "Shift+" : "") + binding.code;
+    (rowsByKey[key] = rowsByKey[key] || []).push(row);
+    return key;
+  });
+  rows.forEach(function (row, index) {
+    var others = keys[index] ? rowsByKey[keys[index]] : [];
+    setShortcutRowConflict(row, others.filter(function (other) {
+      return other !== row;
+    }).map(function (other) {
+      return other.dataset.action;
+    }));
+  });
+}
+
+// A site rule's shortcuts replace the global ones on that site, so they only
+// clash with each other.
+function refreshSiteRuleShortcutConflicts(ruleEl) {
+  if (!ruleEl) return;
+  var override = ruleEl.querySelector(".override-shortcuts");
+  var rows = Array.from(
+    ruleEl.querySelectorAll(".site-shortcuts-rows .shortcut-row")
+  );
+  if (override && override.checked) {
+    markShortcutConflicts(rows);
+  } else {
+    rows.forEach(function (row) {
+      setShortcutRowConflict(row, []);
+    });
+  }
+}
+
+function refreshShortcutConflicts() {
+  markShortcutConflicts(
+    Array.from(document.querySelectorAll("#customs .shortcut-row"))
+  );
+  document.querySelectorAll(".site-rule").forEach(refreshSiteRuleShortcutConflicts);
 }
 
 function add_shortcut(action, value) {
@@ -1265,6 +1347,7 @@ function addSiteRuleShortcut(rowsEl, action, binding, value, force) {
   labelShortcutRow(div);
 
   rowsEl.appendChild(div);
+  refreshSiteRuleShortcutConflicts(rowsEl.closest(".site-rule"));
 }
 
 var siteRuleControlId = 0;
@@ -2046,6 +2129,7 @@ function restore_options(callback) {
         createSiteRule(rule);
       }
     });
+    refreshShortcutConflicts();
 
     initLucideButtonIconsUI();
     optionsSavedEditVersion = optionsEditVersion;
@@ -2248,6 +2332,7 @@ document.addEventListener("DOMContentLoaded", function () {
       var removedRow = removeParentButton.parentNode;
       var siteRuleForShortcut = removedRow.closest(".site-rule");
       removedRow.remove();
+      refreshShortcutConflicts();
       refreshAddShortcutSelector();
       if (siteRuleForShortcut) {
         refreshSiteRuleAddShortcutSelector(siteRuleForShortcut);
@@ -2313,6 +2398,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         if (ocb === "override-shortcuts") {
           refreshSiteRuleAddShortcutSelector(siteRuleRoot);
+          refreshSiteRuleShortcutConflicts(siteRuleRoot);
         }
         return;
       }

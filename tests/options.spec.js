@@ -709,4 +709,95 @@ describe("options.js", () => {
     expect(keyInput.vscBinding.disabled).toBe(true);
     expect(selector.disabled).toBe(false);
   });
+
+  it("flags shortcuts that share a key until the clash is fixed", async () => {
+    bootOptions();
+    await flushAsyncWork(3);
+
+    const row = (action) =>
+      document.querySelector('#customs .shortcut-row[data-action="' + action + '"]');
+    const press = (action, init) =>
+      row(action).querySelector(".customKey").dispatchEvent(
+        new window.KeyboardEvent("keydown", Object.assign({ bubbles: true }, init))
+      );
+
+    // Increase speed defaults to D.
+    press("reset", { key: "d", code: "KeyD" });
+    expect(row("reset").classList.contains("shortcut-conflict")).toBe(true);
+    expect(row("faster").classList.contains("shortcut-conflict")).toBe(true);
+    expect(row("reset").querySelector(".shortcut-conflict-note").textContent).toBe(
+      "Same key as Increase speed. Only one will work."
+    );
+    const keyInput = row("faster").querySelector(".customKey");
+    expect(keyInput.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(keyInput.getAttribute("aria-describedby")).textContent)
+      .toContain("Reset speed");
+
+    // Shift+D is a separate key.
+    press("reset", { key: "D", code: "KeyD", shiftKey: true });
+    expect(document.querySelector(".shortcut-conflict")).toBeNull();
+    expect(document.querySelector(".shortcut-conflict-note")).toBeNull();
+    expect(keyInput.hasAttribute("aria-invalid")).toBe(false);
+
+    press("reset", { key: "d", code: "KeyD" });
+    expect(row("faster").classList.contains("shortcut-conflict")).toBe(true);
+    press("reset", { key: "Escape", code: "Escape" });
+    expect(document.querySelector(".shortcut-conflict")).toBeNull();
+  });
+
+  it("flags stored duplicate shortcuts on load and clears them when a row is removed", async () => {
+    bootOptions({
+      syncData: {
+        keyBindings: [
+          { action: "slower", code: "KeyS", value: 0.1 },
+          { action: "faster", code: "KeyD", value: 0.1 },
+          { action: "fast", code: "KeyG", value: 1.8 },
+          { action: "fast", code: "KeyG", value: 2.5 }
+        ]
+      }
+    });
+    await flushAsyncWork(3);
+
+    const fastRows = document.querySelectorAll('#customs .shortcut-row[data-action="fast"]');
+    expect(fastRows).toHaveLength(2);
+    fastRows.forEach((fastRow) => {
+      expect(fastRow.classList.contains("shortcut-conflict")).toBe(true);
+      expect(fastRow.querySelector(".shortcut-conflict-note").textContent).toBe(
+        "Same key as Preferred speed. Only one will work."
+      );
+    });
+
+    fastRows[1].querySelector(".removeParent").click();
+    expect(document.querySelector(".shortcut-conflict")).toBeNull();
+  });
+
+  it("checks site rule shortcuts only against the same rule", async () => {
+    bootOptions();
+    await flushAsyncWork(3);
+    window.createSiteRule({
+      pattern: "example.org",
+      shortcuts: [
+        { action: "rewind", code: "KeyD", value: 10, disabled: false },
+        { action: "advance", code: "KeyD", value: 10, disabled: false },
+        { action: "slower", code: "KeyS", value: 0.1, disabled: false }
+      ]
+    });
+    const rule = document.getElementById("siteRulesContainer").lastElementChild;
+    const siteRow = (action) =>
+      rule.querySelector('.site-shortcuts-rows .shortcut-row[data-action="' + action + '"]');
+
+    expect(siteRow("rewind").classList.contains("shortcut-conflict")).toBe(true);
+    expect(siteRow("advance").classList.contains("shortcut-conflict")).toBe(true);
+    // D is also the global Increase speed key, but the site rule replaces it there.
+    expect(siteRow("slower").classList.contains("shortcut-conflict")).toBe(false);
+    expect(
+      document.querySelector('#customs .shortcut-row[data-action="faster"]')
+        .classList.contains("shortcut-conflict")
+    ).toBe(false);
+
+    const override = rule.querySelector(".override-shortcuts");
+    override.checked = false;
+    override.dispatchEvent(new window.Event("change", { bubbles: true }));
+    expect(rule.querySelector(".shortcut-conflict")).toBeNull();
+  });
 });

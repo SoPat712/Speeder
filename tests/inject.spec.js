@@ -327,6 +327,51 @@ describe("inject.js helper logic", () => {
     expect(video.vsc.div).toBeDefined();
   });
 
+  it("matches Alt and Alt+Shift bindings exactly and leaves Ctrl/Cmd combos alone", async () => {
+    bootInject({
+      syncData: {
+        keyBindings: [
+          { action: "faster", code: "KeyD", value: 0.1 },
+          { action: "slower", code: "KeyS", value: 0.1 },
+          { action: "rewind", code: "KeyD", altKey: true, value: 5 },
+          { action: "advance", code: "KeyD", altKey: true, shiftKey: true, value: 5 },
+          { action: "fast", code: "KeyF", altKey: true, value: 2 }
+        ]
+      }
+    });
+    await flushAsyncWork(3);
+
+    const binding = (init) => {
+      const event = new KeyboardEvent("keydown", Object.assign({ code: "KeyD" }, init));
+      const match = window.tc.settings.keyBindings.find((item) =>
+        window.matchesKeyBinding(item, event)
+      );
+      return match ? match.action : null;
+    };
+    expect(binding({ key: "d" })).toBe("faster");
+    expect(binding({ key: "∂", altKey: true })).toBe("rewind");
+    expect(binding({ key: "Î", altKey: true, shiftKey: true })).toBe("advance");
+    expect(binding({ key: "D", shiftKey: true })).toBeNull();
+
+    const video = document.createElement("video");
+    video.src = "https://example.org/alt.mp4";
+    document.body.appendChild(video);
+    window.ensureController(video, document.body);
+    const press = (init) =>
+      video.dispatchEvent(new KeyboardEvent("keydown", Object.assign(
+        { key: "d", code: "KeyD", bubbles: true, cancelable: true }, init
+      )));
+
+    press({});
+    expect(video.playbackRate).toBeCloseTo(1.1, 5);
+    press({ ctrlKey: true });
+    press({ metaKey: true });
+    press({ ctrlKey: true, altKey: true });
+    expect(video.playbackRate).toBeCloseTo(1.1, 5);
+    press({ key: "\u0192", code: "KeyF", altKey: true });
+    expect(video.playbackRate).toBeCloseTo(2, 5);
+  });
+
   it("lets a site rule shortcut win over a global binding on the same key", async () => {
     bootInject({
       syncData: {

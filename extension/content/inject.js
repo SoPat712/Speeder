@@ -982,6 +982,7 @@ function normalizeStoredBinding(binding, fallbackCode) {
     action: binding.action,
     code: normalizedCode,
     shiftKey: binding.shiftKey === true,
+    altKey: binding.altKey === true,
     disabled: false,
     value: keyBindingUtils.sanitizeActionValue(
       binding.action,
@@ -1800,7 +1801,8 @@ function matchesKeyBinding(binding, event) {
     typeof binding.code === "string" &&
     binding.code.length > 0 &&
     binding.code === event.code &&
-    (binding.shiftKey === true) === event.shiftKey
+    (binding.shiftKey === true) === event.shiftKey &&
+    (binding.altKey === true) === event.altKey
   );
 }
 
@@ -5520,8 +5522,9 @@ function attachKeydownListeners(doc) {
     function(event) {
       if (!tc.runtimeSettingsHydrated) return;
       if (
+        // Alt and Shift are part of a binding; Ctrl/Cmd combos belong to
+        // the browser.
         !event.getModifierState ||
-        event.getModifierState("Alt") ||
         event.getModifierState("Control") ||
         event.getModifierState("Fn") ||
         event.getModifierState("Meta") ||

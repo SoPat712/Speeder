@@ -61,9 +61,11 @@ and choose an action from "Add shortcut…".
 <img width="1760" height="1330" alt="image" src="https://github.com/user-attachments/assets/32e814dd-93ea-4943-8ec9-3eca735447ac" />
 
 Some sites may assign other functionality to one of the assigned shortcut keys.
-You can record `Shift+<shortcut>` as a separate, exact binding, or use a site
-rule to block the site from capturing a particular Speeder shortcut. Shift is
-not applied automatically to an unshifted binding.
+You can record `Shift+<key>`, `Alt+<key>` or `Alt+Shift+<key>` (Option on Mac)
+as separate, exact bindings, or use a site rule to block the site from
+capturing a particular Speeder shortcut. Modifiers are never applied
+automatically, so `S` and `Alt+S` are different shortcuts. Ctrl and Cmd
+combinations are left to the browser.
 
 ## Privacy & security
 

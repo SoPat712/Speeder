@@ -41,6 +41,8 @@ var bindingCodeAliases = {
   Slash: "/"
 };
 
+var altKeyName = /Mac/.test(navigator.platform || "") ? "Option" : "Alt";
+
 var modifierKeys = new Set([
   "Alt",
   "AltGraph",
@@ -635,6 +637,7 @@ function normalizeStoredBinding(binding, fallbackCode) {
   var normalized = {
     code: normalizedCode,
     shiftKey: binding.shiftKey === true,
+    altKey: binding.altKey === true,
     disabled: false
   };
 
@@ -650,10 +653,14 @@ function formatBindingCode(code) {
   return code;
 }
 
+function getBindingModifierPrefix(binding, altName) {
+  return (binding.altKey ? altName + "+" : "") + (binding.shiftKey ? "Shift+" : "");
+}
+
 function getBindingLabel(binding) {
   if (!binding) return "";
   if (binding.disabled) return "";
-  return (binding.shiftKey ? "Shift+" : "") + formatBindingCode(binding.code);
+  return getBindingModifierPrefix(binding, altKeyName) + formatBindingCode(binding.code);
 }
 
 function setShortcutInputBinding(input, binding) {
@@ -663,10 +670,13 @@ function setShortcutInputBinding(input, binding) {
 
 function captureBindingFromEvent(event) {
   if (modifierKeys.has(event.key)) return null;
+  // Speeder ignores Ctrl/Cmd combos, so don't record them as the bare key.
+  if (event.ctrlKey || event.metaKey) return null;
   if (typeof event.code !== "string" || event.code.length === 0) return null;
   return {
     code: event.code,
     shiftKey: event.shiftKey === true,
+    altKey: event.altKey === true,
     disabled: false
   };
 }
@@ -784,14 +794,14 @@ function setShortcutRowConflict(row, otherActions) {
 }
 
 // Speeder runs the first binding that matches a key, so a second one on the
-// same key (Shift counts as a different key) silently never fires.
+// same key (Shift and Alt make a different key) silently never fires.
 function markShortcutConflicts(rows) {
   var rowsByKey = {};
   var keys = rows.map(function (row) {
     var keyInput = row.querySelector(".customKey");
     var binding = normalizeStoredBinding(keyInput && keyInput.vscBinding);
     if (!binding || binding.disabled) return null;
-    var key = (binding.shiftKey ? "Shift+" : "") + binding.code;
+    var key = getBindingModifierPrefix(binding, "Alt") + binding.code;
     (rowsByKey[key] = rowsByKey[key] || []).push(row);
     return key;
   });
@@ -931,6 +941,7 @@ function createKeyBindings(item) {
     action: action,
     code: binding.code,
     shiftKey: binding.shiftKey === true,
+    altKey: binding.altKey === true,
     disabled: binding.disabled === true,
     value: bindingValue,
     force: false,
@@ -1247,6 +1258,7 @@ function save_options(isAutoSave) {
           action: action,
           code: binding.code,
           shiftKey: binding.shiftKey === true,
+          altKey: binding.altKey === true,
           disabled: binding.disabled === true,
           value: shortcutValue,
           force: forceCheckbox ? forceCheckbox.checked : false

@@ -676,6 +676,28 @@ describe("site-rule matching", () => {
   });
 });
 
+describe("stored shortcut modifiers", () => {
+  beforeEach(() => {
+    bootSettingsCore();
+  });
+
+  it("keeps Alt and Shift on stored bindings and coerces them to booleans", () => {
+    const expanded = window.vscExpandStoredSettings({
+      keyBindings: [
+        { action: "slower", code: "KeyS", value: 0.1 },
+        { action: "faster", code: "KeyD", value: 0.1, altKey: true, shiftKey: true },
+        { action: "rewind", code: "KeyZ", value: 10, altKey: "yes" }
+      ]
+    });
+    const byAction = (action) =>
+      expanded.keyBindings.find((binding) => binding.action === action);
+
+    expect(byAction("slower")).not.toHaveProperty("altKey");
+    expect(byAction("faster")).toMatchObject({ altKey: true, shiftKey: true });
+    expect(byAction("rewind").altKey).toBe(false);
+  });
+});
+
 describe("site rules larger than one sync item", () => {
   beforeEach(() => {
     bootSettingsCore();

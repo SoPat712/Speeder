@@ -745,6 +745,58 @@ describe("options.js", () => {
     expect(document.querySelector(".shortcut-conflict")).toBeNull();
   });
 
+  it("records Alt and Alt+Shift shortcuts, saves them, and ignores Ctrl/Cmd", async () => {
+    const chrome = bootOptions();
+    await flushAsyncWork(3);
+
+    const row = (action) =>
+      document.querySelector('#customs .shortcut-row[data-action="' + action + '"]');
+    const press = (action, init) =>
+      row(action).querySelector(".customKey").dispatchEvent(
+        new window.KeyboardEvent("keydown", Object.assign(
+          { bubbles: true, cancelable: true }, init
+        ))
+      );
+    const keyInput = (action) => row(action).querySelector(".customKey");
+
+    press("reset", { key: "\u2202", code: "KeyD", altKey: true });
+    expect(keyInput("reset").value).toBe("Alt+D");
+    // D (Increase speed) and Alt+D are different keys.
+    expect(document.querySelector(".shortcut-conflict")).toBeNull();
+
+    press("fast", { key: "\u00CE", code: "KeyD", altKey: true, shiftKey: true });
+    expect(keyInput("fast").value).toBe("Alt+Shift+D");
+
+    press("fast", { key: "d", code: "KeyD", altKey: true });
+    expect(row("fast").querySelector(".shortcut-conflict-note").textContent).toBe(
+      "Same key as Reset speed. Only one will work."
+    );
+
+    const ctrl = new window.KeyboardEvent("keydown", {
+      key: "g", code: "KeyG", ctrlKey: true, bubbles: true, cancelable: true
+    });
+    keyInput("fast").dispatchEvent(ctrl);
+    keyInput("fast").dispatchEvent(new window.KeyboardEvent("keydown", {
+      key: "g", code: "KeyG", metaKey: true, bubbles: true, cancelable: true
+    }));
+    expect(keyInput("fast").value).toBe("Alt+D");
+    expect(ctrl.defaultPrevented).toBe(false);
+
+    press("fast", { key: "\u00CE", code: "KeyD", altKey: true, shiftKey: true });
+    window.save_options();
+    await flushAsyncWork(3);
+    const saved = window.vscExpandStoredSettings(chrome.storage.sync._dump()).keyBindings;
+    expect(saved.find((item) => item.action === "reset")).toMatchObject(
+      { code: "KeyD", altKey: true, shiftKey: false }
+    );
+    expect(saved.find((item) => item.action === "fast")).toMatchObject(
+      { code: "KeyD", altKey: true, shiftKey: true }
+    );
+    expect(saved.find((item) => item.action === "faster")).toMatchObject(
+      { code: "KeyD", altKey: false }
+    );
+  });
+
   it("flags stored duplicate shortcuts on load and clears them when a row is removed", async () => {
     bootOptions({
       syncData: {

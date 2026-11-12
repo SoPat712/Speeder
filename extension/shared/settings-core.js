@@ -984,6 +984,7 @@
         (binding.code === null && binding.key === null && binding.keyCode === null);
       normalized.force = coerceBoolean(binding.force, false);
       if (hasOwn(binding, "shiftKey")) normalized.shiftKey = binding.shiftKey === true;
+      if (hasOwn(binding, "altKey")) normalized.altKey = binding.altKey === true;
       if (hasOwn(binding, "predefined")) normalized.predefined = Boolean(binding.predefined);
       return normalized;
     });

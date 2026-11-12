@@ -327,6 +327,36 @@ describe("inject.js helper logic", () => {
     expect(video.vsc.div).toBeDefined();
   });
 
+  it("lets a site rule shortcut win over a global binding on the same key", async () => {
+    bootInject({
+      syncData: {
+        keyBindings: [
+          { action: "faster", code: "KeyD", value: 0.1 },
+          { action: "slower", code: "KeyS", value: 0.1 }
+        ]
+      }
+    });
+    await flushAsyncWork(3);
+
+    window.tc.settings.siteRules = [
+      {
+        pattern: "example.org",
+        shortcuts: [{ action: "rewind", code: "KeyD", value: 5 }]
+      }
+    ];
+    window.captureSiteRuleBase();
+    window.applySiteRuleOverrides();
+
+    const event = new KeyboardEvent("keydown", { key: "d", code: "KeyD" });
+    const match = window.tc.settings.keyBindings.find((binding) =>
+      window.matchesKeyBinding(binding, event)
+    );
+    expect(match).toMatchObject({ action: "rewind", value: 5 });
+    expect(
+      window.tc.settings.keyBindings.map((binding) => binding.action)
+    ).toEqual(expect.arrayContaining(["faster", "slower"]));
+  });
+
   it("only blocks page key handlers when the shortcut force option is enabled", async () => {
     bootInject({
       syncData: {

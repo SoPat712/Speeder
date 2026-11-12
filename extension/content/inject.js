@@ -5222,13 +5222,15 @@ function applySiteRuleOverrides() {
       overriddenActions.add(shortcut.action);
     });
 
-    // Keep global bindings that aren't overridden, add site-specific ones
-    tc.settings.keyBindings = tc.settings.keyBindings
-      .filter((binding) => !overriddenActions.has(binding.action))
+    // Site shortcuts go first: the keydown handler takes the first match, so
+    // on this site they win over a global binding that uses the same key.
+    tc.settings.keyBindings = matchedRule.shortcuts
+      .map((shortcut) => normalizeStoredBinding(shortcut))
+      .filter(Boolean)
       .concat(
-        matchedRule.shortcuts.map((shortcut) =>
-          normalizeStoredBinding(shortcut)
-        ).filter(Boolean)
+        tc.settings.keyBindings.filter(
+          (binding) => !overriddenActions.has(binding.action)
+        )
       );
   }
 
